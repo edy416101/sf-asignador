@@ -1,196 +1,1004 @@
-// ══════════════════════════════════════════════════════════════════════════
-//  SF ASIGNADOR · BACKEND — Google Apps Script
-//  Versión 2.0 — Alineado con el código original de Google Sheets
-// ══════════════════════════════════════════════════════════════════════════
-//
-//  CÓMO DESPLEGAR:
-//  1. Ve a https://script.google.com → Nuevo proyecto
-//  2. Borra todo y pega este código
-//  3. Menú → Implementar → Nueva implementación
-//  4. Tipo: Aplicación web
-//  5. Ejecutar como: Yo (tu cuenta de Google)
-//  6. Quién tiene acceso: Cualquiera
-//  7. Haz clic en "Implementar" → Copia la URL resultante
-//  8. En index.html, reemplaza: APPS_SCRIPT_URL = "TU_URL_AQUI"
-//
-//  IMPORTANTE: Cada vez que modifiques el código debes hacer una
-//  NUEVA implementación (no actualizar la existente) para que los
-//  cambios se apliquen.
-//
-// ══════════════════════════════════════════════════════════════════════════
-//
-//  CÓMO OBTENER TU GOOGLE CLIENT ID (para el login de la web app):
-//  1. Ve a https://console.cloud.google.com
-//  2. Crea un proyecto (o usa uno existente)
-//  3. APIs y servicios → Pantalla de consentimiento OAuth
-//     - Tipo de usuario: Interno
-//     - Agrega docplanner.com como dominio autorizado
-//  4. APIs y servicios → Credenciales → Crear credenciales → ID de cliente OAuth 2.0
-//     - Tipo: Aplicación web
-//     - Orígenes de JavaScript autorizados: agrega tu dominio de GitHub Pages
-//       (ej: https://tu-usuario.github.io)
-//     - También agrega: http://localhost (para pruebas locales)
-//  5. Copia el "ID de cliente" (termina en .apps.googleusercontent.com)
-//  6. En index.html, reemplaza: GOOGLE_CLIENT_ID = "TU_ID_AQUI"
-//
-// ══════════════════════════════════════════════════════════════════════════
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SF Asignador · Docplanner</title>
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" async></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:       #0d0f18;
+      --surface:  #161929;
+      --surface2: #1e2235;
+      --border:   #272c45;
+      --accent:   #4b7cf3;
+      --accent2:  #7c3aed;
+      --success:  #22c55e;
+      --error:    #f43f5e;
+      --warning:  #f59e0b;
+      --text:     #e4e8f7;
+      --muted:    #6b729a;
+      --mono:     'JetBrains Mono', monospace;
+      --sans:     'Inter', sans-serif;
+    }
 
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-// ── Endpoint principal (recibe el POST de la web app) ────────────────────
-function doPost(e) {
-  var output = ContentService.createTextOutput();
-  output.setMimeType(ContentService.MimeType.JSON);
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       LOGIN SCREEN
+    ══════════════════════════════════════════════════════════ */
+    #loginScreen {
+      position: fixed; inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      background-image:
+        radial-gradient(ellipse 60% 50% at 25% 60%, rgba(75,124,243,.1) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 40% at 75% 40%, rgba(124,58,237,.08) 0%, transparent 70%);
+      z-index: 100;
+    }
+
+    .login-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 48px 44px 40px;
+      width: 370px;
+      text-align: center;
+      box-shadow: 0 32px 80px rgba(0,0,0,.5), 0 0 0 1px rgba(75,124,243,.1);
+    }
+
+    .login-logo {
+      width: 60px; height: 60px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px;
+      margin: 0 auto 22px;
+      box-shadow: 0 8px 24px rgba(75,124,243,.35);
+    }
+
+    .login-card h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+    .login-card .sub {
+      font-size: 13px; color: var(--muted);
+      line-height: 1.55; margin-bottom: 24px;
+    }
+
+    .domain-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(75,124,243,.12);
+      border: 1px solid rgba(75,124,243,.3);
+      border-radius: 100px;
+      padding: 5px 14px;
+      font-size: 11px; font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 28px;
+      letter-spacing: .3px;
+    }
+    .domain-chip::before { content: '🔒'; font-size: 10px; }
+
+    #gSigninBtn { display: flex; justify-content: center; margin-bottom: 18px; }
+
+    .login-note { font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+    /* ══════════════════════════════════════════════════════════
+       MAIN APP
+    ══════════════════════════════════════════════════════════ */
+    #mainApp {
+      display: none;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    /* ── HEADER ── */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 13px 28px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+
+    .logo-mark {
+      width: 30px; height: 30px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; flex-shrink: 0;
+    }
+
+    header h1 { font-size: 13.5px; font-weight: 600; flex: 1; letter-spacing: .1px; }
+    header h1 span { color: var(--muted); font-weight: 400; }
+
+    .user-bar {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 12px; color: var(--muted);
+    }
+    .user-avatar {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; color: white;
+    }
+    #userEmail { font-size: 12px; color: var(--text); }
+    .sign-out {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      font-size: 11px; padding: 4px 10px;
+      cursor: pointer; font-family: var(--sans);
+      transition: all .15s;
+    }
+    .sign-out:hover { border-color: var(--error); color: var(--error); }
+
+    /* ── LAYOUT ── */
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 330px 1fr;
+      overflow: hidden;
+    }
+
+    /* ── SIDEBAR ── */
+    aside {
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+      overflow-y: auto;
+      padding: 20px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .slabel {
+      font-size: 9.5px; font-weight: 700;
+      letter-spacing: 1.4px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    /* ── FIELDS ── */
+    .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+    .field:last-child { margin-bottom: 0; }
+    .field label { font-size: 11.5px; font-weight: 500; color: var(--muted); }
+
+    .field input, .field select {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 13px;
+      padding: 8px 11px;
+      outline: none;
+      transition: border-color .15s;
+      width: 100%;
+    }
+    .field input:focus, .field select:focus { border-color: var(--accent); }
+    .field select { cursor: pointer; }
+    .field select option { background: #1e2235; }
+    .field input.mono { font-family: var(--mono); font-size: 11px; letter-spacing: .3px; }
+
+    /* SID field */
+    .sid-wrap { position: relative; }
+    .sid-wrap input { padding-right: 74px; }
+    .sid-eye {
+      position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+      background: rgba(75,124,243,.2);
+      border: 1px solid rgba(75,124,243,.4);
+      color: var(--accent);
+      font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 5px;
+      cursor: pointer; letter-spacing: .3px; user-select: none;
+      transition: background .15s;
+    }
+    .sid-eye:hover { background: rgba(75,124,243,.35); }
+
+    /* ── REPS ── */
+    .reps-top {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .reps-top .slabel { margin-bottom: 0; }
+
+    .btn-bulk {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      font-size: 11px; font-family: var(--sans);
+      padding: 4px 10px; cursor: pointer;
+      transition: all .15s;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .btn-bulk:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Bulk paste panel */
+    .bulk-panel {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 12px;
+      margin-bottom: 10px;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .bulk-panel.open { display: flex; }
+    .bulk-panel p { font-size: 11px; color: var(--muted); }
+    .bulk-panel textarea {
+      width: 100%; height: 76px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text); font-family: var(--mono); font-size: 11px;
+      padding: 8px 10px; resize: none; outline: none; line-height: 1.7;
+    }
+    .bulk-panel textarea:focus { border-color: var(--accent); }
+    .bulk-actions { display: flex; gap: 6px; }
+    .btn-apply {
+      flex: 1; background: var(--accent); color: white; border: none;
+      border-radius: 7px; font-size: 12px; font-weight: 600;
+      padding: 7px; cursor: pointer; font-family: var(--sans);
+      transition: opacity .15s;
+    }
+    .btn-apply:hover { opacity: .88; }
+    .btn-cancel-bulk {
+      background: none; border: 1px solid var(--border);
+      color: var(--muted); border-radius: 7px;
+      font-size: 12px; padding: 7px 12px;
+      cursor: pointer; font-family: var(--sans);
+      transition: all .15s;
+    }
+    .btn-cancel-bulk:hover { border-color: var(--error); color: var(--error); }
+
+    /* Reps table */
+    .reps-tbl { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+    .reps-tbl th {
+      text-align: left; color: var(--muted);
+      font-weight: 500; font-size: 10.5px;
+      padding: 4px 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .reps-tbl td { padding: 3px 5px; }
+    .reps-tbl tr:hover td { background: var(--surface2); }
+    .reps-tbl input {
+      background: transparent; border: none; color: var(--text);
+      font-size: 11.5px; width: 100%; outline: none;
+      border-bottom: 1px solid transparent; padding: 2px 2px;
+      font-family: var(--sans);
+    }
+    .reps-tbl input:focus { border-bottom-color: var(--accent); }
+    .rep-del {
+      background: none; border: none; color: var(--muted);
+      cursor: pointer; font-size: 12px; padding: 2px 4px;
+      transition: color .15s;
+    }
+    .rep-del:hover { color: var(--error); }
+
+    .btn-add-rep {
+      margin-top: 8px;
+      background: none; border: 1px dashed var(--border);
+      color: var(--muted); border-radius: 6px;
+      font-size: 11.5px; padding: 6px; width: 100%;
+      cursor: pointer; font-family: var(--sans);
+      transition: all .15s;
+    }
+    .btn-add-rep:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* IDs textarea */
+    .ids-box {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 9px 11px;
+      width: 100%; height: 110px;
+      resize: vertical; outline: none;
+      line-height: 1.7;
+    }
+    .ids-box:focus { border-color: var(--accent); }
+    .ids-meta { font-size: 10.5px; color: var(--muted); margin-top: 4px; }
+
+    /* Run button */
+    .btn-run {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, var(--accent) 0%, #6366f1 50%, var(--accent2) 100%);
+      color: white; border: none;
+      border-radius: 10px; font-size: 13.5px; font-weight: 600;
+      cursor: pointer; font-family: var(--sans);
+      transition: opacity .15s, transform .1s;
+      letter-spacing: .2px;
+      position: relative; overflow: hidden;
+    }
+    .btn-run::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(rgba(255,255,255,.1), transparent);
+    }
+    .btn-run:hover { opacity: .9; }
+    .btn-run:active { transform: scale(.98); }
+    .btn-run:disabled { opacity: .35; cursor: not-allowed; }
+
+    /* ══ PANEL (right) ══ */
+    .panel {
+      overflow-y: auto;
+      padding: 24px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    /* Status bar */
+    .status-row {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 13px 17px;
+      display: flex; align-items: center; gap: 10px;
+      font-size: 12.5px;
+    }
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--muted); flex-shrink: 0;
+    }
+    .dot.run { background: var(--warning); animation: pulse 1s infinite; }
+    .dot.ok  { background: var(--success); }
+    .dot.err { background: var(--error); }
+    @keyframes pulse { 0%,100%{ opacity:1 } 50%{ opacity:.25 } }
+
+    /* Stats */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+    .stat .n {
+      font-size: 26px; font-weight: 700;
+      color: var(--accent);
+      line-height: 1.1;
+    }
+    .stat .l { font-size: 10.5px; color: var(--muted); margin-top: 3px; }
+
+    /* Log */
+    .log {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 13px 16px;
+      font-family: var(--mono); font-size: 10.5px;
+      line-height: 1.9; color: var(--muted);
+      min-height: 88px; max-height: 150px;
+      overflow-y: auto;
+    }
+    .log .ok   { color: var(--success); }
+    .log .err  { color: var(--error); }
+    .log .info { color: var(--accent); }
+    .log .warn { color: var(--warning); }
+
+    /* Results */
+    .res-header {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .res-header h2 { font-size: 13px; font-weight: 600; }
+    .res-btns { display: flex; gap: 8px; }
+
+    .btn-copy, .btn-csv {
+      color: white; border: none;
+      border-radius: 8px; padding: 7px 14px;
+      font-size: 11.5px; font-weight: 600;
+      cursor: pointer; font-family: var(--sans);
+      transition: opacity .15s;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .btn-copy { background: var(--accent); }
+    .btn-csv  { background: var(--success); }
+    .btn-copy:hover, .btn-csv:hover { opacity: .85; }
+    .btn-copy:disabled, .btn-csv:disabled { opacity: .25; cursor: not-allowed; }
+
+    /* Table */
+    .tbl-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: auto;
+      flex: 1;
+      min-height: 120px;
+    }
+    table.res-tbl { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+    table.res-tbl th {
+      background: var(--surface2);
+      color: var(--muted); font-weight: 600;
+      font-size: 9.5px; letter-spacing: .6px; text-transform: uppercase;
+      padding: 9px 13px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap; position: sticky; top: 0; z-index: 1;
+    }
+    table.res-tbl td {
+      padding: 8px 13px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap; color: var(--text);
+      max-width: 150px; overflow: hidden; text-overflow: ellipsis;
+    }
+    table.res-tbl tr:last-child td { border-bottom: none; }
+    table.res-tbl tr:hover td { background: var(--surface2); }
+    .chip {
+      display: inline-block;
+      background: rgba(75,124,243,.12);
+      border: 1px solid rgba(75,124,243,.25);
+      border-radius: 100px;
+      padding: 2px 8px; font-size: 9px; color: var(--accent);
+      font-family: var(--mono); font-weight: 500;
+    }
+
+    /* Empty state */
+    .empty {
+      text-align: center; color: var(--muted);
+      padding: 50px 20px;
+    }
+    .empty-ico { font-size: 30px; margin-bottom: 10px; opacity: .6; }
+    .empty p { font-size: 12.5px; }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 22px; right: 22px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 11px 18px;
+      font-size: 12.5px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.4);
+      transform: translateY(60px); opacity: 0;
+      transition: all .3s cubic-bezier(.34,1.56,.64,1);
+      z-index: 200; max-width: 340px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.ok   { border-left: 3px solid var(--success); }
+    .toast.bad  { border-left: 3px solid var(--error); }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════ LOGIN ══════════════════════ -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">⚡</div>
+    <h1>SF Asignador</h1>
+    <p class="sub">Herramienta interna para asignación de<br>contactos de Salesforce a representantes</p>
+    <div class="domain-chip">Solo cuentas @docplanner.com</div>
+    <div id="gSigninBtn"></div>
+    <p class="login-note">¿Problemas para entrar? Contacta a tu administrador de RevOps.</p>
+  </div>
+</div>
+
+<!-- ══════════════════════ APP ══════════════════════ -->
+<div id="mainApp">
+
+  <header>
+    <div class="logo-mark">⚡</div>
+    <h1>SF Asignador <span>· Docplanner</span></h1>
+    <div class="user-bar">
+      <div class="user-avatar" id="userAvatar">U</div>
+      <span id="userEmail">—</span>
+      <button class="sign-out" onclick="logout()">Salir</button>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ══ SIDEBAR ══ -->
+    <aside>
+
+      <!-- Conexión -->
+      <div>
+        <div class="slabel">Conexión Salesforce</div>
+        <div class="field">
+          <label>Session ID (SID)</label>
+          <div class="sid-wrap">
+            <input id="sid" class="mono" type="password" placeholder="Pega tu SID aquí…"/>
+            <span class="sid-eye" onclick="toggleSid()">VER</span>
+          </div>
+        </div>
+        <!-- Instance URL está hardcodeada: https://docplanner.my.salesforce.com -->
+      </div>
+
+      <!-- Parámetros -->
+      <div>
+        <div class="slabel">Parámetros</div>
+        <div class="field">
+          <label>Días de exclusión</label>
+          <input id="dias" type="number" value="30" min="1"/>
+        </div>
+        <div class="field">
+          <label>Business Line</label>
+          <select id="businessLine">
+            <option value="">— Selecciona una línea —</option>
+            <option value="Noa Notes">Noa Notes</option>
+            <option value="Agenda Premium">Agenda Premium</option>
+            <option value="Media 360">Media 360</option>
+            <option value="Clinic Agenda">Clinic Agenda</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Representantes -->
+      <div>
+        <div class="reps-top">
+          <div class="slabel">Representantes</div>
+          <button class="btn-bulk" onclick="toggleBulk()">
+            📋 Pegar varios
+          </button>
+        </div>
+
+        <!-- Bulk paste panel -->
+        <div class="bulk-panel" id="bulkPanel">
+          <p>Pega los emails aquí, uno por línea (o separados por coma):</p>
+          <textarea id="bulkEmails"
+            placeholder="fernanda.loza@docplanner.com&#10;raul.vazquez@docplanner.com&#10;vanessa.diaz@docplanner.com&#10;diana.corona@docplanner.com"></textarea>
+          <div class="bulk-actions">
+            <button class="btn-apply" onclick="aplicarBulk()">✓ Agregar a la tabla</button>
+            <button class="btn-cancel-bulk" onclick="toggleBulk()">Cancelar</button>
+          </div>
+        </div>
+
+        <table class="reps-tbl">
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th style="width:72px; text-align:center">Nº Asignaciones</th>
+              <th style="width:22px"></th>
+            </tr>
+          </thead>
+          <tbody id="repsBody"></tbody>
+        </table>
+        <button class="btn-add-rep" onclick="addRep()">+ Agregar representante</button>
+      </div>
+
+      <!-- IDs de contactos -->
+      <div>
+        <div class="slabel">IDs de Contactos</div>
+        <textarea id="idsArea" class="ids-box"
+          placeholder="Pega aquí los IDs de contacto, uno por línea…"
+          oninput="updateCount()"></textarea>
+        <div class="ids-meta" id="idsCount">0 IDs cargados</div>
+      </div>
+
+      <!-- Botón ejecutar -->
+      <button class="btn-run" id="runBtn" onclick="ejecutar()">⚡ Ejecutar Asignación</button>
+
+    </aside>
+
+    <!-- ══ PANEL DERECHO ══ -->
+    <section class="panel">
+
+      <div class="status-row" id="statusRow">
+        <div class="dot" id="statusDot"></div>
+        <span id="statusMsg">Listo. Configura los parámetros y presiona Ejecutar.</span>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="n" id="sContactos">0</div>
+          <div class="l">Contactos asignados</div>
+        </div>
+        <div class="stat">
+          <div class="n" id="sReps">0</div>
+          <div class="l">Representantes activos</div>
+        </div>
+        <div class="stat">
+          <div class="n" id="sPool">0</div>
+          <div class="l">IDs enviados a SF</div>
+        </div>
+      </div>
+
+      <div class="log" id="logBox">
+        <span class="info">// El log de ejecución aparecerá aquí…</span>
+      </div>
+
+      <div class="res-header">
+        <h2>Resultado de asignación</h2>
+        <div class="res-btns">
+          <button class="btn-copy" id="copyBtn" onclick="copiarTabla()" disabled>
+            📋 Copiar tabla
+          </button>
+          <button class="btn-csv" id="dlBtn" onclick="descargarCSV()" disabled>
+            ⬇ Descargar CSV
+          </button>
+        </div>
+      </div>
+
+      <div class="tbl-wrap" id="tblWrap">
+        <div class="empty">
+          <div class="empty-ico">📋</div>
+          <p>Los contactos asignados aparecerán aquí.</p>
+        </div>
+      </div>
+
+    </section>
+  </main>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+//  CONFIGURACIÓN — EDITA ESTOS DOS VALORES ANTES DE USAR
+// ══════════════════════════════════════════════════════════════════
+
+// 1. URL del Apps Script desplegado como Web App
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxoHtU9OisW9LPrGaWtm-oNi-i68FURzxErxdjHz3s0o50vEbMP4cL6ybYC2qd9If0FzQ/exec";
+
+// 2. Google Client ID (ver instrucciones en backend_apps_script.js)
+const GOOGLE_CLIENT_ID = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
+
+// ── Hardcoded — no necesita cambiarse ──────────────────────────────
+const INSTANCE_URL = "https://docplanner.my.salesforce.com";
+
+// ══════════════════════════════════════════════════════════════════
+//  ESTADO GLOBAL
+// ══════════════════════════════════════════════════════════════════
+let resultados = [];
+let toastTimer  = null;
+
+// ══════════════════════════════════════════════════════════════════
+//  GOOGLE SIGN-IN
+// ══════════════════════════════════════════════════════════════════
+window.addEventListener('load', () => {
+  // Esperar a que cargue la librería de Google
+  const tryInit = () => {
+    if (typeof google !== 'undefined' && google.accounts) {
+      initGSI();
+    } else {
+      setTimeout(tryInit, 200);
+    }
+  };
+  tryInit();
+});
+
+function initGSI() {
+  google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: onGoogleSignIn,
+    hd: 'docplanner.com',   // restringe a dominio docplanner
+    auto_select: false,
+    cancel_on_tap_outside: false,
+  });
+
+  google.accounts.id.renderButton(
+    document.getElementById('gSigninBtn'),
+    { theme: 'filled_blue', size: 'large', text: 'signin_with', width: 280, locale: 'es' }
+  );
+}
+
+function onGoogleSignIn(response) {
+  try {
+    // Decodificar JWT (sin librería externa)
+    const parts   = response.credential.split('.');
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+
+    // Verificar dominio
+    if (!payload.email || !payload.email.toLowerCase().endsWith('@docplanner.com')) {
+      toast('❌ Solo se permiten cuentas @docplanner.com', 'bad');
+      return;
+    }
+
+    // Actualizar UI
+    const initials = (payload.given_name?.[0] || payload.email[0]).toUpperCase();
+    document.getElementById('userAvatar').textContent = initials;
+    document.getElementById('userEmail').textContent  = payload.email;
+
+    // Mostrar app
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'flex';
+    toast(`✅ Bienvenido, ${payload.given_name || payload.email.split('@')[0]}`, 'ok');
+
+  } catch (err) {
+    toast('❌ Error al iniciar sesión. Intenta de nuevo.', 'bad');
+  }
+}
+
+function logout() {
+  if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+  document.getElementById('mainApp').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  resultados = [];
+  renderTable([]);
+  document.getElementById('logBox').innerHTML = '<span class="info">// El log de ejecución aparecerá aquí…</span>';
+  setStatus('Listo. Configura los parámetros y presiona Ejecutar.', '');
+  ['sContactos','sReps','sPool'].forEach(id => document.getElementById(id).textContent = '0');
+  document.getElementById('dlBtn').disabled = true;
+  document.getElementById('copyBtn').disabled = true;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  REPRESENTANTES
+// ══════════════════════════════════════════════════════════════════
+function addRep(email = '', n = '') {
+  const tbody = document.getElementById('repsBody');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" placeholder="email@docplanner.com" value="${escHtml(email)}"/></td>
+    <td style="text-align:center"><input type="number" min="0" placeholder="0" value="${escHtml(String(n))}" style="width:54px; text-align:center"/></td>
+    <td><button class="rep-del" onclick="this.closest('tr').remove()" title="Eliminar">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function toggleBulk() {
+  const panel = document.getElementById('bulkPanel');
+  panel.classList.toggle('open');
+  if (panel.classList.contains('open')) document.getElementById('bulkEmails').focus();
+}
+
+function aplicarBulk() {
+  const raw = document.getElementById('bulkEmails').value;
+  const emails = raw
+    .split(/[\n,;\s]+/)
+    .map(e => e.trim())
+    .filter(e => e.includes('@') && e.includes('.'));
+
+  if (!emails.length) {
+    toast('No se encontraron emails válidos.', 'bad');
+    return;
+  }
+
+  emails.forEach(e => addRep(e, ''));
+  document.getElementById('bulkEmails').value = '';
+  toggleBulk();
+  toast(`✅ ${emails.length} representante(s) agregados`, 'ok');
+}
+
+function getReps() {
+  return Array.from(document.querySelectorAll('#repsBody tr')).reduce((acc, tr) => {
+    const [emailInput, nInput] = tr.querySelectorAll('input');
+    const email = emailInput.value.trim();
+    const cuota = parseInt(nInput.value);
+    if (email && cuota > 0) acc.push({ email, cuota });
+    return acc;
+  }, []);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  IDs
+// ══════════════════════════════════════════════════════════════════
+function getIds() {
+  return document.getElementById('idsArea').value
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean);
+}
+
+function updateCount() {
+  const ids = getIds();
+  document.getElementById('idsCount').textContent = `${ids.length} ID${ids.length !== 1 ? 's' : ''} cargado${ids.length !== 1 ? 's' : ''}`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  SID TOGGLE
+// ══════════════════════════════════════════════════════════════════
+function toggleSid() {
+  const inp = document.getElementById('sid');
+  const btn = document.querySelector('.sid-eye');
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = 'OCULTAR'; }
+  else { inp.type = 'password'; btn.textContent = 'VER'; }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  LOG Y STATUS
+// ══════════════════════════════════════════════════════════════════
+function log(msg, type = 'info') {
+  const box = document.getElementById('logBox');
+  const ts  = new Date().toLocaleTimeString('es-MX');
+  box.innerHTML += `\n<span class="${type}">[${ts}] ${msg}</span>`;
+  box.scrollTop = box.scrollHeight;
+}
+
+function setStatus(msg, state = '') {
+  document.getElementById('statusMsg').textContent = msg;
+  document.getElementById('statusDot').className = 'dot ' + state;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  EJECUTAR — CORRECCIÓN CORS: sin Content-Type para evitar preflight
+// ══════════════════════════════════════════════════════════════════
+async function ejecutar() {
+  const sid          = document.getElementById('sid').value.trim();
+  const dias         = parseInt(document.getElementById('dias').value);
+  const businessLine = document.getElementById('businessLine').value;
+  const reps         = getReps();
+  const ids          = getIds();
+
+  // Validaciones
+  if (!sid)
+    return toast('Falta el Session ID (SID).', 'bad');
+  if (!dias || dias < 1)
+    return toast('Falta el número de días.', 'bad');
+  if (!businessLine)
+    return toast('Selecciona una Business Line.', 'bad');
+  if (!reps.length)
+    return toast('Agrega al menos un representante con Nº Asignaciones > 0.', 'bad');
+  if (!ids.length)
+    return toast('Pega al menos un ID de contacto.', 'bad');
+  if (APPS_SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbxoHtU9OisW9LPrGaWtm-oNi-i68FURzxErxdjHz3s0o50vEbMP4cL6ybYC2qd9If0FzQ/exec')
+    return toast('Configura la URL del Apps Script en el código primero.', 'bad');
+
+  // UI → loading
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Ejecutando…';
+  document.getElementById('dlBtn').disabled = true;
+  document.getElementById('copyBtn').disabled = true;
+  document.getElementById('logBox').innerHTML = '';
+  resultados = [];
+  renderTable([]);
+
+  setStatus('Conectando con Salesforce…', 'run');
+  log('Iniciando proceso de asignación…', 'info');
+  log(`Reps: ${reps.length} | IDs enviados: ${ids.length} | Días: ${dias}`, 'info');
+  log('Enviando datos al backend (Apps Script)…', 'info');
 
   try {
-    // NOTA: El frontend envía sin Content-Type para evitar el preflight CORS.
-    // El body llega igualmente como JSON en e.postData.contents.
-    var payload   = JSON.parse(e.postData.contents);
-    var resultado = procesarAsignacion(payload);
-    output.setContent(JSON.stringify(resultado));
+    const payload = { sid, instanceUrl: INSTANCE_URL, dias, businessLine, reps, ids };
+
+    /*
+      ⚠️  FIX CORS: Al NO incluir 'Content-Type: application/json',
+      el navegador envía el request como "simple request" (text/plain),
+      lo que evita el preflight OPTIONS que bloqueaba Apps Script.
+      El body sigue siendo JSON válido; Apps Script lo parsea con JSON.parse().
+    */
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      redirect: 'follow',
+      body: JSON.stringify(payload)
+      // SIN headers — evita el preflight OPTIONS
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
+
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    resultados = data.rows || [];
+    log(`✓ Contactos asignados: ${resultados.length}`, 'ok');
+    log(`✓ Pool disponible en Salesforce: ${data.poolTotal}`, 'ok');
+    log('Proceso completado. Descarga el CSV o copia la tabla.', 'ok');
+
+    // Stats
+    document.getElementById('sContactos').textContent = resultados.length;
+    document.getElementById('sReps').textContent      = reps.length;
+    document.getElementById('sPool').textContent      = ids.length;
+
+    renderTable(resultados);
+    setStatus(`¡Listo! ${resultados.length} contacto(s) asignado(s) correctamente.`, 'ok');
+
+    document.getElementById('dlBtn').disabled   = false;
+    document.getElementById('copyBtn').disabled = false;
+    toast(`✅ ${resultados.length} contactos asignados`, 'ok');
+
   } catch (err) {
-    output.setContent(JSON.stringify({ error: err.message, stack: err.stack }));
+    log(`✗ Error: ${err.message}`, 'err');
+    setStatus('Error durante la ejecución. Revisa el log.', 'err');
+    toast('❌ ' + err.message, 'bad');
   }
 
-  return output;
+  btn.disabled = false;
+  btn.textContent = '⚡ Ejecutar Asignación';
 }
 
-// ── Health check (GET) ───────────────────────────────────────────────────
-function doGet(e) {
-  return ContentService
-    .createTextOutput(JSON.stringify({ status: "OK", version: "2.0", service: "SF Asignador" }))
-    .setMimeType(ContentService.MimeType.JSON);
-}
+// ══════════════════════════════════════════════════════════════════
+//  TABLA DE RESULTADOS
+// ══════════════════════════════════════════════════════════════════
+const HEADERS = [
+  'Contact__c','LastSource_SO__c','LastSourceAt__c','Company','LastName',
+  'Email','Source_SO__c','SourceSOAt__c','OwnerId','BusinessLine__c',
+  'Lead_Type__c','ContactTypeSegment__c','Country__c',
+  'StatusLeadassist__Use_Round_Robin__c','Status'
+];
 
-
-// ══════════════════════════════════════════════════════════════════════════
-//  LÓGICA PRINCIPAL — Alineada 100% con el Apps Script original de Sheets
-// ══════════════════════════════════════════════════════════════════════════
-function procesarAsignacion(params) {
-
-  var sessionId    = params.sid;
-  var instanceUrl  = params.instanceUrl;  // siempre "https://docplanner.my.salesforce.com"
-  var dias         = params.dias;
-  var businessLine = params.businessLine;
-  var reps         = params.reps;         // [{email, cuota}]
-  var idsContactos = params.ids;          // ["001xxx", "001yyy", ...]
-
-  // Opciones comunes para todas las llamadas a Salesforce
-  var opciones = {
-    "method": "GET",
-    "headers": {
-      "Authorization": "Bearer " + sessionId,
-      "Content-Type":  "application/json"
-    },
-    "muteHttpExceptions": true
-  };
-
-
-  // ── PASO 1: Buscar Owner IDs en Salesforce ────────────────────────────
-  // Idéntico al original: busca por Email Y Username para máxima cobertura
-  var emailsList = reps.map(function(r) { return "'" + r.email + "'"; });
-
-  var soqlUsers = "SELECT Id, Email, Username FROM User " +
-                  "WHERE Email IN ("    + emailsList.join(",") + ") " +
-                  "OR Username IN ("    + emailsList.join(",") + ")";
-
-  var urlUsers  = instanceUrl + "/services/data/v57.0/query/?q=" + encodeURIComponent(soqlUsers);
-  var resUsers  = UrlFetchApp.fetch(urlUsers, opciones);
-  var jsonUsers = JSON.parse(resUsers.getContentText());
-
-  if (!jsonUsers.records) {
-    throw new Error("Salesforce no devolvió registros de usuarios. Verifica el SID. Respuesta: " + JSON.stringify(jsonUsers).slice(0, 200));
+function renderTable(rows) {
+  const wrap = document.getElementById('tblWrap');
+  if (!rows.length) {
+    wrap.innerHTML = `<div class="empty"><div class="empty-ico">📋</div><p>Los contactos asignados aparecerán aquí.</p></div>`;
+    return;
   }
-
-  // Construir mapa email/username → Id (mismo comportamiento que el original)
-  var mapUserIds = {};
-  jsonUsers.records.forEach(function(u) {
-    if (u.Email)    mapUserIds[u.Email.toLowerCase().trim()]    = u.Id;
-    if (u.Username) mapUserIds[u.Username.toLowerCase().trim()] = u.Id;
+  let html = `<table class="res-tbl"><thead><tr>${HEADERS.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>`;
+  rows.forEach(row => {
+    html += `<tr>${row.map((cell, i) => {
+      const v = cell ?? '';
+      // OwnerId → chip
+      if (i === 8) return `<td><span class="chip" title="${v}">${String(v).slice(0,15)}…</span></td>`;
+      return `<td title="${escHtml(String(v))}">${escHtml(String(v))}</td>`;
+    }).join('')}</tr>`;
   });
-
-
-  // ── PASO 2: Extraer contactos en bloques (igual que el original) ──────
-  // El original usa bloques de 40 para no superar límites de SOQL
-  var poolContactos = [];
-  var tamanoBloque  = 40;
-
-  for (var i = 0; i < idsContactos.length; i += tamanoBloque) {
-    var bloque         = idsContactos.slice(i, i + tamanoBloque);
-    var idsFormateados = bloque.map(function(id) { return "'" + id + "'"; }).join(",");
-
-    // SOQL idéntico al código original de Sheets
-    var soqlContactos =
-      "SELECT Id, LastSource_SO__c, LastSourceAt__c, Account.Name, LastName, Email, Source_SO__c, SourceSOAt__c " +
-      "FROM Contact " +
-      "WHERE Id IN (" + idsFormateados + ") " +
-      "AND Id NOT IN (" +
-        "SELECT Contact__c FROM Opportunity " +
-        "WHERE IsClosed = False OR (IsClosed = True AND CloseDate = LAST_N_DAYS:" + dias + ")" +
-      ") " +
-      "AND Id NOT IN (" +
-        "SELECT Contact__c FROM Lead " +
-        "WHERE Status IN ('New', 'Assigned', 'Qualifying') OR lead_closed_date__c = LAST_N_DAYS:" + dias +
-      ")";
-
-    var urlContactos = instanceUrl + "/services/data/v57.0/query/?q=" + encodeURIComponent(soqlContactos);
-
-    try {
-      var resContactos  = UrlFetchApp.fetch(urlContactos, opciones);
-      var jsonContactos = JSON.parse(resContactos.getContentText());
-
-      if (jsonContactos.records) {
-        jsonContactos.records.forEach(function(c) {
-          var accName = c.Account ? c.Account.Name : "Sin Cuenta";
-          poolContactos.push([
-            c.Id,
-            c.LastSource_SO__c  || "",
-            c.LastSourceAt__c   || "",
-            accName,
-            c.LastName          || "",
-            c.Email             || "",
-            c.Source_SO__c      || "",
-            c.SourceSOAt__c     || ""
-          ]);
-        });
-      }
-    } catch (err) {
-      Logger.log("Error en bloque de contactos (índice " + i + "): " + err.message);
-    }
-  }
-
-
-  // ── PASO 3: Distribuir contactos entre reps ───────────────────────────
-  // Lógica idéntica al original: puntero secuencial, cuota por rep
-  var filasFinal   = [];
-  var puntero      = 0;
-
-  // Valores fijos exactos del código original
-  var valoresFijos = ["New Business", "DOCTOR", "Mexico", "Assigned", "FALSE"];
-
-  reps.forEach(function(rep) {
-    var email   = rep.email.toLowerCase().trim();
-    var ownerId = mapUserIds[email] || "ID NO ENCONTRADO";
-    var cuota   = rep.cuota || 0;
-
-    for (var k = 0; k < cuota; k++) {
-      if (puntero >= poolContactos.length) break;
-
-      var contacto  = poolContactos[puntero++];
-      var filaFinal = contacto
-        .concat([ownerId, businessLine])
-        .concat(valoresFijos);
-
-      filasFinal.push(filaFinal);
-    }
-  });
-
-  // ── RESPUESTA ─────────────────────────────────────────────────────────
-  // rows:      array de arrays (15 columnas por fila), equivale al "pre template"
-  // poolTotal: cuántos contactos pasaron los filtros de exclusión
-  // assigned:  cuántos se asignaron efectivamente
-  return {
-    rows:      filasFinal,
-    poolTotal: poolContactos.length,
-    assigned:  filasFinal.length
-  };
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
 }
+
+// ══════════════════════════════════════════════════════════════════
+//  DESCARGAR CSV (con BOM para Excel en español)
+// ══════════════════════════════════════════════════════════════════
+function descargarCSV() {
+  if (!resultados.length) return;
+  const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = [
+    HEADERS.map(esc).join(','),
+    ...resultados.map(row => row.map(esc).join(','))
+  ];
+  const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `asignacion_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('⬇ CSV descargado', 'ok');
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  COPIAR TABLA (como TSV → se puede pegar directo en Google Sheets)
+// ══════════════════════════════════════════════════════════════════
+async function copiarTabla() {
+  if (!resultados.length) return;
+  const lines = [
+    HEADERS.join('\t'),
+    ...resultados.map(row => row.map(v => String(v ?? '').replace(/\t/g, ' ')).join('\t'))
+  ];
+  try {
+    await navigator.clipboard.writeText(lines.join('\n'));
+    toast('📋 Tabla copiada. Pégala en Google Sheets con Ctrl+V.', 'ok');
+  } catch {
+    toast('No se pudo copiar. Usa el botón de CSV.', 'bad');
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  UTILIDADES
+// ══════════════════════════════════════════════════════════════════
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast ${type} show`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = 'toast'; }, 3600);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  INIT — una fila vacía al cargar
+// ══════════════════════════════════════════════════════════════════
+addRep('', '');
+</script>
+</body>
+</html>
