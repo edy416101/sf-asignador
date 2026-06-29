@@ -311,14 +311,15 @@
     }
     table.pt th {
       background: var(--surface2); color: var(--muted); font-weight: 700;
-      font-size: 9.5px; letter-spacing: .6px; text-transform: uppercase;
+      font-size: 9.5px; letter-spacing: .4px;
       padding: 9px 13px; border-bottom: 1px solid var(--border);
       white-space: nowrap; position: sticky; top: 0; z-index: 1;
+      /* No text-transform — preserve exact API field names */
     }
     table.pt td {
       padding: 8px 13px; border-bottom: 1px solid var(--border);
       white-space: nowrap; color: var(--text);
-      max-width: 160px; overflow: hidden; text-overflow: ellipsis;
+      max-width: 200px; overflow: hidden; text-overflow: ellipsis;
     }
     table.pt tr:last-child td { border-bottom: none; }
     table.pt tr:hover td { background: var(--surface2); }
@@ -524,6 +525,7 @@
 // ══════════════════════════════════════════════════════════════════
 const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbxoHtU9OisW9LPrGaWtm-oNi-i68FURzxErxdjHz3s0o50vEbMP4cL6ybYC2qd9If0FzQ/exec";
 const GOOGLE_CLIENT_ID = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
+
 
 // Hardcodeado — no cambiar
 const INSTANCE_URL = "https://docplanner.my.salesforce.com";
@@ -758,10 +760,33 @@ async function ejecutar() {
 }
 
 // ══════════════════════════════════════════════════════════════════
+//  HEADERS EXACTOS DEL PRE TEMPLATE
+//  Orden y nombres idénticos a los del código original de Sheets
+//  (sheetTemplate fila 3, columnas A→O)
+// ══════════════════════════════════════════════════════════════════
+const PT_HEADERS = [
+  'Contact__c',                          // col 0
+  'LastSource_SO__c',                    // col 1
+  'LastSourceAt__c',                     // col 2
+  'Company',                             // col 3  (Account.Name)
+  'LastName',                            // col 4
+  'Email',                               // col 5
+  'Source_SO__c',                        // col 6
+  'SourceSOAt__c',                       // col 7
+  'OwnerId',                             // col 8  → chip azul
+  'BusinessLine__c',                     // col 9  → chip morado
+  'Lead_Type__c',                        // col 10 → fijo: "New Business"
+  'ContactTypeSegment__c',               // col 11 → fijo: "DOCTOR"
+  'Country__c',                          // col 12 → fijo: "Mexico"
+  'StatusLeadassist__Use_Round_Robin__c',// col 13 → fijo: "Assigned"
+  'Status'                               // col 14 → fijo: "FALSE"
+];
+
+// ══════════════════════════════════════════════════════════════════
 //  RENDER PRE TEMPLATE
-//  Muestra la tabla exacta del pre template con los 15 headers
-//  Resalta visualmente: OwnerId (chip azul), BusinessLine (chip morado),
-//  valores fijos (color atenuado)
+//  Usa PT_HEADERS como fuente de verdad (no depende del backend)
+//  Resalta: OwnerId (chip azul), BusinessLine__c (chip morado),
+//           columnas fijas 10-14 (texto atenuado)
 // ══════════════════════════════════════════════════════════════════
 function renderPreTemplate(headers, rows) {
   const wrap = document.getElementById('tblWrap');
@@ -775,30 +800,31 @@ function renderPreTemplate(headers, rows) {
     return;
   }
 
-  // Índices de columnas especiales (igual que en el original de Sheets)
   const IDX_OWNER   = 8;   // OwnerId
   const IDX_BL      = 9;   // BusinessLine__c
-  const FIXED_START = 10;  // Lead_Type__c en adelante → valores fijos
+  const FIXED_START = 10;  // Lead_Type__c … Status → valores fijos
+
+  // Usar PT_HEADERS como fuente de verdad; fallback a lo que venga del backend
+  const displayHeaders = (PT_HEADERS.length === 15) ? PT_HEADERS : headers;
 
   let html = `<table class="pt"><thead><tr>`;
-  headers.forEach(h => { html += `<th>${h}</th>`; });
+  displayHeaders.forEach(h => {
+    html += `<th title="${esc(h)}">${esc(h)}</th>`;
+  });
   html += `</tr></thead><tbody>`;
 
   rows.forEach(row => {
     html += `<tr>`;
     row.forEach((cell, i) => {
-      const v = cell ?? '';
+      const v = String(cell ?? '');
       if (i === IDX_OWNER) {
-        // OwnerId → chip azul
-        html += `<td title="${esc(String(v))}"><span class="chip">${esc(String(v))}</span></td>`;
+        html += `<td title="${esc(v)}"><span class="chip">${esc(v)}</span></td>`;
       } else if (i === IDX_BL) {
-        // BusinessLine → chip morado
-        html += `<td><span class="bl-chip">${esc(String(v))}</span></td>`;
+        html += `<td title="${esc(v)}"><span class="bl-chip">${esc(v)}</span></td>`;
       } else if (i >= FIXED_START) {
-        // Valores fijos → texto atenuado
-        html += `<td class="fixed" title="${esc(String(v))}">${esc(String(v))}</td>`;
+        html += `<td class="fixed" title="${esc(v)}">${esc(v)}</td>`;
       } else {
-        html += `<td title="${esc(String(v))}">${esc(String(v))}</td>`;
+        html += `<td title="${esc(v)}">${esc(v)}</td>`;
       }
     });
     html += `</tr>`;
@@ -810,9 +836,9 @@ function renderPreTemplate(headers, rows) {
 
 // ══════════════════════════════════════════════════════════════════
 //  DESCARGAR CSV
-//  Usa preTemplateHeaders y preTemplateRows para generar el CSV
-//  con BOM (para que Excel/Sheets lo lea bien en español)
-//  Exactamente las mismas 15 columnas del pre template original
+//  Headers: PT_HEADERS (fuente de verdad, 15 columnas exactas)
+//  Datos:   preTemplateRows
+//  BOM (\uFEFF) → Excel/Sheets lee acentos y ñ correctamente
 // ══════════════════════════════════════════════════════════════════
 function descargarCSV() {
   if (!preTemplateRows.length) {
@@ -822,13 +848,11 @@ function descargarCSV() {
 
   const escCsv = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
 
-  // Fila de headers + filas de datos
   const lines = [
-    preTemplateHeaders.map(escCsv).join(','),
+    PT_HEADERS.map(escCsv).join(','),
     ...preTemplateRows.map(row => row.map(escCsv).join(','))
   ];
 
-  // BOM + contenido → Excel en español lee la ñ y acentos correctamente
   const csvContent = '\uFEFF' + lines.join('\r\n');
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
@@ -844,9 +868,8 @@ function descargarCSV() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  COPIAR TABLA
-//  Copia como TSV (tab-separated) → se puede pegar en Google Sheets
-//  con Ctrl+V y queda en columnas perfectamente alineadas
+//  COPIAR TABLA (TSV → pegar directo en Google Sheets con Ctrl+V)
+//  Headers: PT_HEADERS (fuente de verdad)
 // ══════════════════════════════════════════════════════════════════
 async function copiarTabla() {
   if (!preTemplateRows.length) {
@@ -855,7 +878,7 @@ async function copiarTabla() {
   }
 
   const lines = [
-    preTemplateHeaders.join('\t'),
+    PT_HEADERS.join('\t'),
     ...preTemplateRows.map(row =>
       row.map(v => String(v ?? '').replace(/\t/g, ' ')).join('\t')
     )
