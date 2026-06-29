@@ -690,8 +690,6 @@ async function ejecutar() {
   if (!businessLine)  return toast('Selecciona una Business Line.', 'bad');
   if (!reps.length)   return toast('Agrega al menos un representante con Nº Asignaciones > 0.', 'bad');
   if (!ids.length)    return toast('Pega al menos un ID de contacto.', 'bad');
-  if (APPS_SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbxoHtU9OisW9LPrGaWtm-oNi-i68FURzxErxdjHz3s0o50vEbMP4cL6ybYC2qd9If0FzQ/exec')
-    return toast('Configura la URL del Apps Script en el código primero.', 'bad');
 
   // UI → loading
   const btn = document.getElementById('runBtn');
