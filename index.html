@@ -119,7 +119,7 @@
     /* ══════════════════════════════════════════════
        TAB 1 — ASIGNACIÓN
     ══════════════════════════════════════════════ */
-    .asig-layout { display: grid; grid-template-columns: 330px 1fr; flex: 1; overflow: hidden; }
+    .asig-layout { display: grid; grid-template-columns: 420px 1fr; flex: 1; overflow: hidden; }
 
     aside {
       border-right: 1px solid var(--border); background: var(--surface);
@@ -260,7 +260,7 @@
     ══════════════════════════════════════════════ */
     .import-layout {
       display: grid;
-      grid-template-columns: 300px 1fr;
+      grid-template-columns: 420px 1fr;
       flex: 1; overflow: hidden;
     }
 
@@ -304,14 +304,10 @@
     .fmap-table th { font-size: 9.5px; font-weight: 700; color: var(--muted); letter-spacing: .8px; text-transform: uppercase; padding: 5px 8px; border-bottom: 1px solid var(--border); }
     .fmap-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
     .fmap-table tr:last-child td { border-bottom: none; }
-    .fmap-csv  { font-family: var(--mono); font-size: 10px; color: var(--text); }
+    .fmap-csv { font-family: var(--mono); font-size: 9.5px; color: var(--text); white-space: nowrap; }
     .fmap-arr  { color: var(--muted); font-size: 12px; text-align: center; }
     .fmap-sf   { font-size: 10px; }
-    .fmap-sf select {
-      background: var(--sf2); border: 1px solid var(--border); border-radius: 5px;
-      color: var(--text); font-size: 10px; padding: 3px 6px; outline: none;
-      font-family: var(--mono); width: 100%; cursor: pointer;
-    }
+  .fmap-sf select { background: var(--sf2); border: 1px solid var(--border); border-radius: 5px; color: var(--text); font-size: 10px; padding: 3px 6px; outline: none; font-family: var(--mono); width: 100%; cursor: pointer; min-width: 120px; }
     .fmap-sf select:focus { border-color: var(--accent); }
     .fmap-ok   { font-size: 11px; text-align: center; }
 
@@ -581,9 +577,8 @@
 
             <div class="field">
               <label>API Type</label>
-              <select id="cfg-apitype">
+              <select id="cfg-apitype" disabled>
                 <option value="enterprise" selected>Enterprise (default)</option>
-                <option value="partner">Partner</option>
               </select>
             </div>
 
@@ -612,12 +607,12 @@
 
             <div class="field">
               <label>Batch size</label>
-              <input id="cfg-batch" type="number" value="200" min="1" max="10000"/>
+              <input id="cfg-batch" type="number" value="30" min="1" max="10000"/>
             </div>
 
             <div class="field">
               <label>Threads (paralelo)</label>
-              <input id="cfg-threads" type="number" value="1" min="1" max="5"/>
+              <input id="cfg-threads" type="number" value="3" min="1" max="5"/>
             </div>
 
           </div>
@@ -687,19 +682,16 @@
           <span class="info">// El log del import aparecerá aquí…</span>
         </div>
 
-        <div class="result-header">
-          <h2>Resultado del Import</h2>
-          <div class="result-btns">
-            <button class="btn-icon" style="background:var(--accent)" id="dlResultBtn" onclick="descargarResultado()" disabled>
-              ⬇ Descargar resultado
-            </button>
-          </div>
-        </div>
-
+<div class="result-header">
+  <h2>Resultado del Import</h2>
+  <div class="result-btns" style="display:flex;gap:8px;">
+    <button class="btn-icon" style="background:var(--accent)" id="copyResultBtn" onclick="copiarResultado()" disabled>📋 Copiar resultado</button>
+    <button class="btn-icon" style="background:var(--accent)" id="dlResultBtn" onclick="descargarResultado()" disabled>⬇ Descargar resultado</button>
+  </div>
+</div>
         <div class="res-tbl-wrap" id="resTblWrap">
           <div class="empty"><div class="empty-ico">📥</div><p>El resultado del import aparecerá aquí.</p></div>
         </div>
-
       </div>
     </div>
   </div>
@@ -1103,7 +1095,8 @@ function resetImportUI() {
   document.getElementById('progressWrap').classList.remove('visible');
   document.getElementById('importLog').innerHTML = '<span class="info">// El log del import aparecerá aquí…</span>';
   renderImportResult([]);
-  document.getElementById('dlResultBtn').disabled = true;
+document.getElementById('dlResultBtn').disabled   = true;
+document.getElementById('copyResultBtn').disabled = true;
   document.getElementById('badge-import').textContent = '—';
 }
 
@@ -1161,7 +1154,8 @@ async function ejecutarImport() {
   document.getElementById('importLog').innerHTML = '';
   importResultRows = [];
   renderImportResult([]);
-  document.getElementById('dlResultBtn').disabled = true;
+document.getElementById('dlResultBtn').disabled   = true;
+document.getElementById('copyResultBtn').disabled = true;
   currentJobId = null;
 
   const total = preTemplateRows.length;
@@ -1314,6 +1308,7 @@ async function ejecutarImport() {
     renderImportResult(importResultRows);
     setImportStatus(`Import completado: ${totalOk} exitosos, ${totalFail} fallidos.`, totalFail === 0 ? 'ok' : 'err');
     document.getElementById('dlResultBtn').disabled = false;
+    document.getElementById('copyResultBtn').disabled = false;
     document.getElementById('badge-import').textContent = `${totalOk} ✓`;
     toast(`✅ Import completo: ${totalOk} OK · ${totalFail} errores`, totalFail === 0 ? 'ok' : 'bad');
 
@@ -1430,7 +1425,22 @@ function descargarResultado() {
   descargarBlob('\uFEFF' + lines.join('\r\n'), 'text/csv', `import_result_${hoy()}.csv`);
   toast('⬇ Resultado descargado', 'ok');
 }
-
+async function copiarResultado() {
+  if (!importResultRows.length) return;
+  const lines = [
+    IMPORT_RESULT_HEADERS.join('\t'),
+    ...importResultRows.map(r =>
+      IMPORT_RESULT_HEADERS.map(h => String(r[h] ?? '').replace(/\t/g, ' ')).join('\t')
+    )
+  ];
+  try {
+    await navigator.clipboard.writeText(lines.join('\n'));
+    toast('📋 Resultado copiado. Pégalo en Sheets con Ctrl+V.', 'ok');
+  } catch {
+    toast('No se pudo copiar. Usa el botón de descarga.', 'bad');
+  }
+}
+  
 // ══════════════════════════════════════════════════════════════════
 //  UTILIDADES
 // ══════════════════════════════════════════════════════════════════
