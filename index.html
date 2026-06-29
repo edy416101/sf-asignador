@@ -1,627 +1,196 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>SF Asignador · Docplanner</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
-  <style>
-    :root {
-      --bg:        #0f1117;
-      --surface:   #1a1d27;
-      --surface2:  #22263a;
-      --border:    #2e3350;
-      --accent:    #4f7eff;
-      --accent2:   #7c3aed;
-      --success:   #22c55e;
-      --error:     #ef4444;
-      --warning:   #f59e0b;
-      --text:      #e8eaf6;
-      --muted:     #7c82a3;
-      --mono:      'JetBrains Mono', monospace;
-      --sans:      'Inter', sans-serif;
-    }
+// ══════════════════════════════════════════════════════════════════════════
+//  SF ASIGNADOR · BACKEND — Google Apps Script
+//  Versión 2.0 — Alineado con el código original de Google Sheets
+// ══════════════════════════════════════════════════════════════════════════
+//
+//  CÓMO DESPLEGAR:
+//  1. Ve a https://script.google.com → Nuevo proyecto
+//  2. Borra todo y pega este código
+//  3. Menú → Implementar → Nueva implementación
+//  4. Tipo: Aplicación web
+//  5. Ejecutar como: Yo (tu cuenta de Google)
+//  6. Quién tiene acceso: Cualquiera
+//  7. Haz clic en "Implementar" → Copia la URL resultante
+//  8. En index.html, reemplaza: APPS_SCRIPT_URL = "TU_URL_AQUI"
+//
+//  IMPORTANTE: Cada vez que modifiques el código debes hacer una
+//  NUEVA implementación (no actualizar la existente) para que los
+//  cambios se apliquen.
+//
+// ══════════════════════════════════════════════════════════════════════════
+//
+//  CÓMO OBTENER TU GOOGLE CLIENT ID (para el login de la web app):
+//  1. Ve a https://console.cloud.google.com
+//  2. Crea un proyecto (o usa uno existente)
+//  3. APIs y servicios → Pantalla de consentimiento OAuth
+//     - Tipo de usuario: Interno
+//     - Agrega docplanner.com como dominio autorizado
+//  4. APIs y servicios → Credenciales → Crear credenciales → ID de cliente OAuth 2.0
+//     - Tipo: Aplicación web
+//     - Orígenes de JavaScript autorizados: agrega tu dominio de GitHub Pages
+//       (ej: https://tu-usuario.github.io)
+//     - También agrega: http://localhost (para pruebas locales)
+//  5. Copia el "ID de cliente" (termina en .apps.googleusercontent.com)
+//  6. En index.html, reemplaza: GOOGLE_CLIENT_ID = "TU_ID_AQUI"
+//
+// ══════════════════════════════════════════════════════════════════════════
 
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--sans);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    /* ── HEADER ── */
-    header {
-      border-bottom: 1px solid var(--border);
-      padding: 18px 40px;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      background: var(--surface);
-    }
-    .logo-ring {
-      width: 36px; height: 36px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      display: flex; align-items: center; justify-content: center;
-      font-size: 18px;
-    }
-    header h1 { font-size: 15px; font-weight: 600; letter-spacing: .3px; }
-    header span { font-size: 12px; color: var(--muted); margin-left: 6px; }
-
-    /* ── LAYOUT ── */
-    main {
-      flex: 1;
-      display: grid;
-      grid-template-columns: 340px 1fr;
-      gap: 0;
-      height: calc(100vh - 65px);
-      overflow: hidden;
-    }
-
-    /* ── SIDEBAR ── */
-    aside {
-      border-right: 1px solid var(--border);
-      background: var(--surface);
-      overflow-y: auto;
-      padding: 28px 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 28px;
-    }
-
-    .section-label {
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 1.2px;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 12px;
-    }
-
-    /* ── FIELDS ── */
-    .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
-    .field label { font-size: 12px; font-weight: 500; color: var(--muted); }
-    .field input, .field select {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      font-family: var(--sans);
-      font-size: 13px;
-      padding: 9px 12px;
-      outline: none;
-      transition: border-color .15s;
-    }
-    .field input:focus, .field select:focus { border-color: var(--accent); }
-    .field input.mono { font-family: var(--mono); font-size: 11px; }
-
-    /* sid badge */
-    .sid-wrap { position: relative; }
-    .sid-wrap input { padding-right: 70px; }
-    .sid-badge {
-      position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-      background: var(--accent); color: white;
-      font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 4px;
-      cursor: pointer; user-select: none;
-    }
-    .sid-badge:hover { opacity: .85; }
-
-    /* ── REPS TABLE ── */
-    .reps-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .reps-table th {
-      text-align: left; color: var(--muted);
-      font-weight: 500; padding: 6px 8px;
-      border-bottom: 1px solid var(--border);
-    }
-    .reps-table td { padding: 5px 8px; }
-    .reps-table tr:hover td { background: var(--surface2); }
-    .reps-table input {
-      background: transparent; border: none; color: var(--text);
-      font-family: var(--sans); font-size: 12px; width: 100%; outline: none;
-      border-bottom: 1px solid transparent;
-    }
-    .reps-table input:focus { border-bottom-color: var(--accent); }
-    .rep-del {
-      background: none; border: none; color: var(--muted);
-      cursor: pointer; font-size: 14px; padding: 0 4px;
-    }
-    .rep-del:hover { color: var(--error); }
-    .add-rep {
-      margin-top: 10px;
-      background: none; border: 1px dashed var(--border);
-      color: var(--muted); border-radius: 6px;
-      font-size: 12px; padding: 7px; width: 100%; cursor: pointer;
-      transition: all .15s;
-    }
-    .add-rep:hover { border-color: var(--accent); color: var(--accent); }
-
-    /* ── IDs TEXTAREA ── */
-    .ids-area {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      font-family: var(--mono);
-      font-size: 11px;
-      padding: 10px 12px;
-      width: 100%;
-      height: 130px;
-      resize: vertical;
-      outline: none;
-      line-height: 1.6;
-    }
-    .ids-area:focus { border-color: var(--accent); }
-    .ids-count { font-size: 11px; color: var(--muted); margin-top: 5px; }
-
-    /* ── RUN BUTTON ── */
-    .run-btn {
-      width: 100%;
-      padding: 13px;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      color: white;
-      border: none;
-      border-radius: 10px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity .15s, transform .1s;
-      letter-spacing: .3px;
-    }
-    .run-btn:hover { opacity: .9; }
-    .run-btn:active { transform: scale(.98); }
-    .run-btn:disabled { opacity: .4; cursor: not-allowed; }
-
-    /* ── MAIN PANEL ── */
-    .panel {
-      overflow-y: auto;
-      padding: 32px 36px;
-      display: flex;
-      flex-direction: column;
-      gap: 24px;
-    }
-
-    /* ── STATUS ── */
-    .status-bar {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 16px 20px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-size: 13px;
-    }
-    .status-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: var(--muted); flex-shrink: 0;
-    }
-    .status-dot.running { background: var(--warning); animation: pulse 1s infinite; }
-    .status-dot.ok      { background: var(--success); }
-    .status-dot.fail    { background: var(--error); }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-
-    /* ── LOG ── */
-    .log-box {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 16px 20px;
-      font-family: var(--mono);
-      font-size: 11px;
-      line-height: 1.8;
-      color: var(--muted);
-      min-height: 120px;
-      max-height: 200px;
-      overflow-y: auto;
-    }
-    .log-box .ok   { color: var(--success); }
-    .log-box .err  { color: var(--error); }
-    .log-box .info { color: var(--accent); }
-    .log-box .warn { color: var(--warning); }
-
-    /* ── RESULTS TABLE ── */
-    .results-header {
-      display: flex; align-items: center; justify-content: space-between;
-    }
-    .results-header h2 { font-size: 14px; font-weight: 600; }
-    .dl-btn {
-      background: var(--success);
-      color: white; border: none;
-      border-radius: 8px; padding: 8px 16px;
-      font-size: 12px; font-weight: 600;
-      cursor: pointer; transition: opacity .15s;
-    }
-    .dl-btn:hover { opacity: .85; }
-    .dl-btn:disabled { opacity: .3; cursor: not-allowed; }
-
-    .table-wrap {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      overflow: auto;
-    }
-    table.res {
-      width: 100%; border-collapse: collapse; font-size: 11px;
-    }
-    table.res th {
-      background: var(--surface2);
-      color: var(--muted);
-      font-weight: 600;
-      font-size: 10px;
-      letter-spacing: .5px;
-      text-transform: uppercase;
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--border);
-      white-space: nowrap;
-      position: sticky; top: 0;
-    }
-    table.res td {
-      padding: 9px 14px;
-      border-bottom: 1px solid var(--border);
-      white-space: nowrap;
-      color: var(--text);
-      max-width: 180px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    table.res tr:last-child td { border-bottom: none; }
-    table.res tr:hover td { background: var(--surface2); }
-
-    /* owner pill */
-    .pill {
-      display: inline-block;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 2px 10px;
-      font-size: 10px;
-      color: var(--muted);
-    }
-
-    /* empty */
-    .empty {
-      text-align: center;
-      color: var(--muted);
-      font-size: 13px;
-      padding: 60px 20px;
-    }
-    .empty-icon { font-size: 36px; margin-bottom: 12px; }
-
-    /* stats row */
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-    }
-    .stat-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 16px 20px;
-    }
-    .stat-card .num { font-size: 26px; font-weight: 700; color: var(--accent); }
-    .stat-card .lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
-
-    /* scrollbar */
-    ::-webkit-scrollbar { width: 5px; height: 5px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-  </style>
-</head>
-<body>
-
-<header>
-  <div class="logo-ring">⚡</div>
-  <h1>SF Asignador <span>· Docplanner</span></h1>
-</header>
-
-<main>
-  <!-- ═══ SIDEBAR ═══ -->
-  <aside>
-
-    <!-- Conexión -->
-    <div>
-      <div class="section-label">Conexión Salesforce</div>
-      <div class="field">
-        <label>Session ID (SID)</label>
-        <div class="sid-wrap">
-          <input id="sid" class="mono" type="password" placeholder="Pega tu SID aquí…"/>
-          <span class="sid-badge" onclick="toggleSid()">VER</span>
-        </div>
-      </div>
-      <div class="field">
-        <label>Instance URL</label>
-        <input id="instanceUrl" type="text" placeholder="https://docplanner.my.salesforce.com"/>
-      </div>
-    </div>
-
-    <!-- Parámetros -->
-    <div>
-      <div class="section-label">Parámetros</div>
-      <div class="field">
-        <label>Días de exclusión</label>
-        <input id="dias" type="number" value="30" min="1"/>
-      </div>
-      <div class="field">
-        <label>Business Line</label>
-        <input id="businessLine" type="text" placeholder="ej. Marketplace"/>
-      </div>
-    </div>
-
-    <!-- Reps -->
-    <div>
-      <div class="section-label">Representantes</div>
-      <table class="reps-table">
-        <thead>
-          <tr>
-            <th>Email</th>
-            <th style="width:60px">Cuota</th>
-            <th style="width:28px"></th>
-          </tr>
-        </thead>
-        <tbody id="repsBody"></tbody>
-      </table>
-      <button class="add-rep" onclick="addRep()">+ Agregar representante</button>
-    </div>
-
-    <!-- IDs de contactos -->
-    <div>
-      <div class="section-label">IDs de Contactos</div>
-      <textarea id="idsArea" class="ids-area" placeholder="Pega aquí los IDs de contacto, uno por línea…" oninput="updateCount()"></textarea>
-      <div class="ids-count" id="idsCount">0 IDs cargados</div>
-    </div>
-
-    <!-- Botón -->
-    <button class="run-btn" id="runBtn" onclick="ejecutar()">⚡ Ejecutar Asignación</button>
-
-  </aside>
-
-  <!-- ═══ PANEL DERECHO ═══ -->
-  <section class="panel">
-
-    <!-- Status -->
-    <div class="status-bar" id="statusBar">
-      <div class="status-dot" id="statusDot"></div>
-      <span id="statusMsg">Listo para ejecutar. Completa los parámetros y presiona Ejecutar.</span>
-    </div>
-
-    <!-- Stats -->
-    <div class="stats">
-      <div class="stat-card">
-        <div class="num" id="statContactos">0</div>
-        <div class="lbl">Contactos asignados</div>
-      </div>
-      <div class="stat-card">
-        <div class="num" id="statReps">0</div>
-        <div class="lbl">Representantes activos</div>
-      </div>
-      <div class="stat-card">
-        <div class="num" id="statPool">0</div>
-        <div class="lbl">IDs enviados a Salesforce</div>
-      </div>
-    </div>
-
-    <!-- Log -->
-    <div class="log-box" id="logBox">
-      <span class="info">// El log de ejecución aparecerá aquí…</span>
-    </div>
-
-    <!-- Results -->
-    <div class="results-header">
-      <h2>Resultado de asignación</h2>
-      <button class="dl-btn" id="dlBtn" onclick="descargarCSV()" disabled>⬇ Descargar CSV</button>
-    </div>
-
-    <div class="table-wrap" id="tableWrap">
-      <div class="empty">
-        <div class="empty-icon">📋</div>
-        <div>Los contactos asignados aparecerán aquí una vez que ejecutes el proceso.</div>
-      </div>
-    </div>
-
-  </section>
-</main>
-
-<script>
-// ══════════════════════════════════════════════
-// CONFIGURACIÓN — pon aquí la URL de tu Apps Script
-// ══════════════════════════════════════════════
-const APPS_SCRIPT_URL = "https://script.google.com/a/macros/docplanner.com/s/AKfycbz27cVj4OBdpexHFp_CrGrJbLLAeKiAeZexJgjBDs8_DIaG5hypndht8E6AbTF2H1MX/exec";
-
-// ══════════════════════════════════════════════
-// ESTADO GLOBAL
-// ══════════════════════════════════════════════
-let resultados = [];
-
-// ══════════════════════════════════════════════
-// REPS
-// ══════════════════════════════════════════════
-function addRep(email = "", cuota = "") {
-  const tbody = document.getElementById("repsBody");
-  const tr = document.createElement("tr");
-  tr.innerHTML = `
-    <td><input type="text" placeholder="email@docplanner.com" value="${email}"/></td>
-    <td><input type="number" min="0" placeholder="0" value="${cuota}" style="width:50px"/></td>
-    <td><button class="rep-del" onclick="this.closest('tr').remove()">✕</button></td>
-  `;
-  tbody.appendChild(tr);
-}
-
-function getReps() {
-  const rows = document.querySelectorAll("#repsBody tr");
-  const reps = [];
-  rows.forEach(tr => {
-    const inputs = tr.querySelectorAll("input");
-    const email = inputs[0].value.trim();
-    const cuota = parseInt(inputs[1].value);
-    if (email && cuota > 0) reps.push({ email, cuota });
-  });
-  return reps;
-}
-
-// IDs
-function updateCount() {
-  const ids = getIds();
-  document.getElementById("idsCount").textContent = `${ids.length} IDs cargados`;
-}
-
-function getIds() {
-  return document.getElementById("idsArea").value
-    .split("\n")
-    .map(l => l.trim())
-    .filter(Boolean);
-}
-
-// SID toggle
-function toggleSid() {
-  const input = document.getElementById("sid");
-  const badge = document.querySelector(".sid-badge");
-  if (input.type === "password") { input.type = "text"; badge.textContent = "OCULTAR"; }
-  else { input.type = "password"; badge.textContent = "VER"; }
-}
-
-// ══════════════════════════════════════════════
-// LOG
-// ══════════════════════════════════════════════
-function log(msg, type = "info") {
-  const box = document.getElementById("logBox");
-  const ts = new Date().toLocaleTimeString("es-MX");
-  box.innerHTML += `\n<span class="${type}">[${ts}] ${msg}</span>`;
-  box.scrollTop = box.scrollHeight;
-}
-
-function setStatus(msg, state = "") {
-  document.getElementById("statusMsg").textContent = msg;
-  const dot = document.getElementById("statusDot");
-  dot.className = "status-dot " + state;
-}
-
-// ══════════════════════════════════════════════
-// EJECUTAR
-// ══════════════════════════════════════════════
-async function ejecutar() {
-  const sid          = document.getElementById("sid").value.trim();
-  const instanceUrl  = document.getElementById("instanceUrl").value.trim();
-  const dias         = parseInt(document.getElementById("dias").value);
-  const businessLine = document.getElementById("businessLine").value.trim();
-  const reps         = getReps();
-  const ids          = getIds();
-
-  // Validaciones
-  if (!sid)          return alert("Falta el Session ID (SID).");
-  if (!instanceUrl)  return alert("Falta la Instance URL.");
-  if (!dias)         return alert("Falta el número de días.");
-  if (!businessLine) return alert("Falta la Business Line.");
-  if (reps.length === 0) return alert("Agrega al menos un representante con cuota mayor a 0.");
-  if (ids.length === 0)  return alert("Pega al menos un ID de contacto.");
-
-  // UI → loading
-  const btn = document.getElementById("runBtn");
-  btn.disabled = true;
-  btn.textContent = "⏳ Ejecutando…";
-  document.getElementById("dlBtn").disabled = true;
-  document.getElementById("logBox").innerHTML = "";
-  resultados = [];
-  renderTable([]);
-
-  setStatus("Conectando con Salesforce…", "running");
-  log("Iniciando proceso de asignación…", "info");
-  log(`Reps: ${reps.length} | IDs enviados: ${ids.length} | Días: ${dias}`, "info");
+// ── Endpoint principal (recibe el POST de la web app) ────────────────────
+function doPost(e) {
+  var output = ContentService.createTextOutput();
+  output.setMimeType(ContentService.MimeType.JSON);
 
   try {
-    const payload = { sid, instanceUrl, dias, businessLine, reps, ids };
-
-    log("Enviando datos al backend (Apps Script)…", "info");
-    const res = await fetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-
-    if (!res.ok) throw new Error(`HTTP ${res.status} - ${res.statusText}`);
-
-    const data = await res.json();
-
-    if (data.error) throw new Error(data.error);
-
-    resultados = data.rows || [];
-    log(`✓ Contactos asignados: ${resultados.length}`, "ok");
-    log(`✓ Pool disponible en Salesforce: ${data.poolTotal}`, "ok");
-
-    // Stats
-    document.getElementById("statContactos").textContent = resultados.length;
-    document.getElementById("statReps").textContent = reps.length;
-    document.getElementById("statPool").textContent = ids.length;
-
-    renderTable(resultados);
-    setStatus(`¡Listo! ${resultados.length} contactos asignados correctamente.`, "ok");
-    document.getElementById("dlBtn").disabled = false;
-    log("Proceso completado. Descarga el CSV cuando quieras.", "ok");
-
+    // NOTA: El frontend envía sin Content-Type para evitar el preflight CORS.
+    // El body llega igualmente como JSON en e.postData.contents.
+    var payload   = JSON.parse(e.postData.contents);
+    var resultado = procesarAsignacion(payload);
+    output.setContent(JSON.stringify(resultado));
   } catch (err) {
-    log(`✗ Error: ${err.message}`, "err");
-    setStatus("Error durante la ejecución. Revisa el log.", "fail");
+    output.setContent(JSON.stringify({ error: err.message, stack: err.stack }));
   }
 
-  btn.disabled = false;
-  btn.textContent = "⚡ Ejecutar Asignación";
+  return output;
 }
 
-// ══════════════════════════════════════════════
-// TABLA DE RESULTADOS
-// ══════════════════════════════════════════════
-const HEADERS = [
-  "Contact__c","LastSource_SO__c","LastSourceAt__c","Company","LastName",
-  "Email","Source_SO__c","SourceSOAt__c","OwnerId","BusinessLine__c",
-  "Lead_Type__c","ContactTypeSegment__c","Country__c",
-  "StatusLeadassist__Use_Round_Robin__c","Status"
-];
+// ── Health check (GET) ───────────────────────────────────────────────────
+function doGet(e) {
+  return ContentService
+    .createTextOutput(JSON.stringify({ status: "OK", version: "2.0", service: "SF Asignador" }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
 
-function renderTable(rows) {
-  const wrap = document.getElementById("tableWrap");
-  if (!rows.length) {
-    wrap.innerHTML = `<div class="empty"><div class="empty-icon">📋</div><div>Los contactos asignados aparecerán aquí una vez que ejecutes el proceso.</div></div>`;
-    return;
+
+// ══════════════════════════════════════════════════════════════════════════
+//  LÓGICA PRINCIPAL — Alineada 100% con el Apps Script original de Sheets
+// ══════════════════════════════════════════════════════════════════════════
+function procesarAsignacion(params) {
+
+  var sessionId    = params.sid;
+  var instanceUrl  = params.instanceUrl;  // siempre "https://docplanner.my.salesforce.com"
+  var dias         = params.dias;
+  var businessLine = params.businessLine;
+  var reps         = params.reps;         // [{email, cuota}]
+  var idsContactos = params.ids;          // ["001xxx", "001yyy", ...]
+
+  // Opciones comunes para todas las llamadas a Salesforce
+  var opciones = {
+    "method": "GET",
+    "headers": {
+      "Authorization": "Bearer " + sessionId,
+      "Content-Type":  "application/json"
+    },
+    "muteHttpExceptions": true
+  };
+
+
+  // ── PASO 1: Buscar Owner IDs en Salesforce ────────────────────────────
+  // Idéntico al original: busca por Email Y Username para máxima cobertura
+  var emailsList = reps.map(function(r) { return "'" + r.email + "'"; });
+
+  var soqlUsers = "SELECT Id, Email, Username FROM User " +
+                  "WHERE Email IN ("    + emailsList.join(",") + ") " +
+                  "OR Username IN ("    + emailsList.join(",") + ")";
+
+  var urlUsers  = instanceUrl + "/services/data/v57.0/query/?q=" + encodeURIComponent(soqlUsers);
+  var resUsers  = UrlFetchApp.fetch(urlUsers, opciones);
+  var jsonUsers = JSON.parse(resUsers.getContentText());
+
+  if (!jsonUsers.records) {
+    throw new Error("Salesforce no devolvió registros de usuarios. Verifica el SID. Respuesta: " + JSON.stringify(jsonUsers).slice(0, 200));
   }
-  let html = `<table class="res"><thead><tr>${HEADERS.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>`;
-  rows.forEach(row => {
-    html += `<tr>${row.map((cell,i) => {
-      const val = cell || "";
-      if (i === 8) return `<td><span class="pill">${val}</span></td>`; // OwnerId
-      return `<td title="${val}">${val}</td>`;
-    }).join("")}</tr>`;
+
+  // Construir mapa email/username → Id (mismo comportamiento que el original)
+  var mapUserIds = {};
+  jsonUsers.records.forEach(function(u) {
+    if (u.Email)    mapUserIds[u.Email.toLowerCase().trim()]    = u.Id;
+    if (u.Username) mapUserIds[u.Username.toLowerCase().trim()] = u.Id;
   });
-  html += "</tbody></table>";
-  wrap.innerHTML = html;
-}
 
-// ══════════════════════════════════════════════
-// DESCARGAR CSV
-// ══════════════════════════════════════════════
-function descargarCSV() {
-  if (!resultados.length) return;
-  const escape = v => `"${String(v).replace(/"/g,'""')}"`;
-  const lines = [
-    HEADERS.map(escape).join(","),
-    ...resultados.map(row => row.map(escape).join(","))
-  ];
-  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href = url;
-  a.download = `asignacion_${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
-// ══════════════════════════════════════════════
-// INIT — cargar reps de ejemplo
-// ══════════════════════════════════════════════
-addRep("rep@docplanner.com", 10);
-</script>
-</body>
-</html>
+  // ── PASO 2: Extraer contactos en bloques (igual que el original) ──────
+  // El original usa bloques de 40 para no superar límites de SOQL
+  var poolContactos = [];
+  var tamanoBloque  = 40;
+
+  for (var i = 0; i < idsContactos.length; i += tamanoBloque) {
+    var bloque         = idsContactos.slice(i, i + tamanoBloque);
+    var idsFormateados = bloque.map(function(id) { return "'" + id + "'"; }).join(",");
+
+    // SOQL idéntico al código original de Sheets
+    var soqlContactos =
+      "SELECT Id, LastSource_SO__c, LastSourceAt__c, Account.Name, LastName, Email, Source_SO__c, SourceSOAt__c " +
+      "FROM Contact " +
+      "WHERE Id IN (" + idsFormateados + ") " +
+      "AND Id NOT IN (" +
+        "SELECT Contact__c FROM Opportunity " +
+        "WHERE IsClosed = False OR (IsClosed = True AND CloseDate = LAST_N_DAYS:" + dias + ")" +
+      ") " +
+      "AND Id NOT IN (" +
+        "SELECT Contact__c FROM Lead " +
+        "WHERE Status IN ('New', 'Assigned', 'Qualifying') OR lead_closed_date__c = LAST_N_DAYS:" + dias +
+      ")";
+
+    var urlContactos = instanceUrl + "/services/data/v57.0/query/?q=" + encodeURIComponent(soqlContactos);
+
+    try {
+      var resContactos  = UrlFetchApp.fetch(urlContactos, opciones);
+      var jsonContactos = JSON.parse(resContactos.getContentText());
+
+      if (jsonContactos.records) {
+        jsonContactos.records.forEach(function(c) {
+          var accName = c.Account ? c.Account.Name : "Sin Cuenta";
+          poolContactos.push([
+            c.Id,
+            c.LastSource_SO__c  || "",
+            c.LastSourceAt__c   || "",
+            accName,
+            c.LastName          || "",
+            c.Email             || "",
+            c.Source_SO__c      || "",
+            c.SourceSOAt__c     || ""
+          ]);
+        });
+      }
+    } catch (err) {
+      Logger.log("Error en bloque de contactos (índice " + i + "): " + err.message);
+    }
+  }
+
+
+  // ── PASO 3: Distribuir contactos entre reps ───────────────────────────
+  // Lógica idéntica al original: puntero secuencial, cuota por rep
+  var filasFinal   = [];
+  var puntero      = 0;
+
+  // Valores fijos exactos del código original
+  var valoresFijos = ["New Business", "DOCTOR", "Mexico", "Assigned", "FALSE"];
+
+  reps.forEach(function(rep) {
+    var email   = rep.email.toLowerCase().trim();
+    var ownerId = mapUserIds[email] || "ID NO ENCONTRADO";
+    var cuota   = rep.cuota || 0;
+
+    for (var k = 0; k < cuota; k++) {
+      if (puntero >= poolContactos.length) break;
+
+      var contacto  = poolContactos[puntero++];
+      var filaFinal = contacto
+        .concat([ownerId, businessLine])
+        .concat(valoresFijos);
+
+      filasFinal.push(filaFinal);
+    }
+  });
+
+  // ── RESPUESTA ─────────────────────────────────────────────────────────
+  // rows:      array de arrays (15 columnas por fila), equivale al "pre template"
+  // poolTotal: cuántos contactos pasaron los filtros de exclusión
+  // assigned:  cuántos se asignaron efectivamente
+  return {
+    rows:      filasFinal,
+    poolTotal: poolContactos.length,
+    assigned:  filasFinal.length
+  };
+}
