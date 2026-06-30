@@ -1148,13 +1148,19 @@ async function ejecutarImport() {
   const mappedCols = Object.keys(fieldMap);
   if (!mappedCols.length) return toast('El field mapping está vacío.', 'bad');
 
-  // Construir CSV en el frontend
+// Construir CSV en el frontend
+  // mappedCols = CSV column names (llaves del fieldMap)
+  // fieldMap[col] = SF field name (valor)
   const csvHeaders = mappedCols.map(c => fieldMap[c]);
   const csvLines   = [csvHeaders.map(h => `"${h}"`).join(',')];
+
   preTemplateRows.forEach(row => {
+    if (!Array.isArray(row)) return;
     const vals = mappedCols.map(col => {
       const idx = PT_HEADERS.indexOf(col);
-      const val = String(idx >= 0 ? (row[idx] ?? '') : '').replace(/"/g, '""');
+      const val = (idx >= 0 && row[idx] !== undefined)
+        ? String(row[idx]).replace(/"/g, '""')
+        : '';
       return `"${val}"`;
     });
     csvLines.push(vals.join(','));
