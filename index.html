@@ -942,7 +942,7 @@ async function ejecutar() {
     if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-
+ilog(`DEBUG respuesta: ${JSON.stringify(Object.keys(data))} | successRows: ${Array.isArray(data.successRows)} | failedRows: ${Array.isArray(data.failedRows)}`, 'warn');
     preTemplateRows = data.rows || [];
 
     log(`✓ Contactos que pasaron el query: ${data.poolTotal}`, 'ok');
@@ -1211,7 +1211,8 @@ const csvHeaders = mappedCols.map(c => fieldMap[c]);
     if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-
+ilog(`DEBUG respuesta: ${JSON.stringify(Object.keys(data))} | successRows: ${Array.isArray(data.successRows)} | failedRows: ${Array.isArray(data.failedRows)}`, 'warn');
+    
     importResultRows = [...(data.successRows || []), ...(data.failedRows || [])];
     const success = (data.successRows || []).length;
     const failed  = (data.failedRows  || []).length;
