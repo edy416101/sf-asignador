@@ -116,14 +116,12 @@
     .tab-content { display: none; flex: 1; overflow: hidden; }
     .tab-content.active { display: flex; }
 
-    /* ══════════════════════════════════════════════
-       TAB 1 — ASIGNACIÓN
-    ══════════════════════════════════════════════ */
+    /* ══ TAB 1 — ASIGNACIÓN ══ */
     .asig-layout { display: grid; grid-template-columns: 420px 1fr; flex: 1; overflow: hidden; }
 
     aside {
       border-right: 1px solid var(--border); background: var(--surface);
-overflow-y: auto; padding: 20px 18px; max-height: 100vh;
+      overflow-y: auto; padding: 20px 18px; max-height: 100vh;
       display: flex; flex-direction: column; gap: 20px;
     }
     .slabel {
@@ -255,23 +253,17 @@ overflow-y: auto; padding: 20px 18px; max-height: 100vh;
     .empty-ico { font-size: 30px; margin-bottom: 10px; opacity: .6; }
     .empty p { font-size: 12.5px; }
 
-    /* ══════════════════════════════════════════════
-       TAB 2 — DATA IMPORT
-    ══════════════════════════════════════════════ */
+    /* ══ TAB 2 — DATA IMPORT ══ */
     .import-layout {
       display: grid;
       grid-template-columns: 420px 1fr;
       flex: 1; overflow: hidden;
     }
-
-    /* Left config panel */
     .import-config {
       border-right: 1px solid var(--border); background: var(--surface);
-overflow-y: auto; padding: 20px 18px; max-height: calc(100vh - 120px);
+      overflow-y: auto; padding: 20px 18px; max-height: calc(100vh - 120px);
       display: flex; flex-direction: column; gap: 20px;
     }
-
-    /* Source badge */
     .source-badge {
       background: var(--sf2); border: 1px solid var(--border); border-radius: 10px;
       padding: 12px 14px; display: flex; flex-direction: column; gap: 6px;
@@ -281,37 +273,20 @@ overflow-y: auto; padding: 20px 18px; max-height: calc(100vh - 120px);
     .source-badge .sb-count { font-size: 11px; color: var(--muted); }
     .sb-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex-shrink: 0; }
     .sb-dot.empty { background: var(--err); }
-
-    /* Section divider */
     .isec { margin-bottom: 0; }
     .isec .slabel { margin-bottom: 10px; }
-
-    /* Config grid */
     .cfg-grid { display: flex; flex-direction: column; gap: 10px; }
-
-    /* Action select special coloring */
-    .action-opt-insert  { color: #60a5fa; }
-    .action-opt-update  { color: #a78bfa; }
-    .action-opt-upsert  { color: #f59e0b; }
-    .action-opt-delete  { color: #f43f5e; }
-    .action-opt-undelete{ color: #22c55e; }
-
-    /* External ID field (hidden unless upsert) */
     #extIdField { display: none; }
-
-    /* Field mapping */
     .fmap-table { width: 100%; border-collapse: collapse; font-size: 11px; }
     .fmap-table th { font-size: 9.5px; font-weight: 700; color: var(--muted); letter-spacing: .8px; text-transform: uppercase; padding: 5px 8px; border-bottom: 1px solid var(--border); }
     .fmap-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
     .fmap-table tr:last-child td { border-bottom: none; }
     .fmap-csv { font-family: var(--mono); font-size: 9.5px; color: var(--text); white-space: nowrap; }
-    .fmap-arr  { color: var(--muted); font-size: 12px; text-align: center; }
-    .fmap-sf   { font-size: 10px; }
-  .fmap-sf select { background: var(--sf2); border: 1px solid var(--border); border-radius: 5px; color: var(--text); font-size: 10px; padding: 3px 6px; outline: none; font-family: var(--mono); width: 100%; cursor: pointer; min-width: 120px; }
+    .fmap-arr { color: var(--muted); font-size: 12px; text-align: center; }
+    .fmap-sf { font-size: 10px; }
+    .fmap-sf select { background: var(--sf2); border: 1px solid var(--border); border-radius: 5px; color: var(--text); font-size: 10px; padding: 3px 6px; outline: none; font-family: var(--mono); width: 100%; cursor: pointer; min-width: 120px; }
     .fmap-sf select:focus { border-color: var(--accent); }
-    .fmap-ok   { font-size: 11px; text-align: center; }
-
-    /* Run import button */
+    .fmap-ok { font-size: 11px; text-align: center; }
     .btn-import {
       width: 100%; padding: 12px;
       background: linear-gradient(135deg, var(--ac2) 0%, #9333ea 100%);
@@ -324,18 +299,12 @@ overflow-y: auto; padding: 20px 18px; max-height: calc(100vh - 120px);
     .btn-import:hover { opacity: .9; }
     .btn-import:active { transform: scale(.98); }
     .btn-import:disabled { opacity: .35; cursor: not-allowed; }
-
-    /* Right import panel */
     .import-panel { overflow-y: auto; padding: 24px 28px; display: flex; flex-direction: column; gap: 18px; }
-
-    /* Import status */
     .import-status-row {
       background: var(--surface); border: 1px solid var(--border);
       border-radius: 10px; padding: 13px 17px;
       display: flex; align-items: center; gap: 10px; font-size: 12.5px;
     }
-
-    /* Progress bar */
     .progress-wrap {
       background: var(--surface); border: 1px solid var(--border);
       border-radius: 10px; padding: 16px 18px;
@@ -355,19 +324,14 @@ overflow-y: auto; padding: 20px 18px; max-height: calc(100vh - 120px);
     .pc.processed .pn { color: var(--accent); }
     .pc.success .pn  { color: var(--ok); }
     .pc.failed .pn   { color: var(--err); }
-
-    /* Import log */
     .import-log { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 13px 16px; font-family: var(--mono); font-size: 10.5px; line-height: 1.9; color: var(--muted); min-height: 88px; max-height: 160px; overflow-y: auto; }
     .import-log .ok   { color: var(--ok); }
     .import-log .err  { color: var(--err); }
     .import-log .info { color: var(--accent); }
     .import-log .warn { color: var(--warn); }
-
-    /* Result table */
     .result-header { display: flex; align-items: center; justify-content: space-between; }
     .result-header h2 { font-size: 13px; font-weight: 600; }
     .result-btns { display: flex; gap: 8px; }
-
     .res-tbl-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: auto; flex: 1; min-height: 120px; }
     table.res-import { width: 100%; border-collapse: collapse; font-size: 10.5px; }
     table.res-import th {
@@ -387,7 +351,6 @@ overflow-y: auto; padding: 20px 18px; max-height: calc(100vh - 120px);
     .res-id     { font-family: var(--mono); font-size: 9.5px; color: var(--muted); }
     .res-errors { color: var(--err); font-size: 9.5px; }
 
-    /* Toast */
     .toast {
       position: fixed; bottom: 22px; right: 22px;
       background: var(--sf2); border: 1px solid var(--border);
@@ -433,7 +396,6 @@ overflow-y: auto; padding: 20px 18px; max-height: calc(100vh - 120px);
     </div>
   </header>
 
-  <!-- TAB BAR -->
   <div class="tab-bar">
     <button class="tab active" onclick="switchTab('asig')" id="tab-asig">
       ⚡ Asignación
@@ -445,9 +407,7 @@ overflow-y: auto; padding: 20px 18px; max-height: calc(100vh - 120px);
     </button>
   </div>
 
-  <!-- ════════════════════════════════
-       TAB 1 — ASIGNACIÓN
-  ════════════════════════════════ -->
+  <!-- ════ TAB 1 — ASIGNACIÓN ════ -->
   <div class="tab-content active" id="tc-asig">
     <div class="asig-layout">
 
@@ -488,8 +448,7 @@ overflow-y: auto; padding: 20px 18px; max-height: calc(100vh - 120px);
           </div>
           <div class="bulk-panel" id="bulkPanel">
             <p>Pega los emails aquí, uno por línea:</p>
-            <textarea id="bulkEmails"
-              placeholder="email@docplanner.com"></textarea>
+            <textarea id="bulkEmails" placeholder="email@docplanner.com"></textarea>
             <div class="bulk-actions">
               <button class="btn-apply" onclick="aplicarBulk()">✓ Agregar a la tabla</button>
               <button class="btn-cancel-bulk" onclick="toggleBulk()">Cancelar</button>
@@ -548,16 +507,12 @@ overflow-y: auto; padding: 20px 18px; max-height: calc(100vh - 120px);
     </div>
   </div>
 
-  <!-- ════════════════════════════════
-       TAB 2 — DATA IMPORT
-  ════════════════════════════════ -->
+  <!-- ════ TAB 2 — DATA IMPORT ════ -->
   <div class="tab-content" id="tc-import">
     <div class="import-layout">
 
-      <!-- Left: Config -->
       <div class="import-config">
 
-        <!-- Fuente de datos -->
         <div class="isec">
           <div class="slabel">Fuente de datos</div>
           <div class="source-badge">
@@ -570,18 +525,15 @@ overflow-y: auto; padding: 20px 18px; max-height: calc(100vh - 120px);
           </div>
         </div>
 
-        <!-- Configure Import -->
         <div class="isec">
           <div class="slabel">Configure Import</div>
           <div class="cfg-grid">
-
             <div class="field">
               <label>API Type</label>
               <select id="cfg-apitype" disabled style="appearance:none; pointer-events:none;">
                 <option value="enterprise" selected>Enterprise (default)</option>
               </select>
             </div>
-
             <div class="field">
               <label>Action</label>
               <select id="cfg-action" onchange="onActionChange()">
@@ -592,33 +544,27 @@ overflow-y: auto; padding: 20px 18px; max-height: calc(100vh - 120px);
                 <option value="undelete">Undelete</option>
               </select>
             </div>
-
             <div class="field" id="extIdField">
               <label>External ID Field (Upsert)</label>
               <input id="cfg-extid" type="text" placeholder="ej. Id, Email, Custom_Id__c"/>
             </div>
-
             <div class="field">
               <label>Object</label>
               <select id="cfg-object">
                 <option value="Lead" selected>Lead</option>
               </select>
             </div>
-
             <div class="field">
               <label>Batch size</label>
               <input id="cfg-batch" type="number" value="30" min="1" max="10000"/>
             </div>
-
             <div class="field">
               <label>Threads (paralelo)</label>
               <input id="cfg-threads" type="number" value="3" min="1" max="5"/>
             </div>
-
           </div>
         </div>
 
-        <!-- Field Mapping -->
         <div class="isec">
           <div class="slabel">Field Mapping</div>
           <table class="fmap-table">
@@ -634,14 +580,12 @@ overflow-y: auto; padding: 20px 18px; max-height: calc(100vh - 120px);
           </table>
         </div>
 
-        <!-- Run button -->
         <button class="btn-import" id="importBtn" onclick="ejecutarImport()" disabled>
           📥 Ejecutar Import a Salesforce
         </button>
 
       </div>
 
-      <!-- Right: Results -->
       <div class="import-panel">
 
         <div class="import-status-row">
@@ -649,7 +593,6 @@ overflow-y: auto; padding: 20px 18px; max-height: calc(100vh - 120px);
           <span id="importStatusMsg">Configura los parámetros y presiona Ejecutar Import.</span>
         </div>
 
-        <!-- Progress bar (visible during job) -->
         <div class="progress-wrap" id="progressWrap">
           <div class="progress-header">
             <span class="ph-label">Procesando registros…</span>
@@ -682,16 +625,18 @@ overflow-y: auto; padding: 20px 18px; max-height: calc(100vh - 120px);
           <span class="info">// El log del import aparecerá aquí…</span>
         </div>
 
-<div class="result-header">
-  <h2>Resultado del Import</h2>
-  <div class="result-btns" style="display:flex;gap:8px;">
-    <button class="btn-icon" style="background:var(--accent)" id="copyResultBtn" onclick="copiarResultado()" disabled>📋 Copiar resultado</button>
-    <button class="btn-icon" style="background:var(--accent)" id="dlResultBtn" onclick="descargarResultado()" disabled>⬇ Descargar resultado</button>
-  </div>
-</div>
+        <div class="result-header">
+          <h2>Resultado del Import</h2>
+          <div class="result-btns" style="display:flex;gap:8px;">
+            <button class="btn-icon" style="background:var(--accent)" id="copyResultBtn" onclick="copiarResultado()" disabled>📋 Copiar resultado</button>
+            <button class="btn-icon" style="background:var(--accent)" id="dlResultBtn" onclick="descargarResultado()" disabled>⬇ Descargar resultado</button>
+          </div>
+        </div>
+
         <div class="res-tbl-wrap" id="resTblWrap">
           <div class="empty"><div class="empty-ico">📥</div><p>El resultado del import aparecerá aquí.</p></div>
         </div>
+
       </div>
     </div>
   </div>
@@ -704,33 +649,20 @@ overflow-y: auto; padding: 20px 18px; max-height: calc(100vh - 120px);
 // ══════════════════════════════════════════════════════════════════
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════
-const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbylLPJetD6r1Lbo7tTdK35S-6BeWA23CMwsVDo_m-dvefROjN1UyGA0FRFqK-Inou1z_A/exec";
+const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbwxEKR8Lo91pFL77MjS-pjJukYQqpPX4s2rHYeu9UvrX5talNKn2_jOG2dd0gcjwFIoBg/exec";
 const GOOGLE_CLIENT_ID = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 const INSTANCE_URL     = "https://docplanner.my.salesforce.com";
-const SF_API_VERSION   = "v57.0";
 
 // ══════════════════════════════════════════════════════════════════
-//  HEADERS EXACTOS DEL PRE TEMPLATE (fuente de verdad)
+//  HEADERS
 // ══════════════════════════════════════════════════════════════════
 const PT_HEADERS = [
-  'Contact__c',
-  'LastSource_SO__c',
-  'LastSourceAt__c',
-  'Company',
-  'LastName',
-  'Email',
-  'Source_SO__c',
-  'SourceSOAt__c',
-  'OwnerId',
-  'BusinessLine__c',
-  'Lead_Type__c',
-  'ContactTypeSegment__c',
-  'Country__c',
-  'StatusLeadassist__Use_Round_Robin__c',
-  'Status'
+  'Contact__c','LastSource_SO__c','LastSourceAt__c','Company','LastName',
+  'Email','Source_SO__c','SourceSOAt__c','OwnerId','BusinessLine__c',
+  'Lead_Type__c','ContactTypeSegment__c','Country__c',
+  'StatusLeadassist__Use_Round_Robin__c','Status'
 ];
 
-// Columnas del resultado del import (las 18 pedidas)
 const IMPORT_RESULT_HEADERS = [
   'Contact__c', 'LastSource_SO__c', 'LastSourceAt__c', 'Company', 'LastName',
   'Email', 'Source_SO__c', 'SourceSOAt__c', 'BusinessLine__c',
@@ -738,24 +670,15 @@ const IMPORT_RESULT_HEADERS = [
   '__Status', '__Id', '__Action', '__Errors'
 ];
 
-// Mapping por defecto CSV → SF Field para el objeto Lead
-// (los campos del pre template mapeados a sus API names en Lead)
 const DEFAULT_FIELD_MAP = {
-  'Contact__c':                            'Contact__c',
-  'LastSource_SO__c':                      'LastSource_SO__c',
-  'LastSourceAt__c':                       'LastSourceAt__c',
-  'Company':                               'Company',
-  'LastName':                              'LastName',
-  'Email':                                 'Email',
-  'Source_SO__c':                          'Source_SO__c',
-  'SourceSOAt__c':                         'SourceSOAt__c',
-  'OwnerId':                               'OwnerId',
-  'BusinessLine__c':                       'BusinessLine__c',
-  'Lead_Type__c':                          'Lead_Type__c',
-  'ContactTypeSegment__c':                 'ContactTypeSegment__c',
-  'Country__c':                            'Country__c',
-  'StatusLeadassist__Use_Round_Robin__c':  'StatusLeadassist__Use_Round_Robin__c',
-  'Status':                                'Status'
+  'Contact__c':'Contact__c','LastSource_SO__c':'LastSource_SO__c',
+  'LastSourceAt__c':'LastSourceAt__c','Company':'Company','LastName':'LastName',
+  'Email':'Email','Source_SO__c':'Source_SO__c','SourceSOAt__c':'SourceSOAt__c',
+  'OwnerId':'OwnerId','BusinessLine__c':'BusinessLine__c',
+  'Lead_Type__c':'Lead_Type__c','ContactTypeSegment__c':'ContactTypeSegment__c',
+  'Country__c':'Country__c',
+  'StatusLeadassist__Use_Round_Robin__c':'StatusLeadassist__Use_Round_Robin__c',
+  'Status':'Status'
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -763,9 +686,7 @@ const DEFAULT_FIELD_MAP = {
 // ══════════════════════════════════════════════════════════════════
 let preTemplateRows  = [];
 let importResultRows = [];
-let pollingTimer     = null;
 let toastTimer       = null;
-let currentJobId     = null;
 let totalAsignados   = 0;
 
 // ══════════════════════════════════════════════════════════════════
@@ -942,7 +863,7 @@ async function ejecutar() {
     if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-ilog(`DEBUG respuesta: ${JSON.stringify(Object.keys(data))} | successRows: ${Array.isArray(data.successRows)} | failedRows: ${Array.isArray(data.failedRows)}`, 'warn');
+
     preTemplateRows = data.rows || [];
 
     log(`✓ Contactos que pasaron el query: ${data.poolTotal}`, 'ok');
@@ -967,6 +888,7 @@ ilog(`DEBUG respuesta: ${JSON.stringify(Object.keys(data))} | successRows: ${Arr
     else toast('⚠ Sin resultados. Revisa los IDs y filtros.', 'bad');
 
   } catch (err) {
+    console.error(err);
     log(`✗ Error: ${err.message}`, 'err');
     setStatus('Error durante la ejecución. Revisa el log.', 'err');
     toast('❌ ' + err.message, 'bad');
@@ -1021,8 +943,6 @@ async function copiarTabla() {
 // ══════════════════════════════════════════════════════════════════
 //  TAB 2 — DATA IMPORT
 // ══════════════════════════════════════════════════════════════════
-
-/* Actualizar panel de fuente cuando se va al tab */
 function actualizarFuenteImport() {
   const dot   = document.getElementById('srcDot');
   const label = document.getElementById('srcLabel');
@@ -1046,13 +966,11 @@ function actualizarFuenteImport() {
   }
 }
 
-/* Cuando cambia la acción, mostrar/ocultar External ID */
 function onActionChange() {
   const action = document.getElementById('cfg-action').value;
   document.getElementById('extIdField').style.display = (action === 'upsert') ? '' : 'none';
 }
 
-/* Construir tabla de field mapping (CSV header → SF field) */
 function buildFieldMapping() {
   const tbody = document.getElementById('fmapBody');
   tbody.innerHTML = '';
@@ -1079,7 +997,6 @@ function syncMapCheck(sel, col) {
   if (ok) ok.textContent = sel.value === '--skip--' ? '—' : '✓';
 }
 
-/* Log del import */
 function ilog(msg, type = 'info') {
   const box = document.getElementById('importLog');
   const ts  = new Date().toLocaleTimeString('es-MX');
@@ -1097,12 +1014,11 @@ function resetImportUI() {
   document.getElementById('progressWrap').classList.remove('visible');
   document.getElementById('importLog').innerHTML = '<span class="info">// El log del import aparecerá aquí…</span>';
   renderImportResult([]);
-document.getElementById('dlResultBtn').disabled   = true;
-document.getElementById('copyResultBtn').disabled = true;
+  document.getElementById('dlResultBtn').disabled   = true;
+  document.getElementById('copyResultBtn').disabled = true;
   document.getElementById('badge-import').textContent = '—';
 }
 
-/* Actualizar barra de progreso */
 function updateProgress(total, processed, success, failed) {
   const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
   document.getElementById('progPct').textContent    = pct + '%';
@@ -1114,16 +1030,9 @@ function updateProgress(total, processed, success, failed) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  BULK API 2.0 — EJECUTAR IMPORT
-//
-//  Flujo:
-//  1. Crear job      POST /jobs/ingest
-//  2. Subir CSV      PUT  /jobs/ingest/{id}/batches
-//  3. Cerrar job     PATCH /jobs/ingest/{id}  → state: UploadComplete
-//  4. Poll estado    GET  /jobs/ingest/{id}   → hasta JobComplete/Failed/Aborted
-//  5. Obtener OK     GET  /jobs/ingest/{id}/successfulResults
-//  6. Obtener errores GET  /jobs/ingest/{id}/failedResults
-//  7. Combinar y mostrar
+//  EJECUTAR IMPORT — MISMO PATRÓN QUE LA ASIGNACIÓN
+//  Solo manda los datos crudos a Apps Script.
+//  Apps Script hace TODO el trabajo (construye CSV, llama Bulk API, polling).
 // ══════════════════════════════════════════════════════════════════
 async function ejecutarImport() {
   if (!preTemplateRows.length) {
@@ -1139,37 +1048,35 @@ async function ejecutarImport() {
   if (action === 'upsert' && !extId) return toast('Para Upsert debes indicar el External ID Field.', 'bad');
 
   // Field mapping desde la UI
-  const fmapRows = document.querySelectorAll('#fmapBody tr');
-  const fieldMap = {};
+  // Para cada columna del pre template, decidir si se envía o se omite,
+  // y a qué SF field se mapea
+  const fmapRows  = document.querySelectorAll('#fmapBody tr');
+  const sfHeaders = [];   // SF field names que van al CSV
+  const colIndexes = [];  // qué índices de PT_HEADERS incluir
+
   fmapRows.forEach((tr, i) => {
     const sfVal = tr.querySelector('select').value;
-    if (sfVal !== '--skip--') fieldMap[PT_HEADERS[i]] = sfVal;
-  });
-  const mappedCols = Object.keys(fieldMap);
-  if (!mappedCols.length) return toast('El field mapping está vacío.', 'bad');
-
-const csvHeaders = mappedCols.map(c => fieldMap[c]);
-  const csvLines   = [csvHeaders.map(h => `"${h}"`).join(',')];
-
-  for (let ri = 0; ri < preTemplateRows.length; ri++) {
-    const row = preTemplateRows[ri];
-    const vals = [];
-    for (let ci = 0; ci < mappedCols.length; ci++) {
-      const col = mappedCols[ci];
-      const idx = PT_HEADERS.indexOf(col);
-      let val = '';
-      try {
-        if (Array.isArray(row)) {
-          val = idx >= 0 ? String(row[idx] ?? '') : '';
-        } else if (row && typeof row === 'object') {
-          val = String(row[col] ?? '');
-        }
-      } catch(e) { val = ''; }
-      vals.push('"' + String(val).replace(/"/g, '""') + '"');
+    if (sfVal !== '--skip--') {
+      sfHeaders.push(sfVal);
+      colIndexes.push(i);
     }
-    csvLines.push(vals.join(','));
+  });
+
+  if (!sfHeaders.length) return toast('El field mapping está vacío.', 'bad');
+
+  // Construir las filas con solo las columnas mapeadas
+  // Esto SOLO reordena/filtra, no construye CSV. Apps Script construye el CSV.
+  const rowsToSend = [];
+  for (let i = 0; i < preTemplateRows.length; i++) {
+    const row = preTemplateRows[i];
+    if (!Array.isArray(row)) continue;
+    const newRow = [];
+    for (let j = 0; j < colIndexes.length; j++) {
+      const idx = colIndexes[j];
+      newRow.push(row[idx] !== undefined && row[idx] !== null ? row[idx] : '');
+    }
+    rowsToSend.push(newRow);
   }
-  const csvContent = csvLines.join('\n');
 
   // UI loading
   const btn = document.getElementById('importBtn');
@@ -1181,27 +1088,26 @@ const csvHeaders = mappedCols.map(c => fieldMap[c]);
   document.getElementById('dlResultBtn').disabled   = true;
   document.getElementById('copyResultBtn').disabled = true;
 
-  const total = preTemplateRows.length;
+  const total = rowsToSend.length;
   updateProgress(total, 0, 0, 0);
   setImportStatus(`Enviando ${total} registros al servidor…`, 'run');
 
   ilog(`Iniciando import vía Apps Script → Salesforce`, 'info');
   ilog(`Objeto: ${object} | Acción: ${action} | Registros: ${total}`, 'info');
-  ilog(`DEBUG — mappedCols: ${JSON.stringify(mappedCols)} | fila0: ${JSON.stringify(preTemplateRows[0])}`, 'warn');
   ilog('⏳ Apps Script ejecutará el Bulk Job. Puede tardar entre 30 seg y varios minutos…', 'warn');
 
   try {
     const payload = {
       action:      'import',
-      sid,
+      sid:         sid,
       instanceUrl: INSTANCE_URL,
-      object,
+      object:      object,
       operation:   action,
       externalId:  extId,
-      csvContent
+      headers:     sfHeaders,
+      rows:        rowsToSend
     };
 
-    // Pasa por Apps Script — sin CORS
     const res = await fetch(APPS_SCRIPT_URL, {
       method: 'POST',
       redirect: 'follow',
@@ -1210,23 +1116,24 @@ const csvHeaders = mappedCols.map(c => fieldMap[c]);
 
     if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
     const data = await res.json();
-   if (data.error) throw new Error(data.error);
+    if (data.error) throw new Error(data.error);
 
-    ilog(`DEBUG respuesta completa: ${JSON.stringify(data).slice(0,300)}`, 'warn');
+    ilog(`✓ Job ID: ${data.jobId || 'N/A'}`, 'ok');
+    ilog(`✓ Estado final: ${data.jobState || 'N/A'}`, 'ok');
 
-    const successRows = Array.isArray(data.successRows) ? data.successRows : [];
-    const failedRows  = Array.isArray(data.failedRows)  ? data.failedRows  : [];
-    importResultRows  = [...successRows, ...failedRows];
-    const success = successRows.length;
-    const failed  = failedRows.length;
+    // Parsear los CSVs de resultado que devuelve Apps Script
+    const okRows   = parseSfResultCsv(data.successCsv || '', true);
+    const failRows = parseSfResultCsv(data.failedCsv  || '', false);
+    importResultRows = okRows.concat(failRows);
+
+    const success = okRows.length;
+    const failed  = failRows.length;
 
     updateProgress(total, success + failed, success, failed);
     document.getElementById('progPct').textContent = '100%';
     document.getElementById('progBar').style.width = '100%';
 
-    ilog(`✓ Job ID: ${data.jobId || 'N/A'}`, 'ok');
-    ilog(`✓ Estado final: ${data.jobState || 'N/A'}`, 'ok');
-    ilog(`✓ Exitosos: ${success} | Fallidos: ${failed}`, 'ok');
+    ilog(`✓ Exitosos: ${success} | Fallidos: ${failed}`, success > 0 ? 'ok' : 'warn');
 
     renderImportResult(importResultRows);
     setImportStatus(`Import completado: ${success} exitosos, ${failed} fallidos.`, failed === 0 ? 'ok' : 'err');
@@ -1235,55 +1142,41 @@ const csvHeaders = mappedCols.map(c => fieldMap[c]);
     document.getElementById('badge-import').textContent = `${success} ✓`;
     toast(`✅ Import completo: ${success} OK · ${failed} errores`, failed === 0 ? 'ok' : 'bad');
 
-} catch (err) {
-    console.error(err); // <--- ESTA ES LA LÍNEA NUEVA
-    ilog ( ` ✗ Error: ${ err . message } ` , 'err' ) ;
-    setImportStatus ( 'Error en el import. Revisa el log.' , 'err' ) ;
-    toast ( '❌ ' + err . message , 'bad' ) ;
+  } catch (err) {
+    console.error(err);
+    ilog(`✗ Error: ${err.message}`, 'err');
+    setImportStatus('Error en el import. Revisa el log.', 'err');
+    toast('❌ ' + err.message, 'bad');
   }
 
   btn.disabled = false; btn.textContent = '📥 Ejecutar Import a Salesforce';
 }
 
-/* Combinar CSVs de resultados exitosos y fallidos en array de objetos */
-function combinarResultados(okCsv, failCsv) {
-  const rows = [];
+// Parsear el CSV de resultados que devuelve Apps Script
+function parseSfResultCsv(csvText, isOk) {
+  if (!csvText || !csvText.trim()) return [];
+  const lines = csvText.split('\n').filter(l => l.trim());
+  if (lines.length < 2) return [];
 
-  const parseCSV = (csvText, isOk) => {
-    if (!csvText.trim()) return;
-    const lines = csvText.split('\n').filter(Boolean);
-    if (lines.length < 2) return;
-    // SF Bulk API devuelve: sf__Id,sf__Created,<campos_originales>  para OK
-    // y: sf__Id,sf__Error,<campos_originales> para Failed
-    const headers = parseCsvRow(lines[0]);
-    for (let i = 1; i < lines.length; i++) {
-      const vals = parseCsvRow(lines[i]);
-      const obj  = {};
-      headers.forEach((h, idx) => { obj[h] = vals[idx] ?? ''; });
+  const csvHdrs = parseCsvRow(lines[0]);
+  const result = [];
 
-      // Mapear a nuestras columnas de resultado
-      const result = {};
-      IMPORT_RESULT_HEADERS.forEach(h => { result[h] = ''; });
+  for (let i = 1; i < lines.length; i++) {
+    const vals = parseCsvRow(lines[i]);
+    const obj = {};
+    csvHdrs.forEach((h, idx) => { obj[h] = vals[idx] !== undefined ? vals[idx] : ''; });
 
-      // Campos del pre template
-      PT_HEADERS.forEach(h => { result[h] = obj[h] || ''; });
-
-      // Campos especiales de Bulk API
-      result['__Id']     = obj['sf__Id'] || '';
-      result['__Action'] = obj['sf__Created'] === 'true' ? 'insert' : (obj['sf__Id'] ? 'update' : '');
-      result['__Status'] = isOk ? 'true' : 'false';
-      result['__Errors'] = obj['sf__Error'] || '';
-
-      rows.push(result);
-    }
-  };
-
-  parseCSV(okCsv, true);
-  parseCSV(failCsv, false);
-  return rows;
+    const row = {};
+    IMPORT_RESULT_HEADERS.forEach(h => { row[h] = obj[h] || ''; });
+    row['__Id']     = obj['sf__Id'] || '';
+    row['__Action'] = isOk ? (obj['sf__Created'] === 'true' ? 'insert' : 'update') : '';
+    row['__Status'] = isOk ? 'true' : 'false';
+    row['__Errors'] = obj['sf__Error'] || '';
+    result.push(row);
+  }
+  return result;
 }
 
-/* Parser CSV simple (maneja comillas) */
 function parseCsvRow(line) {
   const result = [];
   let cur = '', inQ = false;
@@ -1302,7 +1195,6 @@ function parseCsvRow(line) {
   return result;
 }
 
-/* Render tabla de resultados del import */
 function renderImportResult(rows) {
   const wrap = document.getElementById('resTblWrap');
   if (!rows.length) {
@@ -1315,7 +1207,6 @@ function renderImportResult(rows) {
 
   rows.forEach(row => {
     const isOk  = row['__Status'] === 'true';
-    const hasErr = row['__Errors'] && row['__Errors'].trim();
     html += `<tr>`;
     IMPORT_RESULT_HEADERS.forEach(h => {
       const v = String(row[h] ?? '');
@@ -1338,7 +1229,6 @@ function renderImportResult(rows) {
   wrap.innerHTML = html;
 }
 
-/* Descargar resultado como CSV */
 function descargarResultado() {
   if (!importResultRows.length) return;
   const e = v => `"${String(v ?? '').replace(/"/g,'""')}"`;
@@ -1349,6 +1239,7 @@ function descargarResultado() {
   descargarBlob('\uFEFF' + lines.join('\r\n'), 'text/csv', `import_result_${hoy()}.csv`);
   toast('⬇ Resultado descargado', 'ok');
 }
+
 async function copiarResultado() {
   if (!importResultRows.length) return;
   const lines = [
@@ -1364,7 +1255,7 @@ async function copiarResultado() {
     toast('No se pudo copiar. Usa el botón de descarga.', 'bad');
   }
 }
-  
+
 // ══════════════════════════════════════════════════════════════════
 //  UTILIDADES
 // ══════════════════════════════════════════════════════════════════
@@ -1379,8 +1270,6 @@ function toast(msg, type = 'ok') {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { el.className = 'toast'; }, 4000);
 }
-
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function hoy() { return new Date().toISOString().slice(0,10); }
 
