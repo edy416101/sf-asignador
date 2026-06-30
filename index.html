@@ -649,7 +649,7 @@
 // ══════════════════════════════════════════════════════════════════
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════
-const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbwxEKR8Lo91pFL77MjS-pjJukYQqpPX4s2rHYeu9UvrX5talNKn2_jOG2dd0gcjwFIoBg/exec";
+const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbxOEWyiXT1Pb_EWizeyDDaLf6rjxeBFtk-D9ljDLFzxaNRlqOrkCYu1I7ibtrSCjnW3vg/exec";
 const GOOGLE_CLIENT_ID = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 const INSTANCE_URL     = "https://docplanner.my.salesforce.com";
 
@@ -1120,6 +1120,8 @@ async function ejecutarImport() {
 
     ilog(`✓ Job ID: ${data.jobId || 'N/A'}`, 'ok');
     ilog(`✓ Estado final: ${data.jobState || 'N/A'}`, 'ok');
+    if (data.errorMessage) ilog(`⚠ Salesforce dice: ${data.errorMessage}`, 'err');
+    if (data.pollData) console.log('DEBUG pollData:', data.pollData);
 
     // Parsear los CSVs de resultado que devuelve Apps Script
     const okRows   = parseSfResultCsv(data.successCsv || '', true);
