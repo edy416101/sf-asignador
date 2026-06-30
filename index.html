@@ -1235,10 +1235,11 @@ const csvHeaders = mappedCols.map(c => fieldMap[c]);
     document.getElementById('badge-import').textContent = `${success} ✓`;
     toast(`✅ Import completo: ${success} OK · ${failed} errores`, failed === 0 ? 'ok' : 'bad');
 
-  } catch (err) {
-    ilog(`✗ Error: ${err.message}`, 'err');
-    setImportStatus('Error en el import. Revisa el log.', 'err');
-    toast('❌ ' + err.message, 'bad');
+} catch (err) {
+    console.error(err); // <--- ESTA ES LA LÍNEA NUEVA
+    ilog ( ` ✗ Error: ${ err . message } ` , 'err' ) ;
+    setImportStatus ( 'Error en el import. Revisa el log.' , 'err' ) ;
+    toast ( '❌ ' + err . message , 'bad' ) ;
   }
 
   btn.disabled = false; btn.textContent = '📥 Ejecutar Import a Salesforce';
