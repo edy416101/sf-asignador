@@ -1148,25 +1148,27 @@ async function ejecutarImport() {
   const mappedCols = Object.keys(fieldMap);
   if (!mappedCols.length) return toast('El field mapping está vacío.', 'bad');
 
-// Construir CSV en el frontend
-  // mappedCols = CSV column names (llaves del fieldMap)
-  // fieldMap[col] = SF field name (valor)
-  const csvHeaders = mappedCols.map(c => fieldMap[c]);
+const csvHeaders = mappedCols.map(c => fieldMap[c]);
   const csvLines   = [csvHeaders.map(h => `"${h}"`).join(',')];
 
- preTemplateRows.forEach(row => {
-    const vals = mappedCols.map(col => {
+  for (let ri = 0; ri < preTemplateRows.length; ri++) {
+    const row = preTemplateRows[ri];
+    const vals = [];
+    for (let ci = 0; ci < mappedCols.length; ci++) {
+      const col = mappedCols[ci];
       const idx = PT_HEADERS.indexOf(col);
       let val = '';
-      if (Array.isArray(row) && idx >= 0 && row[idx] !== undefined) {
-        val = String(row[idx]).replace(/"/g, '""');
-      } else if (!Array.isArray(row) && row[col] !== undefined) {
-        val = String(row[col]).replace(/"/g, '""');
-      }
-      return `"${val}"`;
-    });
+      try {
+        if (Array.isArray(row)) {
+          val = idx >= 0 ? String(row[idx] ?? '') : '';
+        } else if (row && typeof row === 'object') {
+          val = String(row[col] ?? '');
+        }
+      } catch(e) { val = ''; }
+      vals.push('"' + val.replace(/"/g, '""') + '"');
+    }
     csvLines.push(vals.join(','));
-  });
+  }
   const csvContent = csvLines.join('\n');
 
   // UI loading
@@ -1185,6 +1187,7 @@ async function ejecutarImport() {
 
   ilog(`Iniciando import vía Apps Script → Salesforce`, 'info');
   ilog(`Objeto: ${object} | Acción: ${action} | Registros: ${total}`, 'info');
+  ilog(`DEBUG — mappedCols: ${JSON.stringify(mappedCols)} | fila0: ${JSON.stringify(preTemplateRows[0])}`, 'warn');
   ilog('⏳ Apps Script ejecutará el Bulk Job. Puede tardar entre 30 seg y varios minutos…', 'warn');
 
   try {
