@@ -1154,13 +1154,15 @@ async function ejecutarImport() {
   const csvHeaders = mappedCols.map(c => fieldMap[c]);
   const csvLines   = [csvHeaders.map(h => `"${h}"`).join(',')];
 
-  preTemplateRows.forEach(row => {
-    if (!Array.isArray(row)) return;
+ preTemplateRows.forEach(row => {
     const vals = mappedCols.map(col => {
       const idx = PT_HEADERS.indexOf(col);
-      const val = (idx >= 0 && row[idx] !== undefined)
-        ? String(row[idx]).replace(/"/g, '""')
-        : '';
+      let val = '';
+      if (Array.isArray(row) && idx >= 0 && row[idx] !== undefined) {
+        val = String(row[idx]).replace(/"/g, '""');
+      } else if (!Array.isArray(row) && row[col] !== undefined) {
+        val = String(row[col]).replace(/"/g, '""');
+      }
       return `"${val}"`;
     });
     csvLines.push(vals.join(','));
