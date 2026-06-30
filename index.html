@@ -1130,189 +1130,94 @@ async function ejecutarImport() {
     toast('Sin datos. Ejecuta la asignación primero.', 'bad'); return;
   }
 
-  const sid     = document.getElementById('sid').value.trim();
-  const action  = document.getElementById('cfg-action').value;
-  const object  = document.getElementById('cfg-object').value;
-  const extId   = document.getElementById('cfg-extid').value.trim();
+  const sid    = document.getElementById('sid').value.trim();
+  const action = document.getElementById('cfg-action').value;
+  const object = document.getElementById('cfg-object').value;
+  const extId  = document.getElementById('cfg-extid').value.trim();
 
   if (!sid) return toast('Falta el Session ID (SID).', 'bad');
   if (action === 'upsert' && !extId) return toast('Para Upsert debes indicar el External ID Field.', 'bad');
 
-  // Obtener el field mapping desde la UI
-  const fmapRows  = document.querySelectorAll('#fmapBody tr');
-  const fieldMap  = {}; // csvCol → sfField
+  const fmapRows = document.querySelectorAll('#fmapBody tr');
+  const fieldMap = {};
   fmapRows.forEach((tr, i) => {
     const sfVal = tr.querySelector('select').value;
     if (sfVal !== '--skip--') fieldMap[PT_HEADERS[i]] = sfVal;
   });
+  const mappedCols = Object.keys(fieldMap);
+  if (!mappedCols.length) return toast('El field mapping está vacío.', 'bad');
 
-  const mappedHeaders = Object.keys(fieldMap);
-  if (!mappedHeaders.length) return toast('El field mapping está vacío.', 'bad');
+  // Construir CSV aquí en el frontend
+  const csvHeaders = mappedCols.map(c => fieldMap[c]);
+  const csvLines   = [csvHeaders.map(h => `"${h}"`).join(',')];
+  preTemplateRows.forEach(row => {
+    const vals = mappedCols.map(col => {
+      const idx = PT_HEADERS.indexOf(col);
+      const val = String(idx >= 0 ? (row[idx] ?? '') : '').replace(/"/g, '""');
+      return `"${val}"`;
+    });
+    csvLines.push(vals.join(','));
+  });
+  const csvContent = csvLines.join('\n');
 
   // UI loading
   const btn = document.getElementById('importBtn');
-  btn.disabled = true; btn.textContent = '⏳ Ejecutando…';
+  btn.disabled = true; btn.textContent = '⏳ Enviando al servidor…';
   document.getElementById('progressWrap').classList.add('visible');
   document.getElementById('importLog').innerHTML = '';
   importResultRows = [];
   renderImportResult([]);
-document.getElementById('dlResultBtn').disabled   = true;
-document.getElementById('copyResultBtn').disabled = true;
-  currentJobId = null;
+  document.getElementById('dlResultBtn').disabled   = true;
+  document.getElementById('copyResultBtn').disabled = true;
 
   const total = preTemplateRows.length;
   updateProgress(total, 0, 0, 0);
+  setImportStatus(`Enviando ${total} registros al servidor…`, 'run');
 
-  setImportStatus(`Iniciando Bulk API 2.0 para ${total} registros…`, 'run');
-
-  // Headers Salesforce
-  const sfHeaders = {
-    'Authorization': `Bearer ${sid}`,
-    'Content-Type':  'application/json',
-    'Accept':        'application/json'
-  };
-  const base = `${INSTANCE_URL}/services/data/${SF_API_VERSION}`;
+  ilog(`Iniciando import vía Apps Script → Salesforce`, 'info');
+  ilog(`Objeto: ${object} | Acción: ${action} | Registros: ${total}`, 'info');
+  ilog('⏳ Apps Script ejecutará el Bulk Job. Puede tardar entre 30 seg y varios minutos…', 'warn');
 
   try {
-    // ── PASO 1: Crear el Job ──────────────────────────────────────
-    ilog(`Creando Bulk Job → Object: ${object}, Action: ${action}`, 'info');
-
-    const jobBody = {
-      object:        object,
-      operation:     action,
-      contentType:   'CSV',
-      lineEnding:    'LF'
+    const payload = {
+      action:      'import',
+      sid,
+      instanceUrl: INSTANCE_URL,
+      object,
+      operation:   action,
+      externalId:  extId,
+      csvContent
     };
-    if (action === 'upsert') jobBody.externalIdFieldName = extId;
 
-    const jobRes = await fetch(`${base}/jobs/ingest`, {
+    // VA POR APPS SCRIPT — sin CORS
+    const res = await fetch(APPS_SCRIPT_URL, {
       method: 'POST',
-      headers: sfHeaders,
-      body: JSON.stringify(jobBody)
+      redirect: 'follow',
+      body: JSON.stringify(payload)
     });
 
-    if (!jobRes.ok) {
-      const errText = await jobRes.text();
-      throw new Error(`Error creando Job: ${jobRes.status} — ${errText.slice(0,200)}`);
-    }
-    const job = await jobRes.json();
-    currentJobId = job.id;
-    ilog(`✓ Job creado: ${currentJobId}`, 'ok');
-    ilog(`  Estado inicial: ${job.state}`, 'info');
+    if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
 
-    // ── PASO 2: Construir y subir CSV ─────────────────────────────
-    ilog(`Construyendo CSV con ${mappedHeaders.length} columnas, ${total} filas…`, 'info');
+    importResultRows = [...(data.successRows || []), ...(data.failedRows || [])];
+    const success  = (data.successRows || []).length;
+    const failed   = (data.failedRows  || []).length;
 
-    const csvLines = [
-      mappedHeaders.map(h => `"${fieldMap[h]}"`).join(',')
-    ];
+    updateProgress(total, success + failed, success, failed);
+    document.getElementById('progPct').textContent = '100%';
+    document.getElementById('progBar').style.width = '100%';
 
-    preTemplateRows.forEach(row => {
-      const csvRow = PT_HEADERS.map((h, i) => {
-        if (!fieldMap[h]) return null; // columna omitida
-        const val = String(row[i] ?? '').replace(/"/g, '""');
-        return `"${val}"`;
-      }).filter(v => v !== null);
-      csvLines.push(csvRow.join(','));
-    });
-
-    const csvContent = csvLines.join('\n');
-
-    ilog(`Subiendo ${(csvContent.length / 1024).toFixed(1)} KB a Salesforce…`, 'info');
-
-    const uploadRes = await fetch(`${base}/jobs/ingest/${currentJobId}/batches`, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${sid}`,
-        'Content-Type':  'text/csv',
-        'Accept':        'application/json'
-      },
-      body: csvContent
-    });
-
-    if (!uploadRes.ok) {
-      const errText = await uploadRes.text();
-      throw new Error(`Error subiendo CSV: ${uploadRes.status} — ${errText.slice(0,200)}`);
-    }
-    ilog(`✓ CSV subido correctamente`, 'ok');
-
-    // ── PASO 3: Cerrar Job (UploadComplete) ──────────────────────
-    ilog(`Cerrando job para iniciar procesamiento…`, 'info');
-
-    const closeRes = await fetch(`${base}/jobs/ingest/${currentJobId}`, {
-      method: 'PATCH',
-      headers: sfHeaders,
-      body: JSON.stringify({ state: 'UploadComplete' })
-    });
-
-    if (!closeRes.ok) {
-      const errText = await closeRes.text();
-      throw new Error(`Error cerrando Job: ${closeRes.status} — ${errText.slice(0,200)}`);
-    }
-    ilog(`✓ Job en cola de procesamiento. Esperando resultados…`, 'ok');
-
-    // ── PASO 4: Polling del estado ────────────────────────────────
-    let jobState = 'UploadComplete';
-    let attempts = 0;
-    const MAX_ATTEMPTS = 120; // 10 minutos máximo (cada 5s)
-
-    while (!['JobComplete','Failed','Aborted'].includes(jobState) && attempts < MAX_ATTEMPTS) {
-      await sleep(5000);
-      attempts++;
-
-      const pollRes = await fetch(`${base}/jobs/ingest/${currentJobId}`, {
-        headers: sfHeaders
-      });
-      if (!pollRes.ok) { ilog(`Advertencia: error en poll (intento ${attempts})`, 'warn'); continue; }
-
-      const pollData = await pollRes.json();
-      jobState = pollData.state;
-
-      const processed = (pollData.numberRecordsProcessed || 0);
-      const failed    = (pollData.numberRecordsFailed    || 0);
-      const success   = processed - failed;
-
-      updateProgress(total, processed, success, failed);
-      ilog(`[Poll ${attempts}] Estado: ${jobState} | Procesados: ${processed}/${total} | Fallidos: ${failed}`, 'info');
-    }
-
-    if (attempts >= MAX_ATTEMPTS) {
-      ilog('⚠ Tiempo de espera agotado. El job puede seguir corriendo en SF.', 'warn');
-    }
-
-    if (jobState === 'Failed' || jobState === 'Aborted') {
-      throw new Error(`Job terminó con estado: ${jobState}. Revisa Salesforce para más detalles.`);
-    }
-
-    ilog(`✓ Job completado. Obteniendo resultados…`, 'ok');
-
-    // ── PASO 5: Resultados exitosos ───────────────────────────────
-    const okRes = await fetch(`${base}/jobs/ingest/${currentJobId}/successfulResults`, {
-      headers: { 'Authorization': `Bearer ${sid}`, 'Accept': 'text/csv' }
-    });
-    const okCsv = okRes.ok ? await okRes.text() : '';
-
-    // ── PASO 6: Resultados fallidos ──────────────────────────────
-    const failRes = await fetch(`${base}/jobs/ingest/${currentJobId}/failedResults`, {
-      headers: { 'Authorization': `Bearer ${sid}`, 'Accept': 'text/csv' }
-    });
-    const failCsv = failRes.ok ? await failRes.text() : '';
-
-    // ── PASO 7: Combinar y mostrar ────────────────────────────────
-    importResultRows = combinarResultados(okCsv, failCsv);
-
-    const totalOk   = importResultRows.filter(r => r['__Status'] === 'true' || r['__Status'] === 'Created' || r['__Status'] === 'Updated').length;
-    const totalFail = importResultRows.filter(r => r['__Errors'] && r['__Errors'].trim()).length;
-
-    ilog(`✓ Resultados: ${totalOk} exitosos, ${totalFail} con errores`, totalFail === 0 ? 'ok' : 'warn');
-    updateProgress(total, importResultRows.length, totalOk, totalFail);
+    ilog(`✓ Job ID: ${data.jobId}`, 'ok');
+    ilog(`✓ Estado final: ${data.jobState}`, 'ok');
+    ilog(`✓ Exitosos: ${success} | Fallidos: ${failed}`, 'ok');
 
     renderImportResult(importResultRows);
-    setImportStatus(`Import completado: ${totalOk} exitosos, ${totalFail} fallidos.`, totalFail === 0 ? 'ok' : 'err');
-    document.getElementById('dlResultBtn').disabled = false;
+    setImportStatus(`Import completado: ${success} exitosos, ${failed} fallidos.`, failed === 0 ? 'ok' : 'err');
+    document.getElementById('dlResultBtn').disabled   = false;
     document.getElementById('copyResultBtn').disabled = false;
-    document.getElementById('badge-import').textContent = `${totalOk} ✓`;
-    toast(`✅ Import completo: ${totalOk} OK · ${totalFail} errores`, totalFail === 0 ? 'ok' : 'bad');
+    document.getElementById('badge-import').textContent = `${success} ✓`;
+    toast(`✅ Import completo: ${success} OK · ${failed} errores`, failed === 0 ? 'ok' : 'bad');
 
   } catch (err) {
     ilog(`✗ Error: ${err.message}`, 'err');
