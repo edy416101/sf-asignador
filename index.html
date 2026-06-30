@@ -1138,6 +1138,7 @@ async function ejecutarImport() {
   if (!sid) return toast('Falta el Session ID (SID).', 'bad');
   if (action === 'upsert' && !extId) return toast('Para Upsert debes indicar el External ID Field.', 'bad');
 
+  // Field mapping desde la UI
   const fmapRows = document.querySelectorAll('#fmapBody tr');
   const fieldMap = {};
   fmapRows.forEach((tr, i) => {
@@ -1147,7 +1148,7 @@ async function ejecutarImport() {
   const mappedCols = Object.keys(fieldMap);
   if (!mappedCols.length) return toast('El field mapping está vacío.', 'bad');
 
-  // Construir CSV aquí en el frontend
+  // Construir CSV en el frontend
   const csvHeaders = mappedCols.map(c => fieldMap[c]);
   const csvLines   = [csvHeaders.map(h => `"${h}"`).join(',')];
   preTemplateRows.forEach(row => {
@@ -1189,7 +1190,7 @@ async function ejecutarImport() {
       csvContent
     };
 
-    // VA POR APPS SCRIPT — sin CORS
+    // Pasa por Apps Script — sin CORS
     const res = await fetch(APPS_SCRIPT_URL, {
       method: 'POST',
       redirect: 'follow',
@@ -1201,8 +1202,8 @@ async function ejecutarImport() {
     if (data.error) throw new Error(data.error);
 
     importResultRows = [...(data.successRows || []), ...(data.failedRows || [])];
-    const success  = (data.successRows || []).length;
-    const failed   = (data.failedRows  || []).length;
+    const success = (data.successRows || []).length;
+    const failed  = (data.failedRows  || []).length;
 
     updateProgress(total, success + failed, success, failed);
     document.getElementById('progPct').textContent = '100%';
