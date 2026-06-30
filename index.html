@@ -1165,7 +1165,7 @@ const csvHeaders = mappedCols.map(c => fieldMap[c]);
           val = String(row[col] ?? '');
         }
       } catch(e) { val = ''; }
-      vals.push('"' + val.replace(/"/g, '""') + '"');
+      vals.push('"' + String(val).replace(/"/g, '""') + '"');
     }
     csvLines.push(vals.join(','));
   }
@@ -1210,19 +1210,22 @@ const csvHeaders = mappedCols.map(c => fieldMap[c]);
 
     if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
     const data = await res.json();
-    if (data.error) throw new Error(data.error);
-ilog(`DEBUG respuesta: ${JSON.stringify(Object.keys(data))} | successRows: ${Array.isArray(data.successRows)} | failedRows: ${Array.isArray(data.failedRows)}`, 'warn');
-    
-    importResultRows = [...(data.successRows || []), ...(data.failedRows || [])];
-    const success = (data.successRows || []).length;
-    const failed  = (data.failedRows  || []).length;
+   if (data.error) throw new Error(data.error);
+
+    ilog(`DEBUG respuesta completa: ${JSON.stringify(data).slice(0,300)}`, 'warn');
+
+    const successRows = Array.isArray(data.successRows) ? data.successRows : [];
+    const failedRows  = Array.isArray(data.failedRows)  ? data.failedRows  : [];
+    importResultRows  = [...successRows, ...failedRows];
+    const success = successRows.length;
+    const failed  = failedRows.length;
 
     updateProgress(total, success + failed, success, failed);
     document.getElementById('progPct').textContent = '100%';
     document.getElementById('progBar').style.width = '100%';
 
-    ilog(`✓ Job ID: ${data.jobId}`, 'ok');
-    ilog(`✓ Estado final: ${data.jobState}`, 'ok');
+    ilog(`✓ Job ID: ${data.jobId || 'N/A'}`, 'ok');
+    ilog(`✓ Estado final: ${data.jobState || 'N/A'}`, 'ok');
     ilog(`✓ Exitosos: ${success} | Fallidos: ${failed}`, 'ok');
 
     renderImportResult(importResultRows);
