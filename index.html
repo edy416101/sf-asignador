@@ -32,80 +32,32 @@
                         radial-gradient(ellipse 50% 40% at 75% 40%, rgba(124,58,237,.08) 0%, transparent 70%);
       z-index: 100;
     }
-    .login-card {
-      background: var(--surface); border: 1px solid var(--border); border-radius: 22px;
-      padding: 48px 44px 40px; width: 370px; text-align: center;
-      box-shadow: 0 32px 80px rgba(0,0,0,.5);
-    }
-    .login-logo {
-      width: 60px; height: 60px; border-radius: 18px;
-      background: linear-gradient(135deg, var(--accent), var(--ac2));
-      display: flex; align-items: center; justify-content: center;
-      font-size: 28px; margin: 0 auto 22px;
-      box-shadow: 0 8px 24px rgba(75,124,243,.35);
-    }
+    .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 22px; padding: 48px 44px 40px; width: 370px; text-align: center; box-shadow: 0 32px 80px rgba(0,0,0,.5); }
+    .login-logo { width: 60px; height: 60px; border-radius: 18px; background: linear-gradient(135deg, var(--accent), var(--ac2)); display: flex; align-items: center; justify-content: center; font-size: 28px; margin: 0 auto 22px; box-shadow: 0 8px 24px rgba(75,124,243,.35); }
     .login-card h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
     .login-card .sub { font-size: 13px; color: var(--muted); line-height: 1.55; margin-bottom: 24px; }
-    .domain-chip {
-      display: inline-flex; align-items: center; gap: 6px;
-      background: rgba(75,124,243,.12); border: 1px solid rgba(75,124,243,.3);
-      border-radius: 100px; padding: 5px 14px; font-size: 11px; font-weight: 600;
-      color: var(--accent); margin-bottom: 28px;
-    }
+    .domain-chip { display: inline-flex; align-items: center; gap: 6px; background: rgba(75,124,243,.12); border: 1px solid rgba(75,124,243,.3); border-radius: 100px; padding: 5px 14px; font-size: 11px; font-weight: 600; color: var(--accent); margin-bottom: 28px; }
     .domain-chip::before { content: '🔒'; font-size: 10px; }
     #gSigninBtn { display: flex; justify-content: center; margin-bottom: 18px; }
     .login-note { font-size: 11px; color: var(--muted); }
 
     #mainApp { display: none; flex-direction: column; height: 100vh; }
 
-    header {
-      border-bottom: 1px solid var(--border); padding: 13px 28px;
-      display: flex; align-items: center; gap: 12px;
-      background: var(--surface); flex-shrink: 0;
-    }
-    .logo-mark {
-      width: 30px; height: 30px; border-radius: 8px;
-      background: linear-gradient(135deg, var(--accent), var(--ac2));
-      display: flex; align-items: center; justify-content: center;
-      font-size: 14px; flex-shrink: 0;
-    }
+    header { border-bottom: 1px solid var(--border); padding: 13px 28px; display: flex; align-items: center; gap: 12px; background: var(--surface); flex-shrink: 0; }
+    .logo-mark { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, var(--accent), var(--ac2)); display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
     header h1 { font-size: 13.5px; font-weight: 600; flex: 1; }
     header h1 span { color: var(--muted); font-weight: 400; }
     .user-bar { display: flex; align-items: center; gap: 10px; }
-    .user-avatar {
-      width: 26px; height: 26px; border-radius: 50%;
-      background: linear-gradient(135deg, var(--accent), var(--ac2));
-      display: flex; align-items: center; justify-content: center;
-      font-size: 11px; font-weight: 700; color: white;
-    }
+    .user-avatar { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--ac2)); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: white; }
     #userEmail { font-size: 12px; }
-    .sign-out {
-      background: none; border: 1px solid var(--border); color: var(--muted);
-      border-radius: 6px; font-size: 11px; padding: 4px 10px;
-      cursor: pointer; font-family: var(--sans); transition: all .15s;
-    }
+    .sign-out { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; font-size: 11px; padding: 4px 10px; cursor: pointer; font-family: var(--sans); transition: all .15s; }
     .sign-out:hover { border-color: var(--err); color: var(--err); }
 
-    .tab-bar {
-      display: flex; gap: 0;
-      border-bottom: 1px solid var(--border);
-      background: var(--surface); flex-shrink: 0;
-      padding: 0 28px;
-    }
-    .tab {
-      padding: 11px 20px; font-size: 12.5px; font-weight: 500;
-      color: var(--muted); cursor: pointer; border: none; background: none;
-      font-family: var(--sans); border-bottom: 2px solid transparent;
-      margin-bottom: -1px; transition: color .15s, border-color .15s;
-      display: flex; align-items: center; gap: 7px;
-    }
+    .tab-bar { display: flex; gap: 0; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; padding: 0 28px; }
+    .tab { padding: 11px 20px; font-size: 12.5px; font-weight: 500; color: var(--muted); cursor: pointer; border: none; background: none; font-family: var(--sans); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s; display: flex; align-items: center; gap: 7px; }
     .tab:hover { color: var(--text); }
     .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-    .tab-badge {
-      background: var(--sf2); border: 1px solid var(--border);
-      border-radius: 100px; padding: 1px 7px; font-size: 10px;
-      color: var(--muted); font-weight: 600;
-    }
+    .tab-badge { background: var(--sf2); border: 1px solid var(--border); border-radius: 100px; padding: 1px 7px; font-size: 10px; color: var(--muted); font-weight: 600; }
     .tab.active .tab-badge { background: rgba(75,124,243,.15); border-color: rgba(75,124,243,.3); color: var(--accent); }
 
     .tab-content { display: none; flex: 1; overflow: hidden; }
@@ -114,69 +66,39 @@
     /* ══ TAB 1 — ASIGNACIÓN ══ */
     .asig-layout { display: grid; grid-template-columns: 420px 1fr; flex: 1; overflow: hidden; }
 
-    aside {
-      border-right: 1px solid var(--border); background: var(--surface);
-      overflow-y: auto; padding: 20px 18px; max-height: 100vh;
-      display: flex; flex-direction: column; gap: 20px;
-    }
-    .slabel {
-      font-size: 9.5px; font-weight: 700; letter-spacing: 1.4px;
-      text-transform: uppercase; color: var(--muted); margin-bottom: 10px;
-    }
+    aside { border-right: 1px solid var(--border); background: var(--surface); overflow-y: auto; padding: 20px 18px; max-height: 100vh; display: flex; flex-direction: column; gap: 20px; }
+    .slabel { font-size: 9.5px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
     .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
     .field:last-child { margin-bottom: 0; }
     .field label { font-size: 11.5px; font-weight: 500; color: var(--muted); }
-    .field input, .field select {
-      background: var(--sf2); border: 1px solid var(--border); border-radius: 8px;
-      color: var(--text); font-family: var(--sans); font-size: 13px;
-      padding: 8px 11px; outline: none; transition: border-color .15s; width: 100%;
-    }
+    .field input, .field select { background: var(--sf2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--sans); font-size: 13px; padding: 8px 11px; outline: none; transition: border-color .15s; width: 100%; }
     .field input:focus, .field select:focus { border-color: var(--accent); }
     .field select { cursor: pointer; }
     .field select option { background: #1e2235; }
     .field input.mono { font-family: var(--mono); font-size: 11px; }
+    .field .field-hint { font-size: 10px; color: var(--muted); font-style: italic; }
     .sid-wrap { position: relative; }
     .sid-wrap input { padding-right: 74px; }
-    .sid-eye {
-      position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-      background: rgba(75,124,243,.2); border: 1px solid rgba(75,124,243,.4);
-      color: var(--accent); font-size: 10px; font-weight: 600;
-      padding: 3px 8px; border-radius: 5px; cursor: pointer; user-select: none;
-    }
+    .sid-eye { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: rgba(75,124,243,.2); border: 1px solid rgba(75,124,243,.4); color: var(--accent); font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 5px; cursor: pointer; user-select: none; }
     .sid-eye:hover { background: rgba(75,124,243,.35); }
-    .reps-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+
+    .reps-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 6px; }
     .reps-top .slabel { margin-bottom: 0; }
-    .btn-sm {
-      background: none; border: 1px solid var(--border); color: var(--muted);
-      border-radius: 6px; font-size: 11px; font-family: var(--sans);
-      padding: 4px 10px; cursor: pointer; transition: all .15s;
-    }
+    .reps-top-btns { display: flex; gap: 6px; }
+    .btn-sm { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; font-size: 10.5px; font-family: var(--sans); padding: 4px 9px; cursor: pointer; transition: all .15s; white-space: nowrap; }
     .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
-    .bulk-panel {
-      background: var(--sf2); border: 1px solid var(--border); border-radius: 9px;
-      padding: 12px; margin-bottom: 10px; display: none; flex-direction: column; gap: 8px;
-    }
+
+    .bulk-panel { background: var(--sf2); border: 1px solid var(--border); border-radius: 9px; padding: 12px; margin-bottom: 10px; display: none; flex-direction: column; gap: 8px; }
     .bulk-panel.open { display: flex; }
     .bulk-panel p { font-size: 11px; color: var(--muted); }
-    .bulk-panel textarea {
-      width: 100%; height: 76px; background: var(--surface); border: 1px solid var(--border);
-      border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: 11px;
-      padding: 8px 10px; resize: none; outline: none; line-height: 1.7;
-    }
+    .bulk-panel textarea { width: 100%; height: 76px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: 11px; padding: 8px 10px; resize: none; outline: none; line-height: 1.7; }
     .bulk-panel textarea:focus { border-color: var(--accent); }
     .bulk-actions { display: flex; gap: 6px; }
-    .btn-apply {
-      flex: 1; background: var(--accent); color: white; border: none;
-      border-radius: 7px; font-size: 12px; font-weight: 600;
-      padding: 7px; cursor: pointer; font-family: var(--sans);
-    }
+    .btn-apply { flex: 1; background: var(--accent); color: white; border: none; border-radius: 7px; font-size: 12px; font-weight: 600; padding: 7px; cursor: pointer; font-family: var(--sans); }
     .btn-apply:hover { opacity: .88; }
-    .btn-cancel-bulk {
-      background: none; border: 1px solid var(--border); color: var(--muted);
-      border-radius: 7px; font-size: 12px; padding: 7px 12px;
-      cursor: pointer; font-family: var(--sans);
-    }
+    .btn-cancel-bulk { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 7px; font-size: 12px; padding: 7px 12px; cursor: pointer; font-family: var(--sans); }
     .btn-cancel-bulk:hover { border-color: var(--err); color: var(--err); }
+
     .reps-tbl { width: 100%; border-collapse: collapse; font-size: 11.5px; }
     .reps-tbl th { text-align: left; color: var(--muted); font-weight: 500; font-size: 10.5px; padding: 4px 6px; border-bottom: 1px solid var(--border); }
     .reps-tbl td { padding: 3px 5px; }
@@ -187,20 +109,21 @@
     .rep-del:hover { color: var(--err); }
     .btn-add-rep { margin-top: 8px; background: none; border: 1px dashed var(--border); color: var(--muted); border-radius: 6px; font-size: 11.5px; padding: 6px; width: 100%; cursor: pointer; font-family: var(--sans); }
     .btn-add-rep:hover { border-color: var(--accent); color: var(--accent); }
+    .reps-total { margin-top: 6px; font-size: 10.5px; color: var(--muted); text-align: right; }
+    .reps-total strong { color: var(--accent); font-family: var(--mono); }
+
     .ids-box { background: var(--sf2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--mono); font-size: 11px; padding: 9px 11px; width: 100%; height: 110px; resize: vertical; outline: none; line-height: 1.7; }
     .ids-box:focus { border-color: var(--accent); }
     .ids-meta { font-size: 10.5px; color: var(--muted); margin-top: 4px; }
-    .btn-run {
-      width: 100%; padding: 12px;
-      background: linear-gradient(135deg, var(--accent) 0%, #6366f1 50%, var(--ac2) 100%);
-      color: white; border: none; border-radius: 10px; font-size: 13.5px; font-weight: 600;
-      cursor: pointer; font-family: var(--sans); transition: opacity .15s, transform .1s;
-      position: relative; overflow: hidden;
-    }
+
+    .action-buttons { display: flex; gap: 8px; }
+    .btn-run { flex: 1; padding: 12px; background: linear-gradient(135deg, var(--accent) 0%, #6366f1 50%, var(--ac2) 100%); color: white; border: none; border-radius: 10px; font-size: 13.5px; font-weight: 600; cursor: pointer; font-family: var(--sans); transition: opacity .15s, transform .1s; position: relative; overflow: hidden; }
     .btn-run::after { content: ''; position: absolute; inset: 0; background: linear-gradient(rgba(255,255,255,.1), transparent); }
     .btn-run:hover { opacity: .9; }
     .btn-run:active { transform: scale(.98); }
     .btn-run:disabled { opacity: .35; cursor: not-allowed; }
+    .btn-clear { padding: 12px 16px; background: var(--sf2); color: var(--err); border: 1px solid var(--border); border-radius: 10px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--sans); transition: all .15s; white-space: nowrap; }
+    .btn-clear:hover { border-color: var(--err); background: rgba(244,63,94,.08); }
 
     .panel { overflow-y: auto; padding: 24px 28px; display: flex; flex-direction: column; gap: 18px; }
     .status-row { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 13px 17px; display: flex; align-items: center; gap: 10px; font-size: 12.5px; }
@@ -218,21 +141,15 @@
     .log .err  { color: var(--err); }
     .log .info { color: var(--accent); }
     .log .warn { color: var(--warn); }
-    .res-header { display: flex; align-items: center; justify-content: space-between; }
+    .res-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
     .res-header h2 { font-size: 13px; font-weight: 600; }
-    .res-btns { display: flex; gap: 8px; align-items: center; }
+    .res-btns { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .btn-icon { color: white; border: none; border-radius: 8px; padding: 7px 14px; font-size: 11.5px; font-weight: 600; cursor: pointer; font-family: var(--sans); transition: opacity .15s; display: flex; align-items: center; gap: 5px; }
     .btn-icon:disabled { opacity: .25; cursor: not-allowed; }
     .btn-icon:not(:disabled):hover { opacity: .85; }
     .btn-copy-tbl { background: var(--accent); }
     .btn-csv      { background: var(--ok); }
-    .btn-go-import {
-      background: linear-gradient(135deg, var(--ac2), #9333ea);
-      color: white; border: none; border-radius: 8px;
-      padding: 7px 16px; font-size: 11.5px; font-weight: 600;
-      cursor: pointer; font-family: var(--sans); transition: opacity .15s;
-      display: flex; align-items: center; gap: 6px;
-    }
+    .btn-go-import { background: linear-gradient(135deg, var(--ac2), #9333ea); color: white; border: none; border-radius: 8px; padding: 7px 16px; font-size: 11.5px; font-weight: 600; cursor: pointer; font-family: var(--sans); transition: opacity .15s; display: flex; align-items: center; gap: 6px; }
     .btn-go-import:disabled { opacity: .25; cursor: not-allowed; }
     .btn-go-import:not(:disabled):hover { opacity: .85; }
     .tbl-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: auto; flex: 1; min-height: 120px; }
@@ -249,34 +166,12 @@
     .empty p { font-size: 12.5px; }
 
     /* ══ TAB 2 — DATA IMPORT ══ */
-    .import-layout {
-      display: grid;
-      grid-template-columns: 420px 1fr;
-      flex: 1; overflow: hidden;
-    }
-    .import-config {
-      border-right: 1px solid var(--border); background: var(--surface);
-      display: flex; flex-direction: column;
-      max-height: 100%;
-      overflow: hidden;
-    }
-    .import-config-scroll {
-      flex: 1;
-      overflow-y: auto;
-      padding: 20px 18px;
-      display: flex; flex-direction: column; gap: 20px;
-    }
-    .import-config-footer {
-      flex-shrink: 0;
-      padding: 14px 18px;
-      border-top: 1px solid var(--border);
-      background: var(--surface);
-    }
+    .import-layout { display: grid; grid-template-columns: 420px 1fr; flex: 1; overflow: hidden; }
+    .import-config { border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; max-height: 100%; overflow: hidden; }
+    .import-config-scroll { flex: 1; overflow-y: auto; padding: 20px 18px; display: flex; flex-direction: column; gap: 20px; }
+    .import-config-footer { flex-shrink: 0; padding: 14px 18px; border-top: 1px solid var(--border); background: var(--surface); display: flex; gap: 8px; }
 
-    .source-badge {
-      background: var(--sf2); border: 1px solid var(--border); border-radius: 10px;
-      padding: 12px 14px; display: flex; flex-direction: column; gap: 6px;
-    }
+    .source-badge { background: var(--sf2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
     .source-badge .sb-label { font-size: 9.5px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); }
     .source-badge .sb-val { font-size: 12px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 6px; }
     .source-badge .sb-count { font-size: 11px; color: var(--muted); }
@@ -301,30 +196,15 @@
     .fmap-ok.skip { color: var(--muted); }
     .fmap-ok.pending { color: var(--muted); }
 
-    .btn-import {
-      width: 100%; padding: 12px;
-      background: linear-gradient(135deg, var(--ac2) 0%, #9333ea 100%);
-      color: white; border: none; border-radius: 10px;
-      font-size: 13.5px; font-weight: 600; cursor: pointer;
-      font-family: var(--sans); transition: opacity .15s, transform .1s;
-      position: relative; overflow: hidden;
-    }
+    .btn-import { flex: 1; padding: 12px; background: linear-gradient(135deg, var(--ac2) 0%, #9333ea 100%); color: white; border: none; border-radius: 10px; font-size: 13.5px; font-weight: 600; cursor: pointer; font-family: var(--sans); transition: opacity .15s, transform .1s; position: relative; overflow: hidden; }
     .btn-import::after { content: ''; position: absolute; inset: 0; background: linear-gradient(rgba(255,255,255,.1), transparent); }
     .btn-import:hover { opacity: .9; }
     .btn-import:active { transform: scale(.98); }
     .btn-import:disabled { opacity: .35; cursor: not-allowed; }
 
     .import-panel { overflow-y: auto; padding: 24px 28px; display: flex; flex-direction: column; gap: 18px; }
-    .import-status-row {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 10px; padding: 13px 17px;
-      display: flex; align-items: center; gap: 10px; font-size: 12.5px;
-    }
-    .progress-wrap {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 10px; padding: 16px 18px;
-      display: none; flex-direction: column; gap: 10px;
-    }
+    .import-status-row { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 13px 17px; display: flex; align-items: center; gap: 10px; font-size: 12.5px; }
+    .progress-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; display: none; flex-direction: column; gap: 10px; }
     .progress-wrap.visible { display: flex; }
     .progress-header { display: flex; justify-content: space-between; font-size: 12px; }
     .progress-header .ph-label { color: var(--muted); }
@@ -349,15 +229,8 @@
     .result-btns { display: flex; gap: 8px; }
     .res-tbl-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: auto; flex: 1; min-height: 120px; }
     table.res-import { width: 100%; border-collapse: collapse; font-size: 10.5px; }
-    table.res-import th {
-      background: var(--sf2); color: var(--muted); font-weight: 700;
-      font-size: 9.5px; padding: 9px 13px; border-bottom: 1px solid var(--border);
-      white-space: nowrap; position: sticky; top: 0; z-index: 1;
-    }
-    table.res-import td {
-      padding: 8px 13px; border-bottom: 1px solid var(--border);
-      white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis;
-    }
+    table.res-import th { background: var(--sf2); color: var(--muted); font-weight: 700; font-size: 9.5px; padding: 9px 13px; border-bottom: 1px solid var(--border); white-space: nowrap; position: sticky; top: 0; z-index: 1; }
+    table.res-import td { padding: 8px 13px; border-bottom: 1px solid var(--border); white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
     table.res-import tr:last-child td { border-bottom: none; }
     table.res-import tr:hover td { background: var(--sf2); }
     .res-ok     { color: var(--ok); font-weight: 600; }
@@ -366,15 +239,7 @@
     .res-id     { font-family: var(--mono); font-size: 9.5px; color: var(--muted); }
     .res-errors { color: var(--err); font-size: 9.5px; }
 
-    .toast {
-      position: fixed; bottom: 22px; right: 22px;
-      background: var(--sf2); border: 1px solid var(--border);
-      border-radius: 10px; padding: 11px 18px; font-size: 12.5px;
-      box-shadow: 0 10px 30px rgba(0,0,0,.4);
-      transform: translateY(60px); opacity: 0;
-      transition: all .3s cubic-bezier(.34,1.56,.64,1);
-      z-index: 200; max-width: 360px;
-    }
+    .toast { position: fixed; bottom: 22px; right: 22px; background: var(--sf2); border: 1px solid var(--border); border-radius: 10px; padding: 11px 18px; font-size: 12.5px; box-shadow: 0 10px 30px rgba(0,0,0,.4); transform: translateY(60px); opacity: 0; transition: all .3s cubic-bezier(.34,1.56,.64,1); z-index: 200; max-width: 360px; }
     .toast.show { transform: translateY(0); opacity: 1; }
     .toast.ok  { border-left: 3px solid var(--ok); }
     .toast.bad { border-left: 3px solid var(--err); }
@@ -437,8 +302,9 @@
         <div>
           <div class="slabel">Parámetros</div>
           <div class="field">
-            <label>Días de exclusión</label>
-            <input id="dias" type="number" value="30" min="1"/>
+            <label>Días de exclusión <span style="color:var(--muted); font-weight:400;">(vacío = sin filtro)</span></label>
+            <input id="dias" type="number" value="30" min="0" placeholder="ej. 30, 60, 90 o vacío"/>
+            <span class="field-hint">Si lo dejas vacío, se aplica el query sin filtro de últimos N días.</span>
           </div>
           <div class="field">
             <label>Business Line</label>
@@ -451,10 +317,14 @@
             </select>
           </div>
         </div>
+
         <div>
           <div class="reps-top">
             <div class="slabel">Representantes</div>
-            <button class="btn-sm" onclick="toggleBulk()">📋 Pegar varios</button>
+            <div class="reps-top-btns">
+              <button class="btn-sm" onclick="aplicarMismoNumero()" title="Aplica el número del primer rep a todos los demás">🔁 Mismo nº a todos</button>
+              <button class="btn-sm" onclick="toggleBulk()">📋 Pegar varios</button>
+            </div>
           </div>
           <div class="bulk-panel" id="bulkPanel">
             <p>Pega los emails aquí, uno por línea:</p>
@@ -475,7 +345,9 @@
             <tbody id="repsBody"></tbody>
           </table>
           <button class="btn-add-rep" onclick="addRep()">+ Agregar representante</button>
+          <div class="reps-total">Total: <strong id="repsTotal">0</strong> asignaciones</div>
         </div>
+
         <div>
           <div class="slabel">IDs de Contactos</div>
           <textarea id="idsArea" class="ids-box"
@@ -483,7 +355,11 @@
             oninput="updateCount()"></textarea>
           <div class="ids-meta" id="idsCount">0 IDs cargados</div>
         </div>
-        <button class="btn-run" id="runBtn" onclick="ejecutar()">⚡ Ejecutar Asignación</button>
+
+        <div class="action-buttons">
+          <button class="btn-run" id="runBtn" onclick="ejecutar()">⚡ Ejecutar Asignación</button>
+          <button class="btn-clear" onclick="limpiarAsignacion()" title="Limpia días, BL, reps e IDs">🗑 Limpiar</button>
+        </div>
       </aside>
 
       <section class="panel">
@@ -594,6 +470,7 @@
           <button class="btn-import" id="importBtn" onclick="ejecutarImport()" disabled>
             📥 Ejecutar Import a Salesforce
           </button>
+          <button class="btn-clear" onclick="limpiarImport()" title="Limpia el resultado y el log">🗑</button>
         </div>
 
       </div>
@@ -647,55 +524,58 @@
 // ══════════════════════════════════════════════════════════════════
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════
-const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbzyW0CKHq7yPs1gB8y11tjWYPQMAeBbJ91uFKVfHRvQ205p4tXijui1PuphuonDN469cQ/exec";
+const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbx7K9tXszc810rwxEDEOXDE3xnAelLtOKhElllZ_k64zzSrSrF8ekEpx1qyLhnY7gdcWQ/exec";
 const GOOGLE_CLIENT_ID = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 const INSTANCE_URL     = "https://docplanner.my.salesforce.com";
 
 // ══════════════════════════════════════════════════════════════════
-//  HEADERS — 14 columnas del pre-template
+//  HEADERS — 14 columnas en el ORDEN NUEVO solicitado
 // ══════════════════════════════════════════════════════════════════
 const PT_HEADERS = [
   'Contact__c',
   'LastSource_SO__c',
   'LastSourceAt__c',
+  'FacilitySize__c',
   'Company',
   'LastName',
   'Email',
-  'FacilitySize__c',
   'OwnerId',
   'BusinessLine__c',
   'Lead_Type__c',
   'ContactTypeSegment__c',
   'Country__c',
-  'Leadassist__Use_Round_Robin__c',
-  'Status'
+  'Status',
+  'Leadassist__Use_Round_Robin__c'
 ];
+
+// Campos que SIEMPRE deben enviarse vacíos al import
+// (aunque el pre-template los muestre con valor del Contact)
+const ENVIAR_VACIO_AL_IMPORT = new Set(['FacilitySize__c']);
 
 // Resultado del import: 14 columnas del pre-template + 4 columnas de status = 18
 const IMPORT_RESULT_HEADERS = [
-  'Contact__c', 'LastSource_SO__c', 'LastSourceAt__c', 'Company', 'LastName',
-  'Email', 'FacilitySize__c', 'OwnerId', 'BusinessLine__c',
+  'Contact__c', 'LastSource_SO__c', 'LastSourceAt__c', 'FacilitySize__c',
+  'Company', 'LastName', 'Email', 'OwnerId', 'BusinessLine__c',
   'Lead_Type__c', 'ContactTypeSegment__c', 'Country__c',
-  'Leadassist__Use_Round_Robin__c', 'Status',
+  'Status', 'Leadassist__Use_Round_Robin__c',
   '__Status', '__Id', '__Action', '__Errors'
 ];
 
-// Mapping por defecto CSV → SF Field
 const DEFAULT_FIELD_MAP = {
   'Contact__c':'Contact__c',
   'LastSource_SO__c':'LastSource_SO__c',
   'LastSourceAt__c':'LastSourceAt__c',
+  'FacilitySize__c':'FacilitySize__c',
   'Company':'Company',
   'LastName':'LastName',
   'Email':'Email',
-  'FacilitySize__c':'FacilitySize__c',
   'OwnerId':'OwnerId',
   'BusinessLine__c':'BusinessLine__c',
   'Lead_Type__c':'Lead_Type__c',
   'ContactTypeSegment__c':'ContactTypeSegment__c',
   'Country__c':'Country__c',
-  'Leadassist__Use_Round_Robin__c':'Leadassist__Use_Round_Robin__c',
-  'Status':'Status'
+  'Status':'Status',
+  'Leadassist__Use_Round_Robin__c':'Leadassist__Use_Round_Robin__c'
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -781,10 +661,42 @@ function addRep(email = '', n = '') {
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td><input type="text" placeholder="email@docplanner.com" value="${esc(email)}"/></td>
-    <td style="text-align:center"><input type="number" min="0" placeholder="0" value="${esc(String(n))}" style="width:52px;text-align:center"/></td>
-    <td><button class="rep-del" onclick="this.closest('tr').remove()">✕</button></td>
+    <td style="text-align:center"><input type="number" min="0" placeholder="0" value="${esc(String(n))}" style="width:52px;text-align:center" oninput="actualizarRepsTotal()"/></td>
+    <td><button class="rep-del" onclick="this.closest('tr').remove(); actualizarRepsTotal();">✕</button></td>
   `;
   tbody.appendChild(tr);
+  actualizarRepsTotal();
+}
+
+// Actualiza el contador total de asignaciones
+function actualizarRepsTotal() {
+  let total = 0;
+  document.querySelectorAll('#repsBody tr').forEach(tr => {
+    const nInp = tr.querySelectorAll('input')[1];
+    const n = parseInt(nInp.value);
+    if (!isNaN(n) && n > 0) total += n;
+  });
+  document.getElementById('repsTotal').textContent = total;
+}
+
+// Aplica el número del primer rep a todos los demás
+function aplicarMismoNumero() {
+  const filas = document.querySelectorAll('#repsBody tr');
+  if (filas.length < 2) {
+    toast('Necesitas al menos 2 representantes.', 'bad');
+    return;
+  }
+  const primerInput = filas[0].querySelectorAll('input')[1];
+  const num = parseInt(primerInput.value);
+  if (isNaN(num) || num <= 0) {
+    toast('El primer representante debe tener un número > 0.', 'bad');
+    return;
+  }
+  for (let i = 1; i < filas.length; i++) {
+    filas[i].querySelectorAll('input')[1].value = num;
+  }
+  actualizarRepsTotal();
+  toast(`✅ Aplicado ${num} a ${filas.length - 1} representante(s).`, 'ok');
 }
 
 function toggleBulk() {
@@ -814,7 +726,10 @@ function getReps() {
 }
 
 function getIds() {
-  return document.getElementById('idsArea').value.split('\n').map(l => l.trim()).filter(Boolean);
+  return document.getElementById('idsArea').value
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean);  // filtra strings vacíos y null/undefined
 }
 
 function updateCount() {
@@ -852,15 +767,32 @@ function resetAsigUI() {
   document.getElementById('badge-asig').textContent = '—';
 }
 
+// Limpia todos los inputs de la asignación
+function limpiarAsignacion() {
+  if (!confirm('¿Limpiar días, Business Line, representantes e IDs?')) return;
+
+  document.getElementById('dias').value = '';
+  document.getElementById('businessLine').value = '';
+  document.getElementById('repsBody').innerHTML = '';
+  document.getElementById('idsArea').value = '';
+  updateCount();
+  actualizarRepsTotal();
+  addRep('', '');  // deja una fila vacía
+  resetAsigUI();
+  preTemplateRows = [];
+  totalAsignados = 0;
+  toast('🗑 Asignación limpiada.', 'ok');
+}
+
 async function ejecutar() {
   const sid          = document.getElementById('sid').value.trim();
-  const dias         = parseInt(document.getElementById('dias').value);
+  const diasInput    = document.getElementById('dias').value.trim();
+  const dias         = diasInput === '' ? 0 : parseInt(diasInput);
   const businessLine = document.getElementById('businessLine').value;
   const reps         = getReps();
   const ids          = getIds();
 
   if (!sid)          return toast('Falta el Session ID (SID).', 'bad');
-  if (!dias || dias < 1) return toast('Falta el número de días.', 'bad');
   if (!businessLine) return toast('Selecciona una Business Line.', 'bad');
   if (!reps.length)  return toast('Agrega al menos un representante con Nº Asignaciones > 0.', 'bad');
   if (!ids.length)   return toast('Pega al menos un ID de contacto.', 'bad');
@@ -874,7 +806,11 @@ async function ejecutar() {
 
   setStatus('Conectando con Salesforce…', 'run');
   log('Iniciando proceso de asignación…', 'info');
-  log(`Reps: ${reps.length} | IDs en pool: ${ids.length} | Días de exclusión: ${dias}`, 'info');
+  if (dias > 0) {
+    log(`Reps: ${reps.length} | IDs en pool: ${ids.length} | Días de exclusión: ${dias}`, 'info');
+  } else {
+    log(`Reps: ${reps.length} | IDs en pool: ${ids.length} | SIN filtro de días (query alternativo)`, 'info');
+  }
 
   try {
     const payload = { sid, instanceUrl: INSTANCE_URL, dias, businessLine, reps, ids };
@@ -925,7 +861,8 @@ function renderPreTemplate(headers, rows) {
     wrap.innerHTML = `<div class="empty"><div class="empty-ico">📋</div><p>El pre template aparecerá aquí después de ejecutar.</p></div>`;
     return;
   }
-  // Índices: 7 OwnerId, 8 BusinessLine, 9+ fijos
+  // Orden nuevo: 0 Contact, 1 LastSrc, 2 LastSrcAt, 3 FacilitySize, 4 Company, 5 LastName, 6 Email,
+  // 7 OwnerId, 8 BusinessLine, 9 LeadType, 10 ContactType, 11 Country, 12 Status, 13 RoundRobin
   const IDX_OWNER = 7, IDX_BL = 8, FIXED = 9;
   let html = `<table class="pt"><thead><tr>`;
   PT_HEADERS.forEach(h => { html += `<th title="${esc(h)}">${esc(h)}</th>`; });
@@ -1046,6 +983,21 @@ function resetImportUI() {
   document.getElementById('badge-import').textContent = '—';
 }
 
+// Limpia el resultado/log del import (mantiene la fuente de datos del pre-template)
+function limpiarImport() {
+  resetImportUI();
+  importResultRows = [];
+  leadFieldsCache = null;
+  // resetear marcas del field mapping
+  if (preTemplateRows.length > 0) {
+    PT_HEADERS.forEach(col => {
+      const cell = document.getElementById(`fmap-ok-${col}`);
+      if (cell) { cell.textContent = '•'; cell.className = 'fmap-ok pending'; }
+    });
+  }
+  toast('🗑 Import limpiado.', 'ok');
+}
+
 function updateProgress(total, processed, success, failed) {
   const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
   document.getElementById('progPct').textContent     = pct + '%';
@@ -1057,7 +1009,7 @@ function updateProgress(total, processed, success, failed) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  DIAGNÓSTICO DE CAMPOS DE LEAD
+//  DIAGNÓSTICO DE CAMPOS DE LEAD (best-effort — no bloquea el import)
 // ══════════════════════════════════════════════════════════════════
 async function obtenerCamposLead(sid) {
   if (leadFieldsCache) return leadFieldsCache;
@@ -1072,9 +1024,9 @@ async function obtenerCamposLead(sid) {
       object: 'Lead'
     })
   });
-  if (!res.ok) throw new Error(`No se pudo describir Lead: HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
-  if (data.error) throw new Error('No se pudo describir Lead: ' + data.error);
+  if (data.error) throw new Error(data.error);
 
   leadFieldsCache = data.fields || [];
   return leadFieldsCache;
@@ -1141,43 +1093,46 @@ async function ejecutarImport() {
 
   ilog('🔍 Paso 1/2: Consultando campos reales del objeto Lead en Salesforce…', 'info');
 
-  let realFields;
+  // Validación de campos — si falla, AVISA pero NO bloquea
+  let validacionOk = true;
   try {
-    realFields = await obtenerCamposLead(sid);
-    ilog(`✓ Lead tiene ${realFields.length} campos en Salesforce`, 'ok');
+    const realFields = await obtenerCamposLead(sid);
+    if (realFields.length === 0) {
+      ilog('⚠ Lead describe devolvió 0 campos. Posiblemente el SID no tiene permisos para describe.', 'warn');
+      ilog('💡 Continuando con el import sin validación previa. Salesforce dirá si algún campo es inválido.', 'warn');
+      validacionOk = false;
+    } else {
+      ilog(`✓ Lead tiene ${realFields.length} campos en Salesforce`, 'ok');
+      const filasInvalidas = validarFieldMapping(realFields);
+      if (filasInvalidas.length > 0) {
+        ilog(`✗ ${filasInvalidas.length} campo(s) NO existen en Lead:`, 'err');
+        filasInvalidas.forEach(f => ilog(`   • ${f.sfVal}  (CSV: ${f.csvCol})`, 'err'));
+        ilog(`💡 Usa el selector del Field Mapping para Omitir esos campos o corregirlos.`, 'warn');
+        setImportStatus(`Faltan ${filasInvalidas.length} campos en Lead. Revisa el Field Mapping (✗ rojo).`, 'err');
+        toast(`❌ ${filasInvalidas.length} campo(s) inválidos. Revisa el Field Mapping.`, 'bad');
+        btn.disabled = false; btn.textContent = '📥 Ejecutar Import a Salesforce';
+        return;
+      }
+      ilog('✓ Todos los campos validados correctamente', 'ok');
+    }
   } catch (err) {
-    ilog(`✗ Error validando campos: ${err.message}`, 'err');
-    setImportStatus('Error validando campos. Revisa el SID.', 'err');
-    toast('❌ ' + err.message, 'bad');
-    btn.disabled = false; btn.textContent = '📥 Ejecutar Import a Salesforce';
-    return;
+    ilog(`⚠ No se pudo validar campos: ${err.message}`, 'warn');
+    ilog('💡 Continuando con el import. Salesforce dirá si algún campo es inválido.', 'warn');
+    validacionOk = false;
   }
 
-  const filasInvalidas = validarFieldMapping(realFields);
-
-  if (filasInvalidas.length > 0) {
-    ilog(`✗ ${filasInvalidas.length} campo(s) NO existen en el objeto Lead:`, 'err');
-    filasInvalidas.forEach(f => {
-      ilog(`   • ${f.sfVal}  (CSV: ${f.csvCol})`, 'err');
-    });
-    ilog(`💡 Usa el selector del Field Mapping para Omitir esos campos o corregir el nombre.`, 'warn');
-    setImportStatus(`Faltan ${filasInvalidas.length} campos en Lead. Revisa el Field Mapping (✗ rojo).`, 'err');
-    toast(`❌ ${filasInvalidas.length} campo(s) inválidos. Revisa el Field Mapping.`, 'bad');
-    btn.disabled = false; btn.textContent = '📥 Ejecutar Import a Salesforce';
-    return;
-  }
-
-  ilog('✓ Todos los campos validados correctamente', 'ok');
-
+  // PASO 2: Preparar datos y enviar al backend
   const fmapRows  = document.querySelectorAll('#fmapBody tr');
   const sfHeaders = [];
   const colIndexes = [];
+  const colNames = [];  // nombres de la columna CSV para detectar campos especiales
 
   fmapRows.forEach((tr, i) => {
     const sfVal = tr.querySelector('select').value;
     if (sfVal !== '--skip--') {
       sfHeaders.push(sfVal);
       colIndexes.push(i);
+      colNames.push(PT_HEADERS[i]);
     }
   });
 
@@ -1187,6 +1142,7 @@ async function ejecutarImport() {
     return;
   }
 
+  // Construir filas — para campos en ENVIAR_VACIO_AL_IMPORT, mandar string vacío
   const rowsToSend = [];
   for (let i = 0; i < preTemplateRows.length; i++) {
     const row = preTemplateRows[i];
@@ -1194,7 +1150,13 @@ async function ejecutarImport() {
     const newRow = [];
     for (let j = 0; j < colIndexes.length; j++) {
       const idx = colIndexes[j];
-      newRow.push(row[idx] !== undefined && row[idx] !== null ? row[idx] : '');
+      const colName = colNames[j];
+
+      if (ENVIAR_VACIO_AL_IMPORT.has(colName)) {
+        newRow.push('');  // FacilitySize__c → siempre vacío al import
+      } else {
+        newRow.push(row[idx] !== undefined && row[idx] !== null ? row[idx] : '');
+      }
     }
     rowsToSend.push(newRow);
   }
@@ -1204,6 +1166,7 @@ async function ejecutarImport() {
 
   ilog(`📤 Paso 2/2: Iniciando Bulk Import a Salesforce`, 'info');
   ilog(`Objeto: ${object} | Acción: ${action} | Registros: ${total}`, 'info');
+  ilog(`Nota: FacilitySize__c se envía vacío al Lead (extraído del Contact, pero no se importa).`, 'info');
   ilog('⏳ Apps Script ejecutará el Bulk Job. Puede tardar entre 30 seg y varios minutos…', 'warn');
   setImportStatus(`Enviando ${total} registros al servidor…`, 'run');
 
