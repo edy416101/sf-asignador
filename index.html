@@ -8,30 +8,15 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
   <style>
     :root {
-      --bg:      #0d0f18;
-      --surface: #161929;
-      --sf2:     #1e2235;
-      --border:  #272c45;
-      --accent:  #4b7cf3;
-      --ac2:     #7c3aed;
-      --ok:      #22c55e;
-      --err:     #f43f5e;
-      --warn:    #f59e0b;
-      --text:    #e4e8f7;
-      --muted:   #6b729a;
-      --mono:    'JetBrains Mono', monospace;
-      --sans:    'Inter', sans-serif;
+      --bg: #0d0f18; --surface: #161929; --sf2: #1e2235; --border: #272c45;
+      --accent: #4b7cf3; --ac2: #7c3aed; --ok: #22c55e; --err: #f43f5e; --warn: #f59e0b;
+      --text: #e4e8f7; --muted: #6b729a;
+      --mono: 'JetBrains Mono', monospace; --sans: 'Inter', sans-serif;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; overflow: hidden; }
 
-    #loginScreen {
-      position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-      background: var(--bg);
-      background-image: radial-gradient(ellipse 60% 50% at 25% 60%, rgba(75,124,243,.1) 0%, transparent 70%),
-                        radial-gradient(ellipse 50% 40% at 75% 40%, rgba(124,58,237,.08) 0%, transparent 70%);
-      z-index: 100;
-    }
+    #loginScreen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--bg); background-image: radial-gradient(ellipse 60% 50% at 25% 60%, rgba(75,124,243,.1) 0%, transparent 70%), radial-gradient(ellipse 50% 40% at 75% 40%, rgba(124,58,237,.08) 0%, transparent 70%); z-index: 100; }
     .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 22px; padding: 48px 44px 40px; width: 370px; text-align: center; box-shadow: 0 32px 80px rgba(0,0,0,.5); }
     .login-logo { width: 60px; height: 60px; border-radius: 18px; background: linear-gradient(135deg, var(--accent), var(--ac2)); display: flex; align-items: center; justify-content: center; font-size: 28px; margin: 0 auto 22px; box-shadow: 0 8px 24px rgba(75,124,243,.35); }
     .login-card h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
@@ -63,7 +48,6 @@
     .tab-content { display: none; flex: 1; overflow: hidden; }
     .tab-content.active { display: flex; }
 
-    /* ══ TAB 1 — ASIGNACIÓN ══ */
     .asig-layout { display: grid; grid-template-columns: 420px 1fr; flex: 1; overflow: hidden; }
 
     aside { border-right: 1px solid var(--border); background: var(--surface); overflow-y: auto; padding: 20px 18px; max-height: 100vh; display: flex; flex-direction: column; gap: 20px; }
@@ -165,7 +149,6 @@
     .empty-ico { font-size: 30px; margin-bottom: 10px; opacity: .6; }
     .empty p { font-size: 12.5px; }
 
-    /* ══ TAB 2 — DATA IMPORT ══ */
     .import-layout { display: grid; grid-template-columns: 420px 1fr; flex: 1; overflow: hidden; }
     .import-config { border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; max-height: 100%; overflow: hidden; }
     .import-config-scroll { flex: 1; overflow-y: auto; padding: 20px 18px; display: flex; flex-direction: column; gap: 20px; }
@@ -243,6 +226,43 @@
     .toast.show { transform: translateY(0); opacity: 1; }
     .toast.ok  { border-left: 3px solid var(--ok); }
     .toast.bad { border-left: 3px solid var(--err); }
+
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 500; padding: 20px; }
+    .modal-backdrop.open { display: flex; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; box-shadow: 0 32px 80px rgba(0,0,0,0.5); }
+    .modal-header { padding: 18px 22px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .modal-header h2 { font-size: 15px; font-weight: 700; }
+    .modal-close { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 4px 8px; }
+    .modal-close:hover { color: var(--err); }
+    .modal-body { padding: 20px 22px; display: flex; flex-direction: column; gap: 16px; }
+    .modal-field { display: flex; flex-direction: column; gap: 5px; }
+    .modal-field label { font-size: 11.5px; font-weight: 500; color: var(--muted); }
+    .modal-field input, .modal-field select { background: var(--sf2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--sans); font-size: 13px; padding: 9px 12px; outline: none; width: 100%; }
+    .modal-field input:focus, .modal-field select:focus { border-color: var(--accent); }
+    .modal-field .hint { font-size: 10.5px; color: var(--muted); font-style: italic; }
+    .modal-radios { display: flex; flex-direction: column; gap: 8px; }
+    .radio-opt { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: var(--sf2); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: all .15s; }
+    .radio-opt:hover { border-color: var(--accent); }
+    .radio-opt input { accent-color: var(--accent); margin-top: 3px; }
+    .radio-opt.selected { border-color: var(--accent); background: rgba(75,124,243,0.08); }
+    .radio-opt .ro-label { font-size: 12.5px; font-weight: 600; color: var(--text); }
+    .radio-opt .ro-desc { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+    .modal-footer { padding: 14px 22px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; }
+    .btn-modal-cancel { background: none; border: 1px solid var(--border); color: var(--muted); padding: 9px 18px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--sans); }
+    .btn-modal-cancel:hover { border-color: var(--err); color: var(--err); }
+    .btn-modal-primary { background: linear-gradient(135deg, var(--accent), var(--ac2)); color: white; border: none; padding: 9px 22px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--sans); }
+    .btn-modal-primary:hover { opacity: 0.9; }
+    .btn-modal-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    .modal-conditional { display: none; }
+    .modal-conditional.visible { display: flex; }
+    .export-links { padding: 20px 22px; background: rgba(34,197,94,0.05); border-top: 1px solid var(--border); display: none; }
+    .export-links.visible { display: flex; flex-direction: column; gap: 8px; }
+    .export-links .el-title { font-size: 12px; font-weight: 600; color: var(--ok); display: flex; align-items: center; gap: 6px; }
+    .export-links .el-link { font-family: var(--mono); font-size: 11px; color: var(--accent); word-break: break-all; }
+    .export-links .el-link a { color: var(--accent); text-decoration: underline; }
+    .export-links .el-ownership { font-size: 10.5px; color: var(--muted); font-style: italic; }
+    .export-links .el-ownership.ok  { color: var(--ok); font-style: normal; }
+    .export-links .el-ownership.err { color: var(--warn); font-style: normal; }
 
     ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -350,9 +370,7 @@
 
         <div>
           <div class="slabel">IDs de Contactos</div>
-          <textarea id="idsArea" class="ids-box"
-            placeholder="Pega aquí los IDs de contacto, uno por línea…"
-            oninput="updateCount()"></textarea>
+          <textarea id="idsArea" class="ids-box" placeholder="Pega aquí los IDs de contacto, uno por línea…" oninput="updateCount()"></textarea>
           <div class="ids-meta" id="idsCount">0 IDs cargados</div>
         </div>
 
@@ -504,8 +522,8 @@
         <div class="result-header">
           <h2>Resultado del Import</h2>
           <div class="result-btns" style="display:flex;gap:8px;">
-            <button class="btn-icon" style="background:var(--accent)" id="copyResultBtn" onclick="copiarResultado()" disabled>📋 Copiar resultado</button>
-            <button class="btn-icon" style="background:var(--accent)" id="dlResultBtn" onclick="descargarResultado()" disabled>⬇ Descargar resultado</button>
+            <button class="btn-icon" style="background:var(--accent)" id="copyResultBtn" onclick="copiarResultado()" disabled>📋 Copiar</button>
+            <button class="btn-icon" style="background:var(--ok)" id="dlResultBtn" onclick="abrirModalExport()" disabled>📊 Descargar resultado</button>
           </div>
         </div>
 
@@ -518,41 +536,92 @@
 
 </div>
 
+<!-- ══════════ MODAL EXPORT SHEET ══════════ -->
+<div class="modal-backdrop" id="exportModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>📊 Guardar resultado en Google Sheets</h2>
+      <button class="modal-close" onclick="cerrarModalExport()">✕</button>
+    </div>
+
+    <div class="modal-body">
+
+      <div class="modal-field">
+        <label>Modo de guardado</label>
+        <div class="modal-radios">
+          <label class="radio-opt selected" data-mode="new">
+            <input type="radio" name="exportMode" value="new" checked onchange="onExportModeChange()"/>
+            <div>
+              <div class="ro-label">Crear nuevo Google Sheet</div>
+              <div class="ro-desc">Se creará un Sheet nuevo con las hojas: Summary, Pre Template, Import Result. Quedará a tu nombre en Drive.</div>
+            </div>
+          </label>
+          <label class="radio-opt" data-mode="attach">
+            <input type="radio" name="exportMode" value="attach" onchange="onExportModeChange()"/>
+            <div>
+              <div class="ro-label">Adjuntar a un Sheet existente</div>
+              <div class="ro-desc">Se añaden las 3 hojas nuevas al Sheet cuyo link pegues abajo, sin tocar las hojas existentes.</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-field modal-conditional visible" id="fieldNewName">
+        <label>Nombre del archivo</label>
+        <input type="text" id="exportFileName" placeholder="ej. Ticket #12345"/>
+        <span class="hint">Escribe el número de ticket u otro identificador. Este será el nombre del Sheet en Drive.</span>
+      </div>
+
+      <div class="modal-field modal-conditional" id="fieldTargetUrl">
+        <label>Link del Google Sheet destino</label>
+        <input type="text" id="exportTargetUrl" placeholder="https://docs.google.com/spreadsheets/d/…"/>
+        <span class="hint">Pega el link o el ID del Sheet. La cuenta que desplegó el script debe tener acceso al archivo.</span>
+      </div>
+
+      <div class="modal-field modal-conditional visible" id="fieldFolder">
+        <label>Carpeta de Drive (opcional)</label>
+        <input type="text" id="exportFolderId" placeholder="ID de carpeta (dejar vacío = usar la predeterminada del backend)"/>
+        <span class="hint">Pega el ID de la carpeta destino de Drive (URL después de /folders/).</span>
+      </div>
+
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-modal-cancel" onclick="cerrarModalExport()">Cancelar</button>
+      <button class="btn-modal-primary" id="btnExportPrimary" onclick="ejecutarExport()">📊 Crear Sheet</button>
+    </div>
+
+    <div class="export-links" id="exportLinks">
+      <div class="el-title" id="exportLinksTitle">✅ Sheet creado</div>
+      <div class="el-link" id="exportLinkContent"></div>
+      <div class="el-ownership" id="exportOwnership"></div>
+    </div>
+
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
 // ══════════════════════════════════════════════════════════════════
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════
-const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbx7K9tXszc810rwxEDEOXDE3xnAelLtOKhElllZ_k64zzSrSrF8ekEpx1qyLhnY7gdcWQ/exec";
+const APPS_SCRIPT_URL  = "https://script.google.com/a/macros/docplanner.com/s/AKfycbxYQ_w57tTvdyzm3jVdWjVY3yn01I0ADtHW1Y_qeU4D785JPEdIxL4CW2KO6tZmhB77rQ/exec";
 const GOOGLE_CLIENT_ID = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 const INSTANCE_URL     = "https://docplanner.my.salesforce.com";
 
 // ══════════════════════════════════════════════════════════════════
-//  HEADERS — 14 columnas en el ORDEN NUEVO solicitado
+//  HEADERS
 // ══════════════════════════════════════════════════════════════════
 const PT_HEADERS = [
-  'Contact__c',
-  'LastSource_SO__c',
-  'LastSourceAt__c',
-  'FacilitySize__c',
-  'Company',
-  'LastName',
-  'Email',
-  'OwnerId',
-  'BusinessLine__c',
-  'Lead_Type__c',
-  'ContactTypeSegment__c',
-  'Country__c',
-  'Status',
-  'Leadassist__Use_Round_Robin__c'
+  'Contact__c', 'LastSource_SO__c', 'LastSourceAt__c', 'FacilitySize__c',
+  'Company', 'LastName', 'Email', 'OwnerId', 'BusinessLine__c',
+  'Lead_Type__c', 'ContactTypeSegment__c', 'Country__c',
+  'Status', 'Leadassist__Use_Round_Robin__c'
 ];
 
-// Campos que SIEMPRE deben enviarse vacíos al import
-// (aunque el pre-template los muestre con valor del Contact)
 const ENVIAR_VACIO_AL_IMPORT = new Set(['FacilitySize__c']);
 
-// Resultado del import: 14 columnas del pre-template + 4 columnas de status = 18
 const IMPORT_RESULT_HEADERS = [
   'Contact__c', 'LastSource_SO__c', 'LastSourceAt__c', 'FacilitySize__c',
   'Company', 'LastName', 'Email', 'OwnerId', 'BusinessLine__c',
@@ -562,19 +631,10 @@ const IMPORT_RESULT_HEADERS = [
 ];
 
 const DEFAULT_FIELD_MAP = {
-  'Contact__c':'Contact__c',
-  'LastSource_SO__c':'LastSource_SO__c',
-  'LastSourceAt__c':'LastSourceAt__c',
-  'FacilitySize__c':'FacilitySize__c',
-  'Company':'Company',
-  'LastName':'LastName',
-  'Email':'Email',
-  'OwnerId':'OwnerId',
-  'BusinessLine__c':'BusinessLine__c',
-  'Lead_Type__c':'Lead_Type__c',
-  'ContactTypeSegment__c':'ContactTypeSegment__c',
-  'Country__c':'Country__c',
-  'Status':'Status',
+  'Contact__c':'Contact__c','LastSource_SO__c':'LastSource_SO__c','LastSourceAt__c':'LastSourceAt__c',
+  'FacilitySize__c':'FacilitySize__c','Company':'Company','LastName':'LastName','Email':'Email',
+  'OwnerId':'OwnerId','BusinessLine__c':'BusinessLine__c','Lead_Type__c':'Lead_Type__c',
+  'ContactTypeSegment__c':'ContactTypeSegment__c','Country__c':'Country__c','Status':'Status',
   'Leadassist__Use_Round_Robin__c':'Leadassist__Use_Round_Robin__c'
 };
 
@@ -586,6 +646,9 @@ let importResultRows = [];
 let toastTimer       = null;
 let totalAsignados   = 0;
 let leadFieldsCache  = null;
+let ownerStatsCache  = [];
+let ultimaAsignacion = {};
+let loggedInEmail    = "";   // ← email del usuario logueado, para exportar
 
 // ══════════════════════════════════════════════════════════════════
 //  GOOGLE SIGN-IN
@@ -600,10 +663,8 @@ window.addEventListener('load', () => {
 
 function initGSI() {
   google.accounts.id.initialize({
-    client_id: GOOGLE_CLIENT_ID,
-    callback: onSignIn,
-    hd: 'docplanner.com',
-    auto_select: false,
+    client_id: GOOGLE_CLIENT_ID, callback: onSignIn,
+    hd: 'docplanner.com', auto_select: false
   });
   google.accounts.id.renderButton(
     document.getElementById('gSigninBtn'),
@@ -618,6 +679,7 @@ function onSignIn(response) {
     if (!payload.email?.toLowerCase().endsWith('@docplanner.com')) {
       toast('❌ Solo se permiten cuentas @docplanner.com', 'bad'); return;
     }
+    loggedInEmail = payload.email.toLowerCase().trim();
     document.getElementById('userAvatar').textContent = (payload.given_name?.[0] || payload.email[0]).toUpperCase();
     document.getElementById('userEmail').textContent  = payload.email;
     document.getElementById('loginScreen').style.display = 'none';
@@ -630,11 +692,10 @@ function logout() {
   if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
   document.getElementById('mainApp').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
-  preTemplateRows = [];
-  importResultRows = [];
-  leadFieldsCache = null;
-  resetAsigUI();
-  resetImportUI();
+  preTemplateRows = []; importResultRows = [];
+  leadFieldsCache = null; ownerStatsCache = [];
+  ultimaAsignacion = {}; loggedInEmail = "";
+  resetAsigUI(); resetImportUI();
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -668,7 +729,6 @@ function addRep(email = '', n = '') {
   actualizarRepsTotal();
 }
 
-// Actualiza el contador total de asignaciones
 function actualizarRepsTotal() {
   let total = 0;
   document.querySelectorAll('#repsBody tr').forEach(tr => {
@@ -679,22 +739,13 @@ function actualizarRepsTotal() {
   document.getElementById('repsTotal').textContent = total;
 }
 
-// Aplica el número del primer rep a todos los demás
 function aplicarMismoNumero() {
   const filas = document.querySelectorAll('#repsBody tr');
-  if (filas.length < 2) {
-    toast('Necesitas al menos 2 representantes.', 'bad');
-    return;
-  }
+  if (filas.length < 2) { toast('Necesitas al menos 2 representantes.', 'bad'); return; }
   const primerInput = filas[0].querySelectorAll('input')[1];
   const num = parseInt(primerInput.value);
-  if (isNaN(num) || num <= 0) {
-    toast('El primer representante debe tener un número > 0.', 'bad');
-    return;
-  }
-  for (let i = 1; i < filas.length; i++) {
-    filas[i].querySelectorAll('input')[1].value = num;
-  }
+  if (isNaN(num) || num <= 0) { toast('El primer representante debe tener un número > 0.', 'bad'); return; }
+  for (let i = 1; i < filas.length; i++) filas[i].querySelectorAll('input')[1].value = num;
   actualizarRepsTotal();
   toast(`✅ Aplicado ${num} a ${filas.length - 1} representante(s).`, 'ok');
 }
@@ -726,10 +777,7 @@ function getReps() {
 }
 
 function getIds() {
-  return document.getElementById('idsArea').value
-    .split('\n')
-    .map(l => l.trim())
-    .filter(Boolean);  // filtra strings vacíos y null/undefined
+  return document.getElementById('idsArea').value.split('\n').map(l => l.trim()).filter(Boolean);
 }
 
 function updateCount() {
@@ -761,26 +809,22 @@ function resetAsigUI() {
   document.getElementById('logBox').innerHTML = '<span class="info">// El log de ejecución aparecerá aquí…</span>';
   setStatus('Listo. Configura los parámetros y presiona Ejecutar.', '');
   ['sAsignados','sReps','sCandidatos'].forEach(id => document.getElementById(id).textContent = '0');
-  document.getElementById('dlBtn').disabled      = true;
-  document.getElementById('copyBtn').disabled    = true;
+  document.getElementById('dlBtn').disabled       = true;
+  document.getElementById('copyBtn').disabled     = true;
   document.getElementById('goImportBtn').disabled = true;
   document.getElementById('badge-asig').textContent = '—';
 }
 
-// Limpia todos los inputs de la asignación
 function limpiarAsignacion() {
   if (!confirm('¿Limpiar días, Business Line, representantes e IDs?')) return;
-
   document.getElementById('dias').value = '';
   document.getElementById('businessLine').value = '';
   document.getElementById('repsBody').innerHTML = '';
   document.getElementById('idsArea').value = '';
-  updateCount();
-  actualizarRepsTotal();
-  addRep('', '');  // deja una fila vacía
+  updateCount(); actualizarRepsTotal();
+  addRep('', '');
   resetAsigUI();
-  preTemplateRows = [];
-  totalAsignados = 0;
+  preTemplateRows = []; totalAsignados = 0; ownerStatsCache = [];
   toast('🗑 Asignación limpiada.', 'ok');
 }
 
@@ -806,11 +850,8 @@ async function ejecutar() {
 
   setStatus('Conectando con Salesforce…', 'run');
   log('Iniciando proceso de asignación…', 'info');
-  if (dias > 0) {
-    log(`Reps: ${reps.length} | IDs en pool: ${ids.length} | Días de exclusión: ${dias}`, 'info');
-  } else {
-    log(`Reps: ${reps.length} | IDs en pool: ${ids.length} | SIN filtro de días (query alternativo)`, 'info');
-  }
+  if (dias > 0) log(`Reps: ${reps.length} | IDs en pool: ${ids.length} | Días de exclusión: ${dias}`, 'info');
+  else log(`Reps: ${reps.length} | IDs en pool: ${ids.length} | SIN filtro de días`, 'info');
 
   try {
     const payload = { sid, instanceUrl: INSTANCE_URL, dias, businessLine, reps, ids };
@@ -820,6 +861,13 @@ async function ejecutar() {
     if (data.error) throw new Error(data.error);
 
     preTemplateRows = data.rows || [];
+    ownerStatsCache = data.ownerStats || [];
+    ultimaAsignacion = {
+      businessLine, dias, fecha: new Date().toLocaleString('es-MX'),
+      contactosQueryPass: data.poolTotal,
+      contactosAsignados: data.assigned,
+      repsActivos: reps.length
+    };
 
     log(`✓ Contactos que pasaron el query: ${data.poolTotal}`, 'ok');
     log(`✓ Contactos asignados: ${data.assigned}`, 'ok');
@@ -861,8 +909,6 @@ function renderPreTemplate(headers, rows) {
     wrap.innerHTML = `<div class="empty"><div class="empty-ico">📋</div><p>El pre template aparecerá aquí después de ejecutar.</p></div>`;
     return;
   }
-  // Orden nuevo: 0 Contact, 1 LastSrc, 2 LastSrcAt, 3 FacilitySize, 4 Company, 5 LastName, 6 Email,
-  // 7 OwnerId, 8 BusinessLine, 9 LeadType, 10 ContactType, 11 Country, 12 Status, 13 RoundRobin
   const IDX_OWNER = 7, IDX_BL = 8, FIXED = 9;
   let html = `<table class="pt"><thead><tr>`;
   PT_HEADERS.forEach(h => { html += `<th title="${esc(h)}">${esc(h)}</th>`; });
@@ -952,13 +998,8 @@ function buildFieldMapping() {
 function syncMapCheck(sel, col) {
   const cell = document.getElementById(`fmap-ok-${col}`);
   if (!cell) return;
-  if (sel.value === '--skip--') {
-    cell.textContent = '—';
-    cell.className = 'fmap-ok skip';
-  } else {
-    cell.textContent = '•';
-    cell.className = 'fmap-ok pending';
-  }
+  if (sel.value === '--skip--') { cell.textContent = '—'; cell.className = 'fmap-ok skip'; }
+  else { cell.textContent = '•'; cell.className = 'fmap-ok pending'; }
 }
 
 function ilog(msg, type = 'info') {
@@ -983,12 +1024,10 @@ function resetImportUI() {
   document.getElementById('badge-import').textContent = '—';
 }
 
-// Limpia el resultado/log del import (mantiene la fuente de datos del pre-template)
 function limpiarImport() {
   resetImportUI();
   importResultRows = [];
   leadFieldsCache = null;
-  // resetear marcas del field mapping
   if (preTemplateRows.length > 0) {
     PT_HEADERS.forEach(col => {
       const cell = document.getElementById(`fmap-ok-${col}`);
@@ -1008,26 +1047,15 @@ function updateProgress(total, processed, success, failed) {
   document.getElementById('pcFailed').textContent    = failed;
 }
 
-// ══════════════════════════════════════════════════════════════════
-//  DIAGNÓSTICO DE CAMPOS DE LEAD (best-effort — no bloquea el import)
-// ══════════════════════════════════════════════════════════════════
 async function obtenerCamposLead(sid) {
   if (leadFieldsCache) return leadFieldsCache;
-
   const res = await fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    redirect: 'follow',
-    body: JSON.stringify({
-      action: 'describe',
-      sid: sid,
-      instanceUrl: INSTANCE_URL,
-      object: 'Lead'
-    })
+    method: 'POST', redirect: 'follow',
+    body: JSON.stringify({ action: 'describe', sid: sid, instanceUrl: INSTANCE_URL, object: 'Lead' })
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
   if (data.error) throw new Error(data.error);
-
   leadFieldsCache = data.fields || [];
   return leadFieldsCache;
 }
@@ -1035,41 +1063,21 @@ async function obtenerCamposLead(sid) {
 function validarFieldMapping(realFields) {
   const realSet = new Set(realFields.map(f => f.toLowerCase()));
   const filasInvalidas = [];
-
-  const fmapRows = document.querySelectorAll('#fmapBody tr');
-  fmapRows.forEach((tr, i) => {
+  document.querySelectorAll('#fmapBody tr').forEach((tr, i) => {
     const csvCol = PT_HEADERS[i];
     const sfVal  = tr.querySelector('select').value;
     const cell   = document.getElementById(`fmap-ok-${csvCol}`);
     if (!cell) return;
-
-    if (sfVal === '--skip--') {
-      cell.textContent = '—';
-      cell.className = 'fmap-ok skip';
-      return;
-    }
-
+    if (sfVal === '--skip--') { cell.textContent = '—'; cell.className = 'fmap-ok skip'; return; }
     const existe = realSet.has(sfVal.toLowerCase());
-    if (existe) {
-      cell.textContent = '✓';
-      cell.className = 'fmap-ok ok';
-    } else {
-      cell.textContent = '✗';
-      cell.className = 'fmap-ok err';
-      filasInvalidas.push({ csvCol, sfVal });
-    }
+    if (existe) { cell.textContent = '✓'; cell.className = 'fmap-ok ok'; }
+    else { cell.textContent = '✗'; cell.className = 'fmap-ok err'; filasInvalidas.push({ csvCol, sfVal }); }
   });
-
   return filasInvalidas;
 }
 
-// ══════════════════════════════════════════════════════════════════
-//  EJECUTAR IMPORT
-// ══════════════════════════════════════════════════════════════════
 async function ejecutarImport() {
-  if (!preTemplateRows.length) {
-    toast('Sin datos. Ejecuta la asignación primero.', 'bad'); return;
-  }
+  if (!preTemplateRows.length) { toast('Sin datos.', 'bad'); return; }
 
   const sid    = document.getElementById('sid').value.trim();
   const action = document.getElementById('cfg-action').value;
@@ -1093,39 +1101,29 @@ async function ejecutarImport() {
 
   ilog('🔍 Paso 1/2: Consultando campos reales del objeto Lead en Salesforce…', 'info');
 
-  // Validación de campos — si falla, AVISA pero NO bloquea
-  let validacionOk = true;
   try {
     const realFields = await obtenerCamposLead(sid);
     if (realFields.length === 0) {
-      ilog('⚠ Lead describe devolvió 0 campos. Posiblemente el SID no tiene permisos para describe.', 'warn');
-      ilog('💡 Continuando con el import sin validación previa. Salesforce dirá si algún campo es inválido.', 'warn');
-      validacionOk = false;
+      ilog('⚠ Lead describe devolvió 0 campos. Continuando sin validación previa.', 'warn');
     } else {
       ilog(`✓ Lead tiene ${realFields.length} campos en Salesforce`, 'ok');
       const filasInvalidas = validarFieldMapping(realFields);
       if (filasInvalidas.length > 0) {
         ilog(`✗ ${filasInvalidas.length} campo(s) NO existen en Lead:`, 'err');
         filasInvalidas.forEach(f => ilog(`   • ${f.sfVal}  (CSV: ${f.csvCol})`, 'err'));
-        ilog(`💡 Usa el selector del Field Mapping para Omitir esos campos o corregirlos.`, 'warn');
-        setImportStatus(`Faltan ${filasInvalidas.length} campos en Lead. Revisa el Field Mapping (✗ rojo).`, 'err');
-        toast(`❌ ${filasInvalidas.length} campo(s) inválidos. Revisa el Field Mapping.`, 'bad');
+        setImportStatus(`Faltan ${filasInvalidas.length} campos en Lead.`, 'err');
+        toast(`❌ ${filasInvalidas.length} campo(s) inválidos.`, 'bad');
         btn.disabled = false; btn.textContent = '📥 Ejecutar Import a Salesforce';
         return;
       }
       ilog('✓ Todos los campos validados correctamente', 'ok');
     }
   } catch (err) {
-    ilog(`⚠ No se pudo validar campos: ${err.message}`, 'warn');
-    ilog('💡 Continuando con el import. Salesforce dirá si algún campo es inválido.', 'warn');
-    validacionOk = false;
+    ilog(`⚠ No se pudo validar campos: ${err.message}. Continuando…`, 'warn');
   }
 
-  // PASO 2: Preparar datos y enviar al backend
   const fmapRows  = document.querySelectorAll('#fmapBody tr');
-  const sfHeaders = [];
-  const colIndexes = [];
-  const colNames = [];  // nombres de la columna CSV para detectar campos especiales
+  const sfHeaders = [], colIndexes = [], colNames = [];
 
   fmapRows.forEach((tr, i) => {
     const sfVal = tr.querySelector('select').value;
@@ -1142,7 +1140,6 @@ async function ejecutarImport() {
     return;
   }
 
-  // Construir filas — para campos en ENVIAR_VACIO_AL_IMPORT, mandar string vacío
   const rowsToSend = [];
   for (let i = 0; i < preTemplateRows.length; i++) {
     const row = preTemplateRows[i];
@@ -1151,12 +1148,8 @@ async function ejecutarImport() {
     for (let j = 0; j < colIndexes.length; j++) {
       const idx = colIndexes[j];
       const colName = colNames[j];
-
-      if (ENVIAR_VACIO_AL_IMPORT.has(colName)) {
-        newRow.push('');  // FacilitySize__c → siempre vacío al import
-      } else {
-        newRow.push(row[idx] !== undefined && row[idx] !== null ? row[idx] : '');
-      }
+      if (ENVIAR_VACIO_AL_IMPORT.has(colName)) newRow.push('');
+      else newRow.push(row[idx] !== undefined && row[idx] !== null ? row[idx] : '');
     }
     rowsToSend.push(newRow);
   }
@@ -1166,41 +1159,27 @@ async function ejecutarImport() {
 
   ilog(`📤 Paso 2/2: Iniciando Bulk Import a Salesforce`, 'info');
   ilog(`Objeto: ${object} | Acción: ${action} | Registros: ${total}`, 'info');
-  ilog(`Nota: FacilitySize__c se envía vacío al Lead (extraído del Contact, pero no se importa).`, 'info');
-  ilog('⏳ Apps Script ejecutará el Bulk Job. Puede tardar entre 30 seg y varios minutos…', 'warn');
+  ilog(`Nota: FacilitySize__c se envía vacío al Lead.`, 'info');
+  ilog('⏳ Puede tardar entre 30 seg y varios minutos…', 'warn');
   setImportStatus(`Enviando ${total} registros al servidor…`, 'run');
 
   try {
     const payload = {
-      action:      'import',
-      sid:         sid,
-      instanceUrl: INSTANCE_URL,
-      object:      object,
-      operation:   action,
-      externalId:  extId,
-      headers:     sfHeaders,
-      rows:        rowsToSend
+      action: 'import', sid, instanceUrl: INSTANCE_URL,
+      object, operation: action, externalId: extId,
+      headers: sfHeaders, rows: rowsToSend
     };
-
-    const res = await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      redirect: 'follow',
-      body: JSON.stringify(payload)
-    });
-
+    const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', redirect: 'follow', body: JSON.stringify(payload) });
     if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
 
     ilog(`✓ Job ID: ${data.jobId || 'N/A'}`, 'ok');
     ilog(`✓ Estado final: ${data.jobState || 'N/A'}`, data.jobState === 'JobComplete' ? 'ok' : 'warn');
+    if (data.errorMessage) ilog(`⚠ Salesforce dice: ${data.errorMessage}`, 'err');
 
-    if (data.errorMessage) {
-      ilog(`⚠ Salesforce dice: ${data.errorMessage}`, 'err');
-    }
-
-    const okRows   = parseSfResultCsv(data.successCsv || '', true);
-    const failRows = parseSfResultCsv(data.failedCsv  || '', false);
+    const okRows   = parseSfResultCsv(data.successCsv || '', true,  action);
+    const failRows = parseSfResultCsv(data.failedCsv  || '', false, action);
     importResultRows = okRows.concat(failRows);
 
     const success = okRows.length;
@@ -1229,13 +1208,22 @@ async function ejecutarImport() {
   btn.disabled = false; btn.textContent = '📥 Ejecutar Import a Salesforce';
 }
 
-function parseSfResultCsv(csvText, isOk) {
+// ══════════════════════════════════════════════════════════════════
+//  PARSEO estilo Salesforce Inspector
+// ══════════════════════════════════════════════════════════════════
+function parseSfResultCsv(csvText, isOk, operation) {
   if (!csvText || !csvText.trim()) return [];
   const lines = csvText.split('\n').filter(l => l.trim());
   if (lines.length < 2) return [];
 
   const csvHdrs = parseCsvRow(lines[0]);
   const result = [];
+
+  const actionLabels = {
+    insert: 'Inserted', update: 'Updated', upsert: 'Upserted',
+    delete: 'Deleted', undelete: 'Undeleted'
+  };
+  const defaultLabel = actionLabels[operation] || 'Processed';
 
   for (let i = 1; i < lines.length; i++) {
     const vals = parseCsvRow(lines[i]);
@@ -1244,10 +1232,20 @@ function parseSfResultCsv(csvText, isOk) {
 
     const row = {};
     IMPORT_RESULT_HEADERS.forEach(h => { row[h] = obj[h] || ''; });
-    row['__Id']     = obj['sf__Id'] || '';
-    row['__Action'] = isOk ? (obj['sf__Created'] === 'true' ? 'insert' : 'update') : '';
-    row['__Status'] = isOk ? 'true' : 'false';
-    row['__Errors'] = obj['sf__Error'] || '';
+    row['__Id'] = obj['sf__Id'] || '';
+
+    if (isOk) {
+      row['__Status'] = 'Succeeded';
+      row['__Action'] = (operation === 'upsert')
+        ? (obj['sf__Created'] === 'true' ? 'Inserted' : 'Updated')
+        : defaultLabel;
+      row['__Errors'] = '';
+    } else {
+      row['__Status'] = 'Failed';
+      row['__Action'] = '';
+      row['__Errors'] = obj['sf__Error'] || 'Unknown error';
+    }
+
     result.push(row);
   }
   return result;
@@ -1261,11 +1259,8 @@ function parseCsvRow(line) {
     if (c === '"') {
       if (inQ && line[i+1] === '"') { cur += '"'; i++; }
       else inQ = !inQ;
-    } else if (c === ',' && !inQ) {
-      result.push(cur); cur = '';
-    } else {
-      cur += c;
-    }
+    } else if (c === ',' && !inQ) { result.push(cur); cur = ''; }
+    else { cur += c; }
   }
   result.push(cur);
   return result;
@@ -1282,21 +1277,15 @@ function renderImportResult(rows) {
   html += `</tr></thead><tbody>`;
 
   rows.forEach(row => {
-    const isOk  = row['__Status'] === 'true';
+    const isOk = row['__Status'] === 'Succeeded';
     html += `<tr>`;
     IMPORT_RESULT_HEADERS.forEach(h => {
       const v = String(row[h] ?? '');
-      if (h === '__Status') {
-        html += `<td><span class="${isOk ? 'res-ok' : 'res-err'}">${isOk ? '✓ OK' : '✗ Error'}</span></td>`;
-      } else if (h === '__Id') {
-        html += `<td class="res-id" title="${esc(v)}">${esc(v)}</td>`;
-      } else if (h === '__Action') {
-        html += `<td><span class="res-action">${esc(v)}</span></td>`;
-      } else if (h === '__Errors') {
-        html += `<td class="res-errors" title="${esc(v)}">${esc(v.slice(0,60))}${v.length > 60 ? '…' : ''}</td>`;
-      } else {
-        html += `<td title="${esc(v)}">${esc(v.slice(0,40))}${v.length > 40 ? '…' : ''}</td>`;
-      }
+      if (h === '__Status') html += `<td><span class="${isOk ? 'res-ok' : 'res-err'}">${esc(v)}</span></td>`;
+      else if (h === '__Id') html += `<td class="res-id" title="${esc(v)}">${esc(v)}</td>`;
+      else if (h === '__Action') html += `<td><span class="res-action">${esc(v)}</span></td>`;
+      else if (h === '__Errors') html += `<td class="res-errors" title="${esc(v)}">${esc(v.slice(0,80))}${v.length > 80 ? '…' : ''}</td>`;
+      else html += `<td title="${esc(v)}">${esc(v.slice(0,40))}${v.length > 40 ? '…' : ''}</td>`;
     });
     html += `</tr>`;
   });
@@ -1305,30 +1294,143 @@ function renderImportResult(rows) {
   wrap.innerHTML = html;
 }
 
-function descargarResultado() {
-  if (!importResultRows.length) return;
-  const e = v => `"${String(v ?? '').replace(/"/g,'""')}"`;
-  const lines = [
-    IMPORT_RESULT_HEADERS.map(e).join(','),
-    ...importResultRows.map(r => IMPORT_RESULT_HEADERS.map(h => e(r[h] || '')).join(','))
-  ];
-  descargarBlob('\uFEFF' + lines.join('\r\n'), 'text/csv', `import_result_${hoy()}.csv`);
-  toast('⬇ Resultado descargado', 'ok');
-}
-
 async function copiarResultado() {
   if (!importResultRows.length) return;
   const lines = [
     IMPORT_RESULT_HEADERS.join('\t'),
-    ...importResultRows.map(r =>
-      IMPORT_RESULT_HEADERS.map(h => String(r[h] ?? '').replace(/\t/g, ' ')).join('\t')
-    )
+    ...importResultRows.map(r => IMPORT_RESULT_HEADERS.map(h => String(r[h] ?? '').replace(/\t/g, ' ')).join('\t'))
   ];
+  try { await navigator.clipboard.writeText(lines.join('\n')); toast('📋 Resultado copiado.', 'ok'); }
+  catch { toast('No se pudo copiar.', 'bad'); }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  MODAL EXPORT SHEET
+// ══════════════════════════════════════════════════════════════════
+function abrirModalExport() {
+  if (!importResultRows.length) { toast('Sin resultado para exportar.', 'bad'); return; }
+
+  // ⚠ NO auto-generar nombre — el usuario escribe el ticket
+  document.getElementById('exportFileName').value = '';
+  document.getElementById('exportTargetUrl').value = '';
+  document.getElementById('exportFolderId').value = '';
+  document.querySelector('input[name="exportMode"][value="new"]').checked = true;
+  document.getElementById('exportLinks').classList.remove('visible');
+
+  const btn = document.getElementById('btnExportPrimary');
+  btn.disabled = false;
+  btn.textContent = '📊 Crear Sheet';
+
+  onExportModeChange();
+  document.getElementById('exportModal').classList.add('open');
+
+  // Focus en el nombre para que empiece a escribir directo
+  setTimeout(() => document.getElementById('exportFileName').focus(), 100);
+}
+
+function cerrarModalExport() {
+  document.getElementById('exportModal').classList.remove('open');
+}
+
+function onExportModeChange() {
+  const mode = document.querySelector('input[name="exportMode"]:checked').value;
+  const btn  = document.getElementById('btnExportPrimary');
+
+  if (mode === 'new') {
+    document.getElementById('fieldNewName').classList.add('visible');
+    document.getElementById('fieldTargetUrl').classList.remove('visible');
+    document.getElementById('fieldFolder').classList.add('visible');
+    btn.textContent = '📊 Crear Sheet';
+  } else {
+    document.getElementById('fieldNewName').classList.remove('visible');
+    document.getElementById('fieldTargetUrl').classList.add('visible');
+    document.getElementById('fieldFolder').classList.remove('visible');
+    btn.textContent = '📎 Adjuntar al Sheet';
+  }
+
+  document.querySelectorAll('.radio-opt').forEach(r => r.classList.remove('selected'));
+  document.querySelector(`.radio-opt[data-mode="${mode}"]`).classList.add('selected');
+}
+
+async function ejecutarExport() {
+  const mode = document.querySelector('input[name="exportMode"]:checked').value;
+  const btn = document.getElementById('btnExportPrimary');
+  const originalText = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳ Procesando…';
+
   try {
-    await navigator.clipboard.writeText(lines.join('\n'));
-    toast('📋 Resultado copiado.', 'ok');
-  } catch {
-    toast('No se pudo copiar. Usa la descarga.', 'bad');
+    let fileName = '', targetSheetUrl = '', folderId = '';
+
+    if (mode === 'new') {
+      fileName = document.getElementById('exportFileName').value.trim();
+      folderId = document.getElementById('exportFolderId').value.trim();
+      if (!fileName) throw new Error('Debes ingresar un nombre de archivo (ej. número de ticket).');
+    } else {
+      targetSheetUrl = document.getElementById('exportTargetUrl').value.trim();
+      if (!targetSheetUrl) throw new Error('Debes pegar el link del Sheet destino.');
+    }
+
+    const payload = {
+      action: 'exportSheet',
+      userEmail: loggedInEmail,     // ← para transferir ownership
+      fileName, targetSheetUrl, folderId,
+      summary: {
+        ownerStats: ownerStatsCache,
+        contactosAsignados: ultimaAsignacion.contactosAsignados || 0,
+        repsActivos:        ultimaAsignacion.repsActivos || 0,
+        contactosQueryPass: ultimaAsignacion.contactosQueryPass || 0,
+        meta: {
+          businessLine: ultimaAsignacion.businessLine || '',
+          dias:         ultimaAsignacion.dias,
+          fecha:        ultimaAsignacion.fecha || new Date().toLocaleString('es-MX')
+        }
+      },
+      preTemplateHeaders:  PT_HEADERS,
+      preTemplateRows:     preTemplateRows,
+      importResultHeaders: IMPORT_RESULT_HEADERS,
+      importResultRows:    importResultRows.map(row => IMPORT_RESULT_HEADERS.map(h => row[h] || ''))
+    };
+
+    const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', redirect: 'follow', body: JSON.stringify(payload) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const linksDiv = document.getElementById('exportLinks');
+    const titleDiv = document.getElementById('exportLinksTitle');
+    const linkDiv  = document.getElementById('exportLinkContent');
+    const ownDiv   = document.getElementById('exportOwnership');
+
+    titleDiv.textContent = data.mode === 'created' ? '✅ Sheet creado' : '✅ Hojas añadidas al Sheet existente';
+    linkDiv.innerHTML = `<a href="${esc(data.url)}" target="_blank">${esc(data.url)}</a>`;
+
+    // Mostrar estado del transfer de ownership
+    if (data.mode === 'created') {
+      if (data.ownershipTransferred) {
+        ownDiv.textContent = `✓ Ownership transferido a ${data.executedBy}`;
+        ownDiv.className = 'el-ownership ok';
+      } else if (data.ownershipError) {
+        ownDiv.textContent = `⚠ Ownership no transferido: ${data.ownershipError}. El archivo quedó a nombre del deployer del script.`;
+        ownDiv.className = 'el-ownership err';
+      } else {
+        ownDiv.textContent = '';
+      }
+    } else {
+      ownDiv.textContent = 'ℹ El Sheet destino mantiene su ownership original (no se cambia al adjuntar).';
+      ownDiv.className = 'el-ownership';
+    }
+
+    linksDiv.classList.add('visible');
+    window.open(data.url, '_blank');
+    toast(`✅ ${data.mode === 'created' ? 'Sheet creado' : 'Hojas añadidas'}. Abriendo…`, 'ok');
+    btn.textContent = '✓ Listo — Volver a exportar';
+
+  } catch (err) {
+    console.error(err);
+    toast('❌ ' + err.message, 'bad');
+    btn.textContent = originalText;
+  } finally {
+    btn.disabled = false;
   }
 }
 
