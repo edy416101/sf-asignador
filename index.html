@@ -121,10 +121,7 @@
     .stat .n { font-size: 26px; font-weight: 700; color: var(--accent); line-height: 1.1; }
     .stat .l { font-size: 10.5px; color: var(--muted); margin-top: 3px; }
     .log { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 13px 16px; font-family: var(--mono); font-size: 10.5px; line-height: 1.9; color: var(--muted); min-height: 88px; max-height: 150px; overflow-y: auto; }
-    .log .ok   { color: var(--ok); }
-    .log .err  { color: var(--err); }
-    .log .info { color: var(--accent); }
-    .log .warn { color: var(--warn); }
+    .log .ok { color: var(--ok); } .log .err { color: var(--err); } .log .info { color: var(--accent); } .log .warn { color: var(--warn); }
     .res-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
     .res-header h2 { font-size: 13px; font-weight: 600; }
     .res-btns { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -132,7 +129,7 @@
     .btn-icon:disabled { opacity: .25; cursor: not-allowed; }
     .btn-icon:not(:disabled):hover { opacity: .85; }
     .btn-copy-tbl { background: var(--accent); }
-    .btn-csv      { background: var(--ok); }
+    .btn-csv { background: var(--ok); }
     .btn-go-import { background: linear-gradient(135deg, var(--ac2), #9333ea); color: white; border: none; border-radius: 8px; padding: 7px 16px; font-size: 11.5px; font-weight: 600; cursor: pointer; font-family: var(--sans); transition: opacity .15s; display: flex; align-items: center; gap: 6px; }
     .btn-go-import:disabled { opacity: .25; cursor: not-allowed; }
     .btn-go-import:not(:disabled):hover { opacity: .85; }
@@ -160,7 +157,6 @@
     .source-badge .sb-count { font-size: 11px; color: var(--muted); }
     .sb-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex-shrink: 0; }
     .sb-dot.empty { background: var(--err); }
-    .isec { margin-bottom: 0; }
     .isec .slabel { margin-bottom: 10px; }
     .cfg-grid { display: flex; flex-direction: column; gap: 10px; }
     #extIdField { display: none; }
@@ -174,10 +170,7 @@
     .fmap-sf select { background: var(--sf2); border: 1px solid var(--border); border-radius: 5px; color: var(--text); font-size: 10px; padding: 3px 6px; outline: none; font-family: var(--mono); width: 100%; cursor: pointer; min-width: 120px; }
     .fmap-sf select:focus { border-color: var(--accent); }
     .fmap-ok { font-size: 13px; text-align: center; font-weight: 700; }
-    .fmap-ok.ok  { color: var(--ok); }
-    .fmap-ok.err { color: var(--err); }
-    .fmap-ok.skip { color: var(--muted); }
-    .fmap-ok.pending { color: var(--muted); }
+    .fmap-ok.ok { color: var(--ok); } .fmap-ok.err { color: var(--err); } .fmap-ok.skip { color: var(--muted); } .fmap-ok.pending { color: var(--muted); }
 
     .btn-import { flex: 1; padding: 12px; background: linear-gradient(135deg, var(--ac2) 0%, #9333ea 100%); color: white; border: none; border-radius: 10px; font-size: 13.5px; font-weight: 600; cursor: pointer; font-family: var(--sans); transition: opacity .15s, transform .1s; position: relative; overflow: hidden; }
     .btn-import::after { content: ''; position: absolute; inset: 0; background: linear-gradient(rgba(255,255,255,.1), transparent); }
@@ -198,15 +191,10 @@
     .pc { background: var(--sf2); border-radius: 8px; padding: 10px; text-align: center; }
     .pc .pn { font-size: 20px; font-weight: 700; font-family: var(--mono); }
     .pc .pl { font-size: 10px; color: var(--muted); margin-top: 2px; }
-    .pc.total .pn { color: var(--text); }
-    .pc.processed .pn { color: var(--accent); }
-    .pc.success .pn  { color: var(--ok); }
-    .pc.failed .pn   { color: var(--err); }
+    .pc.total .pn { color: var(--text); } .pc.processed .pn { color: var(--accent); }
+    .pc.success .pn { color: var(--ok); } .pc.failed .pn { color: var(--err); }
     .import-log { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 13px 16px; font-family: var(--mono); font-size: 10.5px; line-height: 1.9; color: var(--muted); min-height: 88px; max-height: 200px; overflow-y: auto; }
-    .import-log .ok   { color: var(--ok); }
-    .import-log .err  { color: var(--err); }
-    .import-log .info { color: var(--accent); }
-    .import-log .warn { color: var(--warn); }
+    .import-log .ok { color: var(--ok); } .import-log .err { color: var(--err); } .import-log .info { color: var(--accent); } .import-log .warn { color: var(--warn); }
     .result-header { display: flex; align-items: center; justify-content: space-between; }
     .result-header h2 { font-size: 13px; font-weight: 600; }
     .result-btns { display: flex; gap: 8px; }
@@ -216,53 +204,71 @@
     table.res-import td { padding: 8px 13px; border-bottom: 1px solid var(--border); white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
     table.res-import tr:last-child td { border-bottom: none; }
     table.res-import tr:hover td { background: var(--sf2); }
-    .res-ok     { color: var(--ok); font-weight: 600; }
-    .res-err    { color: var(--err); font-weight: 600; }
+    .res-ok { color: var(--ok); font-weight: 600; }
+    .res-err { color: var(--err); font-weight: 600; }
     .res-action { color: var(--accent); font-family: var(--mono); font-size: 9.5px; }
-    .res-id     { font-family: var(--mono); font-size: 9.5px; color: var(--muted); }
+    .res-id { font-family: var(--mono); font-size: 9.5px; color: var(--muted); }
     .res-errors { color: var(--err); font-size: 9.5px; }
 
     .toast { position: fixed; bottom: 22px; right: 22px; background: var(--sf2); border: 1px solid var(--border); border-radius: 10px; padding: 11px 18px; font-size: 12.5px; box-shadow: 0 10px 30px rgba(0,0,0,.4); transform: translateY(60px); opacity: 0; transition: all .3s cubic-bezier(.34,1.56,.64,1); z-index: 200; max-width: 360px; }
     .toast.show { transform: translateY(0); opacity: 1; }
-    .toast.ok  { border-left: 3px solid var(--ok); }
+    .toast.ok { border-left: 3px solid var(--ok); }
     .toast.bad { border-left: 3px solid var(--err); }
 
+    /* ══ MODAL GUARDAR — más compacto y limpio ══ */
     .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 500; padding: 20px; }
     .modal-backdrop.open { display: flex; }
-    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; box-shadow: 0 32px 80px rgba(0,0,0,0.5); }
-    .modal-header { padding: 18px 22px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-    .modal-header h2 { font-size: 15px; font-weight: 700; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; width: 100%; max-width: 480px; max-height: 92vh; overflow-y: auto; box-shadow: 0 32px 80px rgba(0,0,0,0.5); }
+    .modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .modal-header h2 { font-size: 14px; font-weight: 700; }
     .modal-close { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 4px 8px; }
     .modal-close:hover { color: var(--err); }
-    .modal-body { padding: 20px 22px; display: flex; flex-direction: column; gap: 16px; }
-    .modal-field { display: flex; flex-direction: column; gap: 5px; }
-    .modal-field label { font-size: 11.5px; font-weight: 500; color: var(--muted); }
+    .modal-body { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+    .modal-field { display: flex; flex-direction: column; gap: 4px; }
+    .modal-field label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
     .modal-field input, .modal-field select { background: var(--sf2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--sans); font-size: 13px; padding: 9px 12px; outline: none; width: 100%; }
     .modal-field input:focus, .modal-field select:focus { border-color: var(--accent); }
-    .modal-field .hint { font-size: 10.5px; color: var(--muted); font-style: italic; }
-    .modal-radios { display: flex; flex-direction: column; gap: 8px; }
-    .radio-opt { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: var(--sf2); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: all .15s; }
-    .radio-opt:hover { border-color: var(--accent); }
-    .radio-opt input { accent-color: var(--accent); margin-top: 3px; }
-    .radio-opt.selected { border-color: var(--accent); background: rgba(75,124,243,0.08); }
-    .radio-opt .ro-label { font-size: 12.5px; font-weight: 600; color: var(--text); }
-    .radio-opt .ro-desc { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
-    .modal-footer { padding: 14px 22px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; }
+    .modal-field .hint { font-size: 10.5px; color: var(--muted); }
+
+    /* Tres opciones compactas horizontales */
+    .mode-tabs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+    .mode-tab { background: var(--sf2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 6px; cursor: pointer; transition: all .15s; text-align: center; }
+    .mode-tab:hover { border-color: var(--accent); }
+    .mode-tab.selected { border-color: var(--accent); background: rgba(75,124,243,0.1); }
+    .mode-tab .mt-icon { font-size: 18px; margin-bottom: 3px; }
+    .mode-tab .mt-label { font-size: 10.5px; font-weight: 600; color: var(--text); line-height: 1.2; }
+
+    /* Sub-modo dentro de Adjuntar */
+    .submode-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px; }
+    .submode-tab { background: var(--sf2); border: 1px solid var(--border); border-radius: 6px; padding: 7px 8px; cursor: pointer; transition: all .15s; font-size: 11px; font-weight: 600; color: var(--muted); text-align: center; }
+    .submode-tab:hover { border-color: var(--accent); color: var(--accent); }
+    .submode-tab.selected { border-color: var(--accent); color: var(--accent); background: rgba(75,124,243,0.08); }
+
+    /* File input estilizado */
+    .file-input-wrap { position: relative; }
+    .file-input-wrap input[type=file] { position: absolute; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+    .file-input-label { background: var(--sf2); border: 1px dashed var(--border); border-radius: 8px; padding: 12px; text-align: center; cursor: pointer; transition: all .15s; font-size: 12px; color: var(--muted); }
+    .file-input-label:hover { border-color: var(--accent); color: var(--accent); }
+    .file-input-label.has-file { border-style: solid; border-color: var(--ok); color: var(--ok); }
+
+    .modal-conditional { display: none; flex-direction: column; gap: 4px; }
+    .modal-conditional.visible { display: flex; }
+
+    .modal-footer { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; }
     .btn-modal-cancel { background: none; border: 1px solid var(--border); color: var(--muted); padding: 9px 18px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--sans); }
     .btn-modal-cancel:hover { border-color: var(--err); color: var(--err); }
     .btn-modal-primary { background: linear-gradient(135deg, var(--accent), var(--ac2)); color: white; border: none; padding: 9px 22px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--sans); }
     .btn-modal-primary:hover { opacity: 0.9; }
     .btn-modal-primary:disabled { opacity: 0.4; cursor: not-allowed; }
-    .modal-conditional { display: none; }
-    .modal-conditional.visible { display: flex; }
-    .export-links { padding: 20px 22px; background: rgba(34,197,94,0.05); border-top: 1px solid var(--border); display: none; }
-    .export-links.visible { display: flex; flex-direction: column; gap: 8px; }
-    .export-links .el-title { font-size: 12px; font-weight: 600; color: var(--ok); display: flex; align-items: center; gap: 6px; }
+
+    .export-links { padding: 14px 20px; background: rgba(34,197,94,0.05); border-top: 1px solid var(--border); display: none; }
+    .export-links.visible { display: flex; flex-direction: column; gap: 6px; }
+    .export-links .el-title { font-size: 12px; font-weight: 600; color: var(--ok); }
     .export-links .el-link { font-family: var(--mono); font-size: 11px; color: var(--accent); word-break: break-all; }
     .export-links .el-link a { color: var(--accent); text-decoration: underline; }
-    .export-links .el-ownership { font-size: 10.5px; color: var(--muted); font-style: italic; }
-    .export-links .el-ownership.ok  { color: var(--ok); font-style: normal; }
-    .export-links .el-ownership.err { color: var(--warn); font-style: normal; }
+    .export-links .el-ownership { font-size: 10.5px; color: var(--muted); }
+    .export-links .el-ownership.ok { color: var(--ok); }
+    .export-links .el-ownership.err { color: var(--warn); }
 
     ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -283,7 +289,6 @@
 </div>
 
 <div id="mainApp">
-
   <header>
     <div class="logo-mark">⚡</div>
     <h1>SF Asignador <span>· Docplanner</span></h1>
@@ -295,17 +300,10 @@
   </header>
 
   <div class="tab-bar">
-    <button class="tab active" onclick="switchTab('asig')" id="tab-asig">
-      ⚡ Asignación
-      <span class="tab-badge" id="badge-asig">—</span>
-    </button>
-    <button class="tab" onclick="switchTab('import')" id="tab-import">
-      📥 Data Import
-      <span class="tab-badge" id="badge-import">—</span>
-    </button>
+    <button class="tab active" onclick="switchTab('asig')" id="tab-asig">⚡ Asignación <span class="tab-badge" id="badge-asig">—</span></button>
+    <button class="tab" onclick="switchTab('import')" id="tab-import">📥 Data Import <span class="tab-badge" id="badge-import">—</span></button>
   </div>
 
-  <!-- TAB 1 — ASIGNACIÓN -->
   <div class="tab-content active" id="tc-asig">
     <div class="asig-layout">
       <aside>
@@ -337,7 +335,6 @@
             </select>
           </div>
         </div>
-
         <div>
           <div class="reps-top">
             <div class="slabel">Representantes</div>
@@ -350,41 +347,29 @@
             <p>Pega los emails aquí, uno por línea:</p>
             <textarea id="bulkEmails" placeholder="email@docplanner.com"></textarea>
             <div class="bulk-actions">
-              <button class="btn-apply" onclick="aplicarBulk()">✓ Agregar a la tabla</button>
+              <button class="btn-apply" onclick="aplicarBulk()">✓ Agregar</button>
               <button class="btn-cancel-bulk" onclick="toggleBulk()">Cancelar</button>
             </div>
           </div>
           <table class="reps-tbl">
-            <thead>
-              <tr>
-                <th>Email</th>
-                <th style="width:76px; text-align:center">Nº Asignaciones</th>
-                <th style="width:22px"></th>
-              </tr>
-            </thead>
+            <thead><tr><th>Email</th><th style="width:76px; text-align:center">Nº Asignaciones</th><th style="width:22px"></th></tr></thead>
             <tbody id="repsBody"></tbody>
           </table>
           <button class="btn-add-rep" onclick="addRep()">+ Agregar representante</button>
           <div class="reps-total">Total: <strong id="repsTotal">0</strong> asignaciones</div>
         </div>
-
         <div>
           <div class="slabel">IDs de Contactos</div>
           <textarea id="idsArea" class="ids-box" placeholder="Pega aquí los IDs de contacto, uno por línea…" oninput="updateCount()"></textarea>
           <div class="ids-meta" id="idsCount">0 IDs cargados</div>
         </div>
-
         <div class="action-buttons">
           <button class="btn-run" id="runBtn" onclick="ejecutar()">⚡ Ejecutar Asignación</button>
-          <button class="btn-clear" onclick="limpiarAsignacion()" title="Limpia días, BL, reps e IDs">🗑 Limpiar</button>
+          <button class="btn-clear" onclick="limpiarAsignacion()">🗑 Limpiar</button>
         </div>
       </aside>
-
       <section class="panel">
-        <div class="status-row">
-          <div class="dot" id="statusDot"></div>
-          <span id="statusMsg">Listo. Configura los parámetros y presiona Ejecutar.</span>
-        </div>
+        <div class="status-row"><div class="dot" id="statusDot"></div><span id="statusMsg">Listo. Configura los parámetros y presiona Ejecutar.</span></div>
         <div class="stats">
           <div class="stat"><div class="n" id="sAsignados">0</div><div class="l">Contactos asignados</div></div>
           <div class="stat"><div class="n" id="sReps">0</div><div class="l">Representantes activos</div></div>
@@ -396,117 +381,55 @@
           <div class="res-btns">
             <button class="btn-icon btn-copy-tbl" id="copyBtn" onclick="copiarTabla()" disabled>📋 Copiar</button>
             <button class="btn-icon btn-csv" id="dlBtn" onclick="descargarCSV()" disabled>⬇ CSV</button>
-            <button class="btn-go-import" id="goImportBtn" onclick="irAImport()" disabled>
-              📥 Pasar a Data Import →
-            </button>
+            <button class="btn-go-import" id="goImportBtn" onclick="irAImport()" disabled>📥 Pasar a Data Import →</button>
           </div>
         </div>
-        <div class="tbl-wrap" id="tblWrap">
-          <div class="empty"><div class="empty-ico">📋</div><p>El pre template aparecerá aquí después de ejecutar.</p></div>
-        </div>
+        <div class="tbl-wrap" id="tblWrap"><div class="empty"><div class="empty-ico">📋</div><p>El pre template aparecerá aquí después de ejecutar.</p></div></div>
       </section>
     </div>
   </div>
 
-  <!-- TAB 2 — DATA IMPORT -->
   <div class="tab-content" id="tc-import">
     <div class="import-layout">
-
       <div class="import-config">
         <div class="import-config-scroll">
-
           <div class="isec">
             <div class="slabel">Fuente de datos</div>
             <div class="source-badge">
               <div class="sb-label">Pre Template</div>
-              <div class="sb-val">
-                <div class="sb-dot" id="srcDot"></div>
-                <span id="srcLabel">Sin datos — ejecuta la asignación primero</span>
-              </div>
+              <div class="sb-val"><div class="sb-dot" id="srcDot"></div><span id="srcLabel">Sin datos — ejecuta la asignación primero</span></div>
               <div class="sb-count" id="srcCount"></div>
             </div>
           </div>
-
           <div class="isec">
             <div class="slabel">Configure Import</div>
             <div class="cfg-grid">
-              <div class="field">
-                <label>API Type</label>
-                <select id="cfg-apitype" disabled style="appearance:none; pointer-events:none;">
-                  <option value="enterprise" selected>Enterprise (default)</option>
-                </select>
-              </div>
-              <div class="field">
-                <label>Action</label>
-                <select id="cfg-action" onchange="onActionChange()">
-                  <option value="insert">Insert</option>
-                  <option value="update">Update</option>
-                  <option value="upsert">Upsert</option>
-                  <option value="delete">Delete</option>
-                  <option value="undelete">Undelete</option>
-                </select>
-              </div>
-              <div class="field" id="extIdField">
-                <label>External ID Field (Upsert)</label>
-                <input id="cfg-extid" type="text" placeholder="ej. Id, Email, Custom_Id__c"/>
-              </div>
-              <div class="field">
-                <label>Object</label>
-                <select id="cfg-object">
-                  <option value="Lead" selected>Lead</option>
-                </select>
-              </div>
-              <div class="field">
-                <label>Batch size</label>
-                <input id="cfg-batch" type="number" value="30" min="1" max="10000"/>
-              </div>
-              <div class="field">
-                <label>Threads (paralelo)</label>
-                <input id="cfg-threads" type="number" value="3" min="1" max="5"/>
-              </div>
+              <div class="field"><label>API Type</label><select id="cfg-apitype" disabled style="appearance:none; pointer-events:none;"><option value="enterprise" selected>Enterprise (default)</option></select></div>
+              <div class="field"><label>Action</label><select id="cfg-action" onchange="onActionChange()"><option value="insert">Insert</option><option value="update">Update</option><option value="upsert">Upsert</option><option value="delete">Delete</option><option value="undelete">Undelete</option></select></div>
+              <div class="field" id="extIdField"><label>External ID Field (Upsert)</label><input id="cfg-extid" type="text" placeholder="ej. Id, Email, Custom_Id__c"/></div>
+              <div class="field"><label>Object</label><select id="cfg-object"><option value="Lead" selected>Lead</option></select></div>
+              <div class="field"><label>Batch size</label><input id="cfg-batch" type="number" value="30" min="1" max="10000"/></div>
+              <div class="field"><label>Threads (paralelo)</label><input id="cfg-threads" type="number" value="3" min="1" max="5"/></div>
             </div>
           </div>
-
           <div class="isec">
             <div class="slabel">Field Mapping</div>
             <table class="fmap-table">
-              <thead>
-                <tr>
-                  <th>CSV Column</th>
-                  <th></th>
-                  <th>SF Field</th>
-                  <th style="width:22px"></th>
-                </tr>
-              </thead>
+              <thead><tr><th>CSV Column</th><th></th><th>SF Field</th><th style="width:22px"></th></tr></thead>
               <tbody id="fmapBody"></tbody>
             </table>
           </div>
-
         </div>
-
         <div class="import-config-footer">
-          <button class="btn-import" id="importBtn" onclick="ejecutarImport()" disabled>
-            📥 Ejecutar Import a Salesforce
-          </button>
-          <button class="btn-clear" onclick="limpiarImport()" title="Limpia el resultado y el log">🗑</button>
+          <button class="btn-import" id="importBtn" onclick="ejecutarImport()" disabled>📥 Ejecutar Import a Salesforce</button>
+          <button class="btn-clear" onclick="limpiarImport()">🗑</button>
         </div>
-
       </div>
-
       <div class="import-panel">
-        <div class="import-status-row">
-          <div class="dot" id="importDot"></div>
-          <span id="importStatusMsg">Configura los parámetros y presiona Ejecutar Import.</span>
-        </div>
-
+        <div class="import-status-row"><div class="dot" id="importDot"></div><span id="importStatusMsg">Configura los parámetros y presiona Ejecutar Import.</span></div>
         <div class="progress-wrap" id="progressWrap">
-          <div class="progress-header">
-            <span class="ph-label">Procesando registros…</span>
-            <span class="ph-pct" id="progPct">0%</span>
-          </div>
-          <div class="progress-bar-bg">
-            <div class="progress-bar-fill" id="progBar"></div>
-          </div>
+          <div class="progress-header"><span class="ph-label">Procesando registros…</span><span class="ph-pct" id="progPct">0%</span></div>
+          <div class="progress-bar-bg"><div class="progress-bar-fill" id="progBar"></div></div>
           <div class="progress-counts">
             <div class="pc total"><div class="pn" id="pcTotal">0</div><div class="pl">Total</div></div>
             <div class="pc processed"><div class="pn" id="pcProcessed">0</div><div class="pl">Procesados</div></div>
@@ -514,89 +437,109 @@
             <div class="pc failed"><div class="pn" id="pcFailed">0</div><div class="pl">Fallidos</div></div>
           </div>
         </div>
-
-        <div class="import-log" id="importLog">
-          <span class="info">// El log del import aparecerá aquí…</span>
-        </div>
-
+        <div class="import-log" id="importLog"><span class="info">// El log del import aparecerá aquí…</span></div>
         <div class="result-header">
           <h2>Resultado del Import</h2>
-          <div class="result-btns" style="display:flex;gap:8px;">
+          <div class="result-btns">
             <button class="btn-icon" style="background:var(--accent)" id="copyResultBtn" onclick="copiarResultado()" disabled>📋 Copiar</button>
-            <button class="btn-icon" style="background:var(--ok)" id="dlResultBtn" onclick="abrirModalExport()" disabled>📊 Descargar resultado</button>
+            <button class="btn-icon" style="background:var(--ok)" id="dlResultBtn" onclick="abrirModalExport()" disabled>💾 Guardar</button>
           </div>
         </div>
-
-        <div class="res-tbl-wrap" id="resTblWrap">
-          <div class="empty"><div class="empty-ico">📥</div><p>El resultado del import aparecerá aquí.</p></div>
-        </div>
+        <div class="res-tbl-wrap" id="resTblWrap"><div class="empty"><div class="empty-ico">📥</div><p>El resultado del import aparecerá aquí.</p></div></div>
       </div>
     </div>
   </div>
-
 </div>
 
-<!-- ══════════ MODAL EXPORT SHEET ══════════ -->
+<!-- MODAL GUARDAR -->
 <div class="modal-backdrop" id="exportModal">
   <div class="modal">
     <div class="modal-header">
-      <h2>📊 Guardar resultado en Google Sheets</h2>
+      <h2>💾 Guardar resultado</h2>
       <button class="modal-close" onclick="cerrarModalExport()">✕</button>
     </div>
-
     <div class="modal-body">
-
       <div class="modal-field">
-        <label>Modo de guardado</label>
-        <div class="modal-radios">
-          <label class="radio-opt selected" data-mode="new">
-            <input type="radio" name="exportMode" value="new" checked onchange="onExportModeChange()"/>
-            <div>
-              <div class="ro-label">Crear nuevo Google Sheet</div>
-              <div class="ro-desc">Se creará un Sheet nuevo con las hojas: Summary, Pre Template, Import Result. Quedará a tu nombre en Drive.</div>
-            </div>
-          </label>
-          <label class="radio-opt" data-mode="attach">
-            <input type="radio" name="exportMode" value="attach" onchange="onExportModeChange()"/>
-            <div>
-              <div class="ro-label">Adjuntar a un Sheet existente</div>
-              <div class="ro-desc">Se añaden las 3 hojas nuevas al Sheet cuyo link pegues abajo, sin tocar las hojas existentes.</div>
-            </div>
-          </label>
+        <label>Modo</label>
+        <div class="mode-tabs">
+          <div class="mode-tab selected" data-mode="new" onclick="setMode('new')">
+            <div class="mt-icon">📊</div><div class="mt-label">Nuevo<br>Google Sheet</div>
+          </div>
+          <div class="mode-tab" data-mode="csv" onclick="setMode('csv')">
+            <div class="mt-icon">⬇</div><div class="mt-label">Descargar<br>CSVs</div>
+          </div>
+          <div class="mode-tab" data-mode="attach" onclick="setMode('attach')">
+            <div class="mt-icon">📎</div><div class="mt-label">Adjuntar a<br>existente</div>
+          </div>
         </div>
       </div>
 
-      <div class="modal-field modal-conditional visible" id="fieldNewName">
-        <label>Nombre del archivo</label>
-        <input type="text" id="exportFileName" placeholder="ej. Ticket #12345"/>
-        <span class="hint">Escribe el número de ticket u otro identificador. Este será el nombre del Sheet en Drive.</span>
+      <!-- Modo: Crear Sheet Nuevo -->
+      <div class="modal-conditional visible" id="section-new">
+        <div class="modal-field">
+          <label>Nombre del archivo</label>
+          <input type="text" id="exportFileName" placeholder="ej. Ticket #12345"/>
+          <span class="hint">Escribe el número de ticket u otro identificador.</span>
+        </div>
+        <div class="modal-field">
+          <label>ID de Carpeta</label>
+          <input type="text" id="exportFolderId" placeholder="(dejar vacío = predeterminada COE)"/>
+          <span class="hint">Pega el ID de carpeta si quieres una distinta a la COE.</span>
+        </div>
       </div>
 
-      <div class="modal-field modal-conditional" id="fieldTargetUrl">
-        <label>Link del Google Sheet destino</label>
-        <input type="text" id="exportTargetUrl" placeholder="https://docs.google.com/spreadsheets/d/…"/>
-        <span class="hint">Pega el link o el ID del Sheet. La cuenta que desplegó el script debe tener acceso al archivo.</span>
+      <!-- Modo: CSV -->
+      <div class="modal-conditional" id="section-csv">
+        <div class="modal-field">
+          <label>Nombre base de los archivos</label>
+          <input type="text" id="csvFileName" placeholder="ej. Ticket #12345"/>
+          <span class="hint">Se descargarán 3 archivos: [nombre]_summary.csv, [nombre]_pre_template.csv, [nombre]_import_result.csv</span>
+        </div>
       </div>
 
-      <div class="modal-field modal-conditional visible" id="fieldFolder">
-        <label>Carpeta de Drive (opcional)</label>
-        <input type="text" id="exportFolderId" placeholder="ID de carpeta (dejar vacío = usar la predeterminada del backend)"/>
-        <span class="hint">Pega el ID de la carpeta destino de Drive (URL después de /folders/).</span>
+      <!-- Modo: Adjuntar a existente -->
+      <div class="modal-conditional" id="section-attach">
+        <div class="submode-tabs">
+          <div class="submode-tab selected" data-submode="link" onclick="setSubmode('link')">🔗 Link de Sheet</div>
+          <div class="submode-tab" data-submode="upload" onclick="setSubmode('upload')">📁 Subir CSV/Excel</div>
+        </div>
+
+        <div class="modal-conditional visible" id="submode-link" style="margin-top:8px">
+          <div class="modal-field">
+            <label>Link del Google Sheet</label>
+            <input type="text" id="exportTargetUrl" placeholder="https://docs.google.com/spreadsheets/d/…"/>
+            <span class="hint">El Sheet debe estar compartido con la cuenta que desplegó el script (con permisos de Editor).</span>
+          </div>
+        </div>
+
+        <div class="modal-conditional" id="submode-upload" style="margin-top:8px">
+          <div class="modal-field">
+            <label>Archivo local (CSV o Excel)</label>
+            <div class="file-input-wrap">
+              <label class="file-input-label" id="fileInputLabel" for="fileUpload">
+                📁 Haz click o arrastra un archivo aquí
+              </label>
+              <input type="file" id="fileUpload" accept=".csv,.xlsx,.xls" onchange="onFileSelected(this)"/>
+            </div>
+          </div>
+          <div class="modal-field">
+            <label>Nombre del nuevo Sheet <span style="text-transform:none; color:var(--muted); font-weight:400;">(opcional)</span></label>
+            <input type="text" id="uploadFileName" placeholder="Si vacío, usa el nombre del archivo"/>
+            <span class="hint">Se crea un Sheet nuevo con la data del archivo + las 3 hojas del resultado.</span>
+          </div>
+        </div>
       </div>
 
     </div>
-
     <div class="modal-footer">
       <button class="btn-modal-cancel" onclick="cerrarModalExport()">Cancelar</button>
       <button class="btn-modal-primary" id="btnExportPrimary" onclick="ejecutarExport()">📊 Crear Sheet</button>
     </div>
-
     <div class="export-links" id="exportLinks">
-      <div class="el-title" id="exportLinksTitle">✅ Sheet creado</div>
+      <div class="el-title" id="exportLinksTitle">✅ Listo</div>
       <div class="el-link" id="exportLinkContent"></div>
       <div class="el-ownership" id="exportOwnership"></div>
     </div>
-
   </div>
 </div>
 
@@ -606,13 +549,10 @@
 // ══════════════════════════════════════════════════════════════════
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════
-const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbwPakp0PedLaohGDHAid_tdbUff3ZBzwLUX0jVmF-6Y0ciJXMr2fsMpo2sY07CQDe_47A/exec";
+const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbwggys1fictEZo9InuAPsxJ9PmSHp9Qk8vDlojbj_j1IilWlf5i6Pm7P6kD-nu3StYkxw/exec";
 const GOOGLE_CLIENT_ID = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 const INSTANCE_URL     = "https://docplanner.my.salesforce.com";
 
-// ══════════════════════════════════════════════════════════════════
-//  HEADERS
-// ══════════════════════════════════════════════════════════════════
 const PT_HEADERS = [
   'Contact__c', 'LastSource_SO__c', 'LastSourceAt__c', 'FacilitySize__c',
   'Company', 'LastName', 'Email', 'OwnerId', 'BusinessLine__c',
@@ -648,7 +588,12 @@ let totalAsignados   = 0;
 let leadFieldsCache  = null;
 let ownerStatsCache  = [];
 let ultimaAsignacion = {};
-let loggedInEmail    = "";   // ← email del usuario logueado, para exportar
+let loggedInEmail    = "";
+let idTokenCache     = "";  // JWT id_token de Google, se manda al backend en cada request
+let currentMode      = "new";
+let currentSubmode   = "link";
+let uploadedFile     = null;
+let uploadedFileBase64 = "";
 
 // ══════════════════════════════════════════════════════════════════
 //  GOOGLE SIGN-IN
@@ -680,6 +625,7 @@ function onSignIn(response) {
       toast('❌ Solo se permiten cuentas @docplanner.com', 'bad'); return;
     }
     loggedInEmail = payload.email.toLowerCase().trim();
+    idTokenCache  = response.credential;  // guardamos el JWT completo para enviar al backend
     document.getElementById('userAvatar').textContent = (payload.given_name?.[0] || payload.email[0]).toUpperCase();
     document.getElementById('userEmail').textContent  = payload.email;
     document.getElementById('loginScreen').style.display = 'none';
@@ -694,8 +640,28 @@ function logout() {
   document.getElementById('loginScreen').style.display = 'flex';
   preTemplateRows = []; importResultRows = [];
   leadFieldsCache = null; ownerStatsCache = [];
-  ultimaAsignacion = {}; loggedInEmail = "";
+  ultimaAsignacion = {}; loggedInEmail = ""; idTokenCache = "";
   resetAsigUI(); resetImportUI();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  HELPER: fetch al backend con id_token
+// ══════════════════════════════════════════════════════════════════
+async function backendFetch(payload) {
+  if (!idTokenCache) throw new Error("Sesión expirada. Vuelve a iniciar sesión.");
+  const withToken = Object.assign({ idToken: idTokenCache }, payload);
+  const res = await fetch(APPS_SCRIPT_URL, {
+    method: 'POST', redirect: 'follow', body: JSON.stringify(withToken)
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
+  const data = await res.json();
+  if (data.authError) {
+    toast('⚠ Tu sesión expiró. Por favor vuelve a iniciar sesión.', 'bad');
+    setTimeout(() => logout(), 2000);
+    throw new Error(data.error);
+  }
+  if (data.error) throw new Error(data.error);
+  return data;
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -757,7 +723,7 @@ function toggleBulk() {
 }
 
 function aplicarBulk() {
-  const raw    = document.getElementById('bulkEmails').value;
+  const raw = document.getElementById('bulkEmails').value;
   const emails = raw.split(/[\n,;\s]+/).map(e => e.trim()).filter(e => e.includes('@') && e.includes('.'));
   if (!emails.length) { toast('No se encontraron emails válidos.', 'bad'); return; }
   emails.forEach(e => addRep(e, ''));
@@ -794,14 +760,14 @@ function toggleSid() {
 
 function log(msg, type = 'info') {
   const box = document.getElementById('logBox');
-  const ts  = new Date().toLocaleTimeString('es-MX');
+  const ts = new Date().toLocaleTimeString('es-MX');
   box.innerHTML += `\n<span class="${type}">[${ts}] ${msg}</span>`;
-  box.scrollTop  = box.scrollHeight;
+  box.scrollTop = box.scrollHeight;
 }
 
 function setStatus(msg, state = '') {
   document.getElementById('statusMsg').textContent = msg;
-  document.getElementById('statusDot').className   = 'dot ' + state;
+  document.getElementById('statusDot').className = 'dot ' + state;
 }
 
 function resetAsigUI() {
@@ -809,8 +775,8 @@ function resetAsigUI() {
   document.getElementById('logBox').innerHTML = '<span class="info">// El log de ejecución aparecerá aquí…</span>';
   setStatus('Listo. Configura los parámetros y presiona Ejecutar.', '');
   ['sAsignados','sReps','sCandidatos'].forEach(id => document.getElementById(id).textContent = '0');
-  document.getElementById('dlBtn').disabled       = true;
-  document.getElementById('copyBtn').disabled     = true;
+  document.getElementById('dlBtn').disabled = true;
+  document.getElementById('copyBtn').disabled = true;
   document.getElementById('goImportBtn').disabled = true;
   document.getElementById('badge-asig').textContent = '—';
 }
@@ -829,17 +795,17 @@ function limpiarAsignacion() {
 }
 
 async function ejecutar() {
-  const sid          = document.getElementById('sid').value.trim();
-  const diasInput    = document.getElementById('dias').value.trim();
-  const dias         = diasInput === '' ? 0 : parseInt(diasInput);
+  const sid = document.getElementById('sid').value.trim();
+  const diasInput = document.getElementById('dias').value.trim();
+  const dias = diasInput === '' ? 0 : parseInt(diasInput);
   const businessLine = document.getElementById('businessLine').value;
-  const reps         = getReps();
-  const ids          = getIds();
+  const reps = getReps();
+  const ids = getIds();
 
-  if (!sid)          return toast('Falta el Session ID (SID).', 'bad');
+  if (!sid) return toast('Falta el Session ID (SID).', 'bad');
   if (!businessLine) return toast('Selecciona una Business Line.', 'bad');
-  if (!reps.length)  return toast('Agrega al menos un representante con Nº Asignaciones > 0.', 'bad');
-  if (!ids.length)   return toast('Pega al menos un ID de contacto.', 'bad');
+  if (!reps.length) return toast('Agrega al menos un representante con Nº Asignaciones > 0.', 'bad');
+  if (!ids.length) return toast('Pega al menos un ID de contacto.', 'bad');
 
   const btn = document.getElementById('runBtn');
   btn.disabled = true; btn.textContent = '⏳ Ejecutando…';
@@ -850,15 +816,11 @@ async function ejecutar() {
 
   setStatus('Conectando con Salesforce…', 'run');
   log('Iniciando proceso de asignación…', 'info');
-  if (dias > 0) log(`Reps: ${reps.length} | IDs en pool: ${ids.length} | Días de exclusión: ${dias}`, 'info');
-  else log(`Reps: ${reps.length} | IDs en pool: ${ids.length} | SIN filtro de días`, 'info');
+  if (dias > 0) log(`Reps: ${reps.length} | IDs: ${ids.length} | Días: ${dias}`, 'info');
+  else log(`Reps: ${reps.length} | IDs: ${ids.length} | SIN filtro de días`, 'info');
 
   try {
-    const payload = { sid, instanceUrl: INSTANCE_URL, dias, businessLine, reps, ids };
-    const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', redirect: 'follow', body: JSON.stringify(payload) });
-    if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    const data = await backendFetch({ sid, instanceUrl: INSTANCE_URL, dias, businessLine, reps, ids });
 
     preTemplateRows = data.rows || [];
     ownerStatsCache = data.ownerStats || [];
@@ -873,21 +835,21 @@ async function ejecutar() {
     log(`✓ Contactos asignados: ${data.assigned}`, 'ok');
     log(data.mensaje, data.assigned > 0 ? 'ok' : 'warn');
 
-    document.getElementById('sAsignados').textContent  = data.assigned;
-    document.getElementById('sReps').textContent        = reps.length;
-    document.getElementById('sCandidatos').textContent  = data.poolTotal;
-    document.getElementById('badge-asig').textContent   = data.assigned;
+    document.getElementById('sAsignados').textContent = data.assigned;
+    document.getElementById('sReps').textContent = reps.length;
+    document.getElementById('sCandidatos').textContent = data.poolTotal;
+    document.getElementById('badge-asig').textContent = data.assigned;
     totalAsignados = data.assigned;
 
     renderPreTemplate(PT_HEADERS, preTemplateRows);
     setStatus(`¡Listo! ${data.assigned} contacto(s) asignado(s).`, 'ok');
 
     const hasData = preTemplateRows.length > 0;
-    document.getElementById('dlBtn').disabled       = !hasData;
-    document.getElementById('copyBtn').disabled     = !hasData;
+    document.getElementById('dlBtn').disabled = !hasData;
+    document.getElementById('copyBtn').disabled = !hasData;
     document.getElementById('goImportBtn').disabled = !hasData;
 
-    if (hasData) toast(`✅ ${data.assigned} contactos asignados. Puedes pasar al import.`, 'ok');
+    if (hasData) toast(`✅ ${data.assigned} contactos asignados.`, 'ok');
     else toast('⚠ Sin resultados. Revisa los IDs y filtros.', 'bad');
 
   } catch (err) {
@@ -900,9 +862,6 @@ async function ejecutar() {
   btn.disabled = false; btn.textContent = '⚡ Ejecutar Asignación';
 }
 
-// ══════════════════════════════════════════════════════════════════
-//  PRE TEMPLATE RENDER
-// ══════════════════════════════════════════════════════════════════
 function renderPreTemplate(headers, rows) {
   const wrap = document.getElementById('tblWrap');
   if (!rows.length) {
@@ -917,10 +876,10 @@ function renderPreTemplate(headers, rows) {
     html += `<tr>`;
     row.forEach((cell, i) => {
       const v = String(cell ?? '');
-      if      (i === IDX_OWNER) html += `<td title="${esc(v)}"><span class="chip">${esc(v)}</span></td>`;
-      else if (i === IDX_BL)    html += `<td title="${esc(v)}"><span class="bl-chip">${esc(v)}</span></td>`;
-      else if (i >= FIXED)      html += `<td class="fixed" title="${esc(v)}">${esc(v)}</td>`;
-      else                      html += `<td title="${esc(v)}">${esc(v)}</td>`;
+      if (i === IDX_OWNER) html += `<td title="${esc(v)}"><span class="chip">${esc(v)}</span></td>`;
+      else if (i === IDX_BL) html += `<td title="${esc(v)}"><span class="bl-chip">${esc(v)}</span></td>`;
+      else if (i >= FIXED) html += `<td class="fixed" title="${esc(v)}">${esc(v)}</td>`;
+      else html += `<td title="${esc(v)}">${esc(v)}</td>`;
     });
     html += `</tr>`;
   });
@@ -947,10 +906,10 @@ async function copiarTabla() {
 //  TAB 2 — DATA IMPORT
 // ══════════════════════════════════════════════════════════════════
 function actualizarFuenteImport() {
-  const dot   = document.getElementById('srcDot');
+  const dot = document.getElementById('srcDot');
   const label = document.getElementById('srcLabel');
   const count = document.getElementById('srcCount');
-  const btn   = document.getElementById('importBtn');
+  const btn = document.getElementById('importBtn');
 
   if (preTemplateRows.length > 0) {
     dot.classList.remove('empty');
@@ -1004,9 +963,9 @@ function syncMapCheck(sel, col) {
 
 function ilog(msg, type = 'info') {
   const box = document.getElementById('importLog');
-  const ts  = new Date().toLocaleTimeString('es-MX');
+  const ts = new Date().toLocaleTimeString('es-MX');
   box.innerHTML += `\n<span class="${type}">[${ts}] ${msg}</span>`;
-  box.scrollTop  = box.scrollHeight;
+  box.scrollTop = box.scrollHeight;
 }
 
 function setImportStatus(msg, state = '') {
@@ -1019,7 +978,7 @@ function resetImportUI() {
   document.getElementById('progressWrap').classList.remove('visible');
   document.getElementById('importLog').innerHTML = '<span class="info">// El log del import aparecerá aquí…</span>';
   renderImportResult([]);
-  document.getElementById('dlResultBtn').disabled   = true;
+  document.getElementById('dlResultBtn').disabled = true;
   document.getElementById('copyResultBtn').disabled = true;
   document.getElementById('badge-import').textContent = '—';
 }
@@ -1039,23 +998,17 @@ function limpiarImport() {
 
 function updateProgress(total, processed, success, failed) {
   const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
-  document.getElementById('progPct').textContent     = pct + '%';
-  document.getElementById('progBar').style.width     = pct + '%';
-  document.getElementById('pcTotal').textContent     = total;
+  document.getElementById('progPct').textContent = pct + '%';
+  document.getElementById('progBar').style.width = pct + '%';
+  document.getElementById('pcTotal').textContent = total;
   document.getElementById('pcProcessed').textContent = processed;
-  document.getElementById('pcSuccess').textContent   = success;
-  document.getElementById('pcFailed').textContent    = failed;
+  document.getElementById('pcSuccess').textContent = success;
+  document.getElementById('pcFailed').textContent = failed;
 }
 
 async function obtenerCamposLead(sid) {
   if (leadFieldsCache) return leadFieldsCache;
-  const res = await fetch(APPS_SCRIPT_URL, {
-    method: 'POST', redirect: 'follow',
-    body: JSON.stringify({ action: 'describe', sid: sid, instanceUrl: INSTANCE_URL, object: 'Lead' })
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
+  const data = await backendFetch({ action: 'describe', sid: sid, instanceUrl: INSTANCE_URL, object: 'Lead' });
   leadFieldsCache = data.fields || [];
   return leadFieldsCache;
 }
@@ -1065,8 +1018,8 @@ function validarFieldMapping(realFields) {
   const filasInvalidas = [];
   document.querySelectorAll('#fmapBody tr').forEach((tr, i) => {
     const csvCol = PT_HEADERS[i];
-    const sfVal  = tr.querySelector('select').value;
-    const cell   = document.getElementById(`fmap-ok-${csvCol}`);
+    const sfVal = tr.querySelector('select').value;
+    const cell = document.getElementById(`fmap-ok-${csvCol}`);
     if (!cell) return;
     if (sfVal === '--skip--') { cell.textContent = '—'; cell.className = 'fmap-ok skip'; return; }
     const existe = realSet.has(sfVal.toLowerCase());
@@ -1079,10 +1032,10 @@ function validarFieldMapping(realFields) {
 async function ejecutarImport() {
   if (!preTemplateRows.length) { toast('Sin datos.', 'bad'); return; }
 
-  const sid    = document.getElementById('sid').value.trim();
+  const sid = document.getElementById('sid').value.trim();
   const action = document.getElementById('cfg-action').value;
   const object = document.getElementById('cfg-object').value;
-  const extId  = document.getElementById('cfg-extid').value.trim();
+  const extId = document.getElementById('cfg-extid').value.trim();
 
   if (!sid) return toast('Falta el Session ID (SID).', 'bad');
   if (action === 'upsert' && !extId) return toast('Para Upsert debes indicar el External ID Field.', 'bad');
@@ -1093,13 +1046,12 @@ async function ejecutarImport() {
   document.getElementById('importLog').innerHTML = '';
   importResultRows = [];
   renderImportResult([]);
-  document.getElementById('dlResultBtn').disabled   = true;
+  document.getElementById('dlResultBtn').disabled = true;
   document.getElementById('copyResultBtn').disabled = true;
 
   updateProgress(preTemplateRows.length, 0, 0, 0);
   setImportStatus(`Validando campos en Salesforce…`, 'run');
-
-  ilog('🔍 Paso 1/2: Consultando campos reales del objeto Lead en Salesforce…', 'info');
+  ilog('🔍 Paso 1/2: Consultando campos reales del objeto Lead…', 'info');
 
   try {
     const realFields = await obtenerCamposLead(sid);
@@ -1122,16 +1074,11 @@ async function ejecutarImport() {
     ilog(`⚠ No se pudo validar campos: ${err.message}. Continuando…`, 'warn');
   }
 
-  const fmapRows  = document.querySelectorAll('#fmapBody tr');
+  const fmapRows = document.querySelectorAll('#fmapBody tr');
   const sfHeaders = [], colIndexes = [], colNames = [];
-
   fmapRows.forEach((tr, i) => {
     const sfVal = tr.querySelector('select').value;
-    if (sfVal !== '--skip--') {
-      sfHeaders.push(sfVal);
-      colIndexes.push(i);
-      colNames.push(PT_HEADERS[i]);
-    }
+    if (sfVal !== '--skip--') { sfHeaders.push(sfVal); colIndexes.push(i); colNames.push(PT_HEADERS[i]); }
   });
 
   if (!sfHeaders.length) {
@@ -1156,44 +1103,36 @@ async function ejecutarImport() {
 
   const total = rowsToSend.length;
   btn.textContent = '⏳ Enviando al servidor…';
-
-  ilog(`📤 Paso 2/2: Iniciando Bulk Import a Salesforce`, 'info');
+  ilog(`📤 Paso 2/2: Iniciando Bulk Import`, 'info');
   ilog(`Objeto: ${object} | Acción: ${action} | Registros: ${total}`, 'info');
   ilog(`Nota: FacilitySize__c se envía vacío al Lead.`, 'info');
-  ilog('⏳ Puede tardar entre 30 seg y varios minutos…', 'warn');
+  ilog('⏳ Puede tardar 30 seg a varios minutos…', 'warn');
   setImportStatus(`Enviando ${total} registros al servidor…`, 'run');
 
   try {
-    const payload = {
+    const data = await backendFetch({
       action: 'import', sid, instanceUrl: INSTANCE_URL,
       object, operation: action, externalId: extId,
       headers: sfHeaders, rows: rowsToSend
-    };
-    const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', redirect: 'follow', body: JSON.stringify(payload) });
-    if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    });
 
     ilog(`✓ Job ID: ${data.jobId || 'N/A'}`, 'ok');
     ilog(`✓ Estado final: ${data.jobState || 'N/A'}`, data.jobState === 'JobComplete' ? 'ok' : 'warn');
     if (data.errorMessage) ilog(`⚠ Salesforce dice: ${data.errorMessage}`, 'err');
 
-    const okRows   = parseSfResultCsv(data.successCsv || '', true,  action);
-    const failRows = parseSfResultCsv(data.failedCsv  || '', false, action);
+    const okRows = parseSfResultCsv(data.successCsv || '', true, action);
+    const failRows = parseSfResultCsv(data.failedCsv || '', false, action);
     importResultRows = okRows.concat(failRows);
-
-    const success = okRows.length;
-    const failed  = failRows.length;
+    const success = okRows.length, failed = failRows.length;
 
     updateProgress(total, success + failed, success, failed);
     document.getElementById('progPct').textContent = '100%';
     document.getElementById('progBar').style.width = '100%';
-
     ilog(`✓ Exitosos: ${success} | Fallidos: ${failed}`, success > 0 ? 'ok' : 'warn');
 
     renderImportResult(importResultRows);
     setImportStatus(`Import completado: ${success} exitosos, ${failed} fallidos.`, failed === 0 && success > 0 ? 'ok' : 'err');
-    document.getElementById('dlResultBtn').disabled   = importResultRows.length === 0;
+    document.getElementById('dlResultBtn').disabled = importResultRows.length === 0;
     document.getElementById('copyResultBtn').disabled = importResultRows.length === 0;
     document.getElementById('badge-import').textContent = `${success} ✓`;
     toast(`✅ Import completo: ${success} OK · ${failed} errores`, failed === 0 && success > 0 ? 'ok' : 'bad');
@@ -1208,44 +1147,31 @@ async function ejecutarImport() {
   btn.disabled = false; btn.textContent = '📥 Ejecutar Import a Salesforce';
 }
 
-// ══════════════════════════════════════════════════════════════════
-//  PARSEO estilo Salesforce Inspector
-// ══════════════════════════════════════════════════════════════════
 function parseSfResultCsv(csvText, isOk, operation) {
   if (!csvText || !csvText.trim()) return [];
   const lines = csvText.split('\n').filter(l => l.trim());
   if (lines.length < 2) return [];
-
   const csvHdrs = parseCsvRow(lines[0]);
   const result = [];
-
-  const actionLabels = {
-    insert: 'Inserted', update: 'Updated', upsert: 'Upserted',
-    delete: 'Deleted', undelete: 'Undeleted'
-  };
+  const actionLabels = { insert: 'Inserted', update: 'Updated', upsert: 'Upserted', delete: 'Deleted', undelete: 'Undeleted' };
   const defaultLabel = actionLabels[operation] || 'Processed';
 
   for (let i = 1; i < lines.length; i++) {
     const vals = parseCsvRow(lines[i]);
     const obj = {};
     csvHdrs.forEach((h, idx) => { obj[h] = vals[idx] !== undefined ? vals[idx] : ''; });
-
     const row = {};
     IMPORT_RESULT_HEADERS.forEach(h => { row[h] = obj[h] || ''; });
     row['__Id'] = obj['sf__Id'] || '';
-
     if (isOk) {
       row['__Status'] = 'Succeeded';
-      row['__Action'] = (operation === 'upsert')
-        ? (obj['sf__Created'] === 'true' ? 'Inserted' : 'Updated')
-        : defaultLabel;
+      row['__Action'] = (operation === 'upsert') ? (obj['sf__Created'] === 'true' ? 'Inserted' : 'Updated') : defaultLabel;
       row['__Errors'] = '';
     } else {
       row['__Status'] = 'Failed';
       row['__Action'] = '';
       row['__Errors'] = obj['sf__Error'] || 'Unknown error';
     }
-
     result.push(row);
   }
   return result;
@@ -1275,7 +1201,6 @@ function renderImportResult(rows) {
   let html = `<table class="res-import"><thead><tr>`;
   IMPORT_RESULT_HEADERS.forEach(h => { html += `<th title="${esc(h)}">${esc(h)}</th>`; });
   html += `</tr></thead><tbody>`;
-
   rows.forEach(row => {
     const isOk = row['__Status'] === 'Succeeded';
     html += `<tr>`;
@@ -1289,7 +1214,6 @@ function renderImportResult(rows) {
     });
     html += `</tr>`;
   });
-
   html += `</tbody></table>`;
   wrap.innerHTML = html;
 }
@@ -1305,26 +1229,28 @@ async function copiarResultado() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  MODAL EXPORT SHEET
+//  MODAL GUARDAR
 // ══════════════════════════════════════════════════════════════════
 function abrirModalExport() {
-  if (!importResultRows.length) { toast('Sin resultado para exportar.', 'bad'); return; }
+  if (!importResultRows.length) { toast('Sin resultado para guardar.', 'bad'); return; }
 
-  // ⚠ NO auto-generar nombre — el usuario escribe el ticket
   document.getElementById('exportFileName').value = '';
+  document.getElementById('csvFileName').value = '';
   document.getElementById('exportTargetUrl').value = '';
   document.getElementById('exportFolderId').value = '';
-  document.querySelector('input[name="exportMode"][value="new"]').checked = true;
+  document.getElementById('uploadFileName').value = '';
+  document.getElementById('fileUpload').value = '';
+  document.getElementById('fileInputLabel').textContent = '📁 Haz click o arrastra un archivo aquí';
+  document.getElementById('fileInputLabel').classList.remove('has-file');
+  uploadedFile = null; uploadedFileBase64 = "";
+
+  setMode('new');
+  setSubmode('link');
   document.getElementById('exportLinks').classList.remove('visible');
-
   const btn = document.getElementById('btnExportPrimary');
-  btn.disabled = false;
-  btn.textContent = '📊 Crear Sheet';
+  btn.disabled = false; btn.textContent = '📊 Crear Sheet';
 
-  onExportModeChange();
   document.getElementById('exportModal').classList.add('open');
-
-  // Focus en el nombre para que empiece a escribir directo
   setTimeout(() => document.getElementById('exportFileName').focus(), 100);
 }
 
@@ -1332,98 +1258,160 @@ function cerrarModalExport() {
   document.getElementById('exportModal').classList.remove('open');
 }
 
-function onExportModeChange() {
-  const mode = document.querySelector('input[name="exportMode"]:checked').value;
-  const btn  = document.getElementById('btnExportPrimary');
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('selected'));
+  document.querySelector(`.mode-tab[data-mode="${mode}"]`).classList.add('selected');
+  document.getElementById('section-new').classList.remove('visible');
+  document.getElementById('section-csv').classList.remove('visible');
+  document.getElementById('section-attach').classList.remove('visible');
+  document.getElementById(`section-${mode}`).classList.add('visible');
 
-  if (mode === 'new') {
-    document.getElementById('fieldNewName').classList.add('visible');
-    document.getElementById('fieldTargetUrl').classList.remove('visible');
-    document.getElementById('fieldFolder').classList.add('visible');
-    btn.textContent = '📊 Crear Sheet';
-  } else {
-    document.getElementById('fieldNewName').classList.remove('visible');
-    document.getElementById('fieldTargetUrl').classList.add('visible');
-    document.getElementById('fieldFolder').classList.remove('visible');
-    btn.textContent = '📎 Adjuntar al Sheet';
-  }
+  const btn = document.getElementById('btnExportPrimary');
+  if (mode === 'new') btn.textContent = '📊 Crear Sheet';
+  else if (mode === 'csv') btn.textContent = '⬇ Descargar CSVs';
+  else btn.textContent = '📎 Adjuntar';
+}
 
-  document.querySelectorAll('.radio-opt').forEach(r => r.classList.remove('selected'));
-  document.querySelector(`.radio-opt[data-mode="${mode}"]`).classList.add('selected');
+function setSubmode(sub) {
+  currentSubmode = sub;
+  document.querySelectorAll('.submode-tab').forEach(t => t.classList.remove('selected'));
+  document.querySelector(`.submode-tab[data-submode="${sub}"]`).classList.add('selected');
+  document.getElementById('submode-link').classList.remove('visible');
+  document.getElementById('submode-upload').classList.remove('visible');
+  document.getElementById(`submode-${sub}`).classList.add('visible');
+}
+
+function onFileSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  uploadedFile = file;
+  document.getElementById('fileInputLabel').textContent = `✓ ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+  document.getElementById('fileInputLabel').classList.add('has-file');
+}
+
+async function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      // dataURL viene como "data:mime;base64,XXXX" — solo queremos XXXX
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 async function ejecutarExport() {
-  const mode = document.querySelector('input[name="exportMode"]:checked').value;
   const btn = document.getElementById('btnExportPrimary');
   const originalText = btn.textContent;
   btn.disabled = true; btn.textContent = '⏳ Procesando…';
 
   try {
-    let fileName = '', targetSheetUrl = '', folderId = '';
-
-    if (mode === 'new') {
-      fileName = document.getElementById('exportFileName').value.trim();
-      folderId = document.getElementById('exportFolderId').value.trim();
-      if (!fileName) throw new Error('Debes ingresar un nombre de archivo (ej. número de ticket).');
-    } else {
-      targetSheetUrl = document.getElementById('exportTargetUrl').value.trim();
-      if (!targetSheetUrl) throw new Error('Debes pegar el link del Sheet destino.');
+    // === MODO CSV: descarga local, sin backend ===
+    if (currentMode === 'csv') {
+      const baseName = document.getElementById('csvFileName').value.trim();
+      if (!baseName) throw new Error('Debes ingresar un nombre base para los archivos.');
+      descargarTodosLosCSVs(baseName);
+      toast('⬇ 3 archivos CSV descargados.', 'ok');
+      const linksDiv = document.getElementById('exportLinks');
+      document.getElementById('exportLinksTitle').textContent = '✅ CSVs descargados';
+      document.getElementById('exportLinkContent').textContent = `${baseName}_summary.csv, ${baseName}_pre_template.csv, ${baseName}_import_result.csv`;
+      document.getElementById('exportOwnership').textContent = 'Archivos guardados en tu carpeta de Descargas.';
+      document.getElementById('exportOwnership').className = 'el-ownership';
+      linksDiv.classList.add('visible');
+      btn.textContent = '✓ Listo';
+      return;
     }
 
-    const payload = {
-      action: 'exportSheet',
-      userEmail: loggedInEmail,     // ← para transferir ownership
-      fileName, targetSheetUrl, folderId,
-      summary: {
-        ownerStats: ownerStatsCache,
-        contactosAsignados: ultimaAsignacion.contactosAsignados || 0,
-        repsActivos:        ultimaAsignacion.repsActivos || 0,
-        contactosQueryPass: ultimaAsignacion.contactosQueryPass || 0,
-        meta: {
-          businessLine: ultimaAsignacion.businessLine || '',
-          dias:         ultimaAsignacion.dias,
-          fecha:        ultimaAsignacion.fecha || new Date().toLocaleString('es-MX')
-        }
-      },
-      preTemplateHeaders:  PT_HEADERS,
-      preTemplateRows:     preTemplateRows,
-      importResultHeaders: IMPORT_RESULT_HEADERS,
-      importResultRows:    importResultRows.map(row => IMPORT_RESULT_HEADERS.map(h => row[h] || ''))
+    // === MODO NEW o ATTACH === Requieren backend
+    const summary = {
+      ownerStats: ownerStatsCache,
+      contactosAsignados: ultimaAsignacion.contactosAsignados || 0,
+      repsActivos: ultimaAsignacion.repsActivos || 0,
+      contactosQueryPass: ultimaAsignacion.contactosQueryPass || 0,
+      meta: {
+        businessLine: ultimaAsignacion.businessLine || '',
+        dias: ultimaAsignacion.dias,
+        fecha: ultimaAsignacion.fecha || new Date().toLocaleString('es-MX')
+      }
     };
+    const importResultRowsAsArrays = importResultRows.map(row => IMPORT_RESULT_HEADERS.map(h => row[h] || ''));
 
-    const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', redirect: 'follow', body: JSON.stringify(payload) });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    let data;
 
+    if (currentMode === 'new') {
+      const fileName = document.getElementById('exportFileName').value.trim();
+      const folderId = document.getElementById('exportFolderId').value.trim();
+      if (!fileName) throw new Error('Debes ingresar un nombre de archivo (ej. número de ticket).');
+      data = await backendFetch({
+        action: 'exportSheet',
+        userEmail: loggedInEmail,
+        fileName, targetSheetUrl: '', folderId,
+        summary,
+        preTemplateHeaders: PT_HEADERS, preTemplateRows,
+        importResultHeaders: IMPORT_RESULT_HEADERS, importResultRows: importResultRowsAsArrays
+      });
+    } else if (currentMode === 'attach' && currentSubmode === 'link') {
+      const targetSheetUrl = document.getElementById('exportTargetUrl').value.trim();
+      if (!targetSheetUrl) throw new Error('Debes pegar el link del Sheet destino.');
+      data = await backendFetch({
+        action: 'exportSheet',
+        userEmail: loggedInEmail,
+        fileName: '', targetSheetUrl, folderId: '',
+        summary,
+        preTemplateHeaders: PT_HEADERS, preTemplateRows,
+        importResultHeaders: IMPORT_RESULT_HEADERS, importResultRows: importResultRowsAsArrays
+      });
+    } else if (currentMode === 'attach' && currentSubmode === 'upload') {
+      if (!uploadedFile) throw new Error('Debes seleccionar un archivo CSV o Excel.');
+      btn.textContent = '⏳ Subiendo archivo…';
+      const base64 = await fileToBase64(uploadedFile);
+      const customName = document.getElementById('uploadFileName').value.trim();
+      const finalName = customName || uploadedFile.name.replace(/\.[^.]+$/, '');
+      data = await backendFetch({
+        action: 'exportSheetFromFile',
+        userEmail: loggedInEmail,
+        fileName: finalName,
+        origFileName: uploadedFile.name,
+        fileMimeType: uploadedFile.type || (uploadedFile.name.toLowerCase().endsWith('.csv') ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+        fileContent: base64,
+        folderId: '',
+        summary,
+        preTemplateHeaders: PT_HEADERS, preTemplateRows,
+        importResultHeaders: IMPORT_RESULT_HEADERS, importResultRows: importResultRowsAsArrays
+      });
+    }
+
+    // Mostrar link
     const linksDiv = document.getElementById('exportLinks');
     const titleDiv = document.getElementById('exportLinksTitle');
-    const linkDiv  = document.getElementById('exportLinkContent');
-    const ownDiv   = document.getElementById('exportOwnership');
+    const linkDiv = document.getElementById('exportLinkContent');
+    const ownDiv = document.getElementById('exportOwnership');
 
-    titleDiv.textContent = data.mode === 'created' ? '✅ Sheet creado' : '✅ Hojas añadidas al Sheet existente';
+    if (data.mode === 'attached') titleDiv.textContent = '✅ Hojas añadidas al Sheet existente';
+    else if (data.mode === 'created_from_file') titleDiv.textContent = '✅ Sheet creado desde archivo';
+    else titleDiv.textContent = '✅ Sheet creado';
+
     linkDiv.innerHTML = `<a href="${esc(data.url)}" target="_blank">${esc(data.url)}</a>`;
 
-    // Mostrar estado del transfer de ownership
-    if (data.mode === 'created') {
-      if (data.ownershipTransferred) {
-        ownDiv.textContent = `✓ Ownership transferido a ${data.executedBy}`;
-        ownDiv.className = 'el-ownership ok';
-      } else if (data.ownershipError) {
-        ownDiv.textContent = `⚠ Ownership no transferido: ${data.ownershipError}. El archivo quedó a nombre del deployer del script.`;
-        ownDiv.className = 'el-ownership err';
-      } else {
-        ownDiv.textContent = '';
-      }
-    } else {
-      ownDiv.textContent = 'ℹ El Sheet destino mantiene su ownership original (no se cambia al adjuntar).';
+    if (data.mode === 'attached') {
+      ownDiv.textContent = 'ℹ El Sheet destino mantiene su ownership original.';
       ownDiv.className = 'el-ownership';
+    } else if (data.ownershipTransferred) {
+      ownDiv.textContent = `✓ Ownership transferido a ${data.executedBy}`;
+      ownDiv.className = 'el-ownership ok';
+    } else if (data.ownershipError) {
+      ownDiv.textContent = `⚠ Ownership no transferido: ${data.ownershipError}`;
+      ownDiv.className = 'el-ownership err';
     }
 
     linksDiv.classList.add('visible');
     window.open(data.url, '_blank');
-    toast(`✅ ${data.mode === 'created' ? 'Sheet creado' : 'Hojas añadidas'}. Abriendo…`, 'ok');
-    btn.textContent = '✓ Listo — Volver a exportar';
+    toast('✅ Guardado correctamente. Abriendo…', 'ok');
+    btn.textContent = '✓ Listo';
 
   } catch (err) {
     console.error(err);
@@ -1432,6 +1420,39 @@ async function ejecutarExport() {
   } finally {
     btn.disabled = false;
   }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  DESCARGAR 3 CSVs
+// ══════════════════════════════════════════════════════════════════
+function descargarTodosLosCSVs(baseName) {
+  const e = v => `"${String(v ?? '').replace(/"/g,'""')}"`;
+
+  // Summary CSV
+  const summaryLines = [];
+  summaryLines.push('Campo,Valor');
+  summaryLines.push(`Fecha,${e(ultimaAsignacion.fecha || '')}`);
+  summaryLines.push(`Ejecutado por,${e(loggedInEmail)}`);
+  summaryLines.push(`Business Line,${e(ultimaAsignacion.businessLine || '')}`);
+  summaryLines.push(`Días exclusión,${e(ultimaAsignacion.dias === 0 ? 'Sin filtro' : (ultimaAsignacion.dias || ''))}`);
+  summaryLines.push('');
+  summaryLines.push('Owner (email),Leads asignados');
+  ownerStatsCache.forEach(o => summaryLines.push(`${e(o.email)},${o.count}`));
+  summaryLines.push('');
+  summaryLines.push('Contactos asignados,Representantes activos,Contactos que pasaron el query');
+  summaryLines.push(`${ultimaAsignacion.contactosAsignados || 0},${ultimaAsignacion.repsActivos || 0},${ultimaAsignacion.contactosQueryPass || 0}`);
+  descargarBlob('\uFEFF' + summaryLines.join('\r\n'), 'text/csv', `${baseName}_summary.csv`);
+
+  // Pre Template CSV
+  const ptLines = [PT_HEADERS.map(e).join(','), ...preTemplateRows.map(r => r.map(e).join(','))];
+  descargarBlob('\uFEFF' + ptLines.join('\r\n'), 'text/csv', `${baseName}_pre_template.csv`);
+
+  // Import Result CSV
+  const irLines = [
+    IMPORT_RESULT_HEADERS.map(e).join(','),
+    ...importResultRows.map(r => IMPORT_RESULT_HEADERS.map(h => e(r[h] || '')).join(','))
+  ];
+  descargarBlob('\uFEFF' + irLines.join('\r\n'), 'text/csv', `${baseName}_import_result.csv`);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1444,7 +1465,7 @@ function esc(str) {
 function toast(msg, type = 'ok') {
   const el = document.getElementById('toast');
   el.textContent = msg;
-  el.className   = `toast ${type} show`;
+  el.className = `toast ${type} show`;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { el.className = 'toast'; }, 4000);
 }
@@ -1453,8 +1474,8 @@ function hoy() { return new Date().toISOString().slice(0,10); }
 
 function descargarBlob(content, type, filename) {
   const blob = new Blob([content], { type });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
   a.href = url; a.download = filename;
   document.body.appendChild(a); a.click();
   document.body.removeChild(a); URL.revokeObjectURL(url);
