@@ -550,40 +550,40 @@
 // ══════════════════════════════════════════════════════════════════
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════
-const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbzNYg92CBSbsIQ88p2oHF4ktoLm-O002C7qVGssmoXdJP6QEbskiM9jh79B7JPKuJv85Q/exec";
+const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbzMzKW584qHIuu3Z4cyzYkzAzX22ap8E9O67uGsCgHjomg4m4HhjTKG1IumSRBhaFko9w/exec";
 const GOOGLE_CLIENT_ID = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 const INSTANCE_URL     = "https://docplanner.my.salesforce.com";
 
 const PT_HEADERS = [
   'Contact__c', 'LastSource_SO__c', 'LastSourceAt__c',
   'Company', 'LastName', 'Email',
-  'Source_SO__c', 'SourceSOAt__c',
   'OwnerId', 'BusinessLine__c',
   'Lead_Type__c', 'ContactTypeSegment__c', 'Country__c',
-  'Status', 'Leadassist__Use_Round_Robin__c'
+  'Leadassist__Use_Round_Robin__c', 'Status',
+  'FacilitySize__c'
 ];
 
-// Campos que están en el pre-template como INFORMATIVOS pero NO se envían al import a Lead
-// (Source_SO__c y SourceSOAt__c NO existen en el objeto Lead de Salesforce)
-const NO_MAPEAR_AL_IMPORT = new Set(['Source_SO__c', 'SourceSOAt__c']);
+// FacilitySize__c va como columna vacía: existe en el template pero se envía vacío al import
+// (no queremos migrar el valor real del Contact al Lead)
+const ENVIAR_VACIO_AL_IMPORT = new Set(['FacilitySize__c']);
 
 const IMPORT_RESULT_HEADERS = [
   'Contact__c', 'LastSource_SO__c', 'LastSourceAt__c',
   'Company', 'LastName', 'Email',
-  'Source_SO__c', 'SourceSOAt__c',
   'OwnerId', 'BusinessLine__c',
   'Lead_Type__c', 'ContactTypeSegment__c', 'Country__c',
-  'Status', 'Leadassist__Use_Round_Robin__c',
+  'Leadassist__Use_Round_Robin__c', 'Status',
+  'FacilitySize__c',
   '__Status', '__Id', '__Action', '__Errors'
 ];
 
 const DEFAULT_FIELD_MAP = {
   'Contact__c':'Contact__c','LastSource_SO__c':'LastSource_SO__c','LastSourceAt__c':'LastSourceAt__c',
   'Company':'Company','LastName':'LastName','Email':'Email',
-  'Source_SO__c':'--skip--','SourceSOAt__c':'--skip--',
   'OwnerId':'OwnerId','BusinessLine__c':'BusinessLine__c','Lead_Type__c':'Lead_Type__c',
-  'ContactTypeSegment__c':'ContactTypeSegment__c','Country__c':'Country__c','Status':'Status',
-  'Leadassist__Use_Round_Robin__c':'Leadassist__Use_Round_Robin__c'
+  'ContactTypeSegment__c':'ContactTypeSegment__c','Country__c':'Country__c',
+  'Leadassist__Use_Round_Robin__c':'Leadassist__Use_Round_Robin__c','Status':'Status',
+  'FacilitySize__c':'FacilitySize__c'
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -909,13 +909,12 @@ function renderPreTemplate(headers, rows) {
     wrap.innerHTML = `<div class="empty"><div class="empty-ico">📋</div><p>El pre template aparecerá aquí después de ejecutar.</p></div>`;
     return;
   }
-  // Índices en el nuevo PT_HEADERS:
+  // Índices en PT_HEADERS:
   //  0: Contact__c, 1: LastSource_SO__c, 2: LastSourceAt__c,
   //  3: Company,    4: LastName,          5: Email,
-  //  6: Source_SO__c, 7: SourceSOAt__c,
-  //  8: OwnerId,    9: BusinessLine__c,
-  //  10-14: fijos (Lead_Type, Segment, Country, Status, RoundRobin)
-  const IDX_OWNER = 8, IDX_BL = 9, FIXED = 10;
+  //  6: OwnerId,    7: BusinessLine__c,
+  //  8-13: fijos (Lead_Type, ContactTypeSegment, Country, RoundRobin, Status, FacilitySize)
+  const IDX_OWNER = 6, IDX_BL = 7, FIXED = 8;
   let html = `<table class="pt"><thead><tr>`;
   PT_HEADERS.forEach(h => { html += `<th title="${esc(h)}">${esc(h)}</th>`; });
   html += `</tr></thead><tbody>`;
@@ -925,8 +924,9 @@ function renderPreTemplate(headers, rows) {
       const v = String(cell ?? '');
       if (i === IDX_OWNER) {
         // Resaltar en rojo si el OwnerId es inválido
-        const isBad = !v || v === 'ID NO ENCONTRADO' || (!v.startsWith('005') && v.length < 15);
-        if (isBad) html += `<td title="${esc(v)}"><span class="chip" style="background:rgba(244,63,94,.15); border-color:rgba(244,63,94,.4); color:var(--err)">⚠ ${esc(v || 'VACÍO')}</span></td>`;
+        // (un OwnerId válido de SF empieza con "005" y tiene 15 o 18 caracteres)
+        const esValido = v.startsWith('005') && (v.length === 15 || v.length === 18);
+        if (!esValido) html += `<td title="${esc(v)}"><span class="chip" style="background:rgba(244,63,94,.15); border-color:rgba(244,63,94,.4); color:var(--err)">⚠ ${esc(v || 'VACÍO')}</span></td>`;
         else html += `<td title="${esc(v)}"><span class="chip">${esc(v)}</span></td>`;
       }
       else if (i === IDX_BL) html += `<td title="${esc(v)}"><span class="bl-chip">${esc(v)}</span></td>`;
@@ -990,20 +990,17 @@ function buildFieldMapping() {
   tbody.innerHTML = '';
   PT_HEADERS.forEach(col => {
     const mapped = DEFAULT_FIELD_MAP[col] || col;
-    const isSkip = mapped === '--skip--';
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="fmap-csv">${esc(col)}</td>
       <td class="fmap-arr">→</td>
       <td class="fmap-sf">
         <select onchange="syncMapCheck(this, '${esc(col)}')">
-          ${isSkip
-            ? `<option value="--skip--" selected>— Omitir columna —</option><option value="${esc(col)}">${esc(col)}</option>`
-            : `<option value="${esc(mapped)}" selected>${esc(mapped)}</option><option value="--skip--">— Omitir columna —</option>`
-          }
+          <option value="${esc(mapped)}" selected>${esc(mapped)}</option>
+          <option value="--skip--">— Omitir columna —</option>
         </select>
       </td>
-      <td class="fmap-ok ${isSkip ? 'skip' : 'pending'}" id="fmap-ok-${esc(col)}">${isSkip ? '—' : '•'}</td>
+      <td class="fmap-ok pending" id="fmap-ok-${esc(col)}">•</td>
     `;
     tbody.appendChild(tr);
   });
@@ -1149,48 +1146,18 @@ async function ejecutarImport() {
     const newRow = [];
     for (let j = 0; j < colIndexes.length; j++) {
       const idx = colIndexes[j];
-      newRow.push(row[idx] !== undefined && row[idx] !== null ? row[idx] : '');
+      const colName = colNames[j];
+      if (ENVIAR_VACIO_AL_IMPORT.has(colName)) newRow.push('');
+      else newRow.push(row[idx] !== undefined && row[idx] !== null ? row[idx] : '');
     }
     rowsToSend.push(newRow);
-  }
-
-  // ── VALIDAR OwnerIds antes de enviar al import ──
-  // Detectar filas con OwnerId inválido o vacío
-  const IDX_OWNER_PT = 8;  // índice de OwnerId en PT_HEADERS
-  const filasOwnerInvalido = [];
-  const ownersInvalidos = new Set();
-  for (let i = 0; i < preTemplateRows.length; i++) {
-    const ownerVal = String(preTemplateRows[i][IDX_OWNER_PT] || '').trim();
-    // Un OwnerId válido de SF empieza con "005" y tiene 15 o 18 caracteres
-    const esValido = ownerVal.startsWith('005') && (ownerVal.length === 15 || ownerVal.length === 18);
-    if (!esValido) {
-      filasOwnerInvalido.push(i + 1);
-      ownersInvalidos.add(ownerVal || '(vacío)');
-    }
-  }
-
-  if (filasOwnerInvalido.length > 0) {
-    const listaOwners = Array.from(ownersInvalidos).join(', ');
-    const proceder = confirm(
-      `⚠ ATENCIÓN: ${filasOwnerInvalido.length} fila(s) tienen OwnerId inválido:\n\n` +
-      `Valores encontrados: ${listaOwners}\n\n` +
-      `Estos registros VAN A FALLAR en Salesforce con error "OwnerId invalid".\n\n` +
-      `¿Deseas continuar con el import de todas formas?`
-    );
-    if (!proceder) {
-      ilog('✗ Import cancelado por el usuario (OwnerIds inválidos)', 'err');
-      setImportStatus('Import cancelado.', 'err');
-      btn.disabled = false; btn.textContent = '📥 Ejecutar Import a Salesforce';
-      return;
-    }
-    ilog(`⚠ Continuando con ${filasOwnerInvalido.length} fila(s) con OwnerId inválido`, 'warn');
   }
 
   const total = rowsToSend.length;
   btn.textContent = '⏳ Enviando al servidor…';
   ilog(`📤 Paso 2/2: Iniciando Bulk Import`, 'info');
   ilog(`Objeto: ${object} | Acción: ${action} | Registros: ${total}`, 'info');
-  ilog(`ℹ Source_SO__c y SourceSOAt__c se omiten del import (no existen en Lead)`, 'info');
+  ilog(`ℹ FacilitySize__c se envía vacío al Lead (no se migra del Contact).`, 'info');
   ilog('⏳ Puede tardar 30 seg a varios minutos…', 'warn');
   setImportStatus(`Enviando ${total} registros al servidor…`, 'run');
 
