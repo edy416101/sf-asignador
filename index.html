@@ -550,7 +550,7 @@
 // ══════════════════════════════════════════════════════════════════
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════
-const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbzMzKW584qHIuu3Z4cyzYkzAzX22ap8E9O67uGsCgHjomg4m4HhjTKG1IumSRBhaFko9w/exec";
+const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbyfhALkAAgVJLd6nxI3H-WzArC7xjx3xXf9AcKr54zTsH0SrlUOfCsU87iyNsrfMuVZ6w/exec";
 const GOOGLE_CLIENT_ID = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 const INSTANCE_URL     = "https://docplanner.my.salesforce.com";
 
@@ -663,11 +663,36 @@ async function backendFetch(payload) {
   });
   if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
   const data = await res.json();
+
+  // Rate limit alcanzado
+  if (data.rateLimited) {
+    toast(`⚠ Límite alcanzado. Espera ${data.resetEnMinutos} min.`, 'bad');
+    alert(
+      "⏱ Rate limit alcanzado\n\n" +
+      data.error + "\n\n" +
+      "Esto protege la herramienta contra abuso y bucles accidentales."
+    );
+    throw new Error(data.error);
+  }
+
+  // Email no está en la whitelist (distinto de expirado)
+  if (data.notAuthorized) {
+    alert(
+      "⛔ Acceso denegado\n\n" +
+      "Tu email no está autorizado para usar esta herramienta.\n\n" +
+      "Si necesitas acceso, contacta al equipo de RevOps."
+    );
+    setTimeout(() => logout(), 500);
+    throw new Error(data.error);
+  }
+
+  // Token expirado o inválido genérico
   if (data.authError) {
-    toast('⚠ Tu sesión expiró. Por favor vuelve a iniciar sesión.', 'bad');
+    toast('⚠ Tu sesión expiró. Vuelve a iniciar sesión.', 'bad');
     setTimeout(() => logout(), 2000);
     throw new Error(data.error);
   }
+
   if (data.error) throw new Error(data.error);
   return data;
 }
