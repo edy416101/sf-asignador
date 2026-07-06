@@ -483,9 +483,9 @@
           <span class="hint">Escribe el número de ticket u otro identificador.</span>
         </div>
         <div class="modal-field">
-          <label>ID de Carpeta</label>
+          <label>Link o ID de Carpeta</label>
           <input type="text" id="exportFolderId" placeholder="(dejar vacío = predeterminada COE)"/>
-          <span class="hint">Pega el ID de carpeta si quieres una distinta a la COE.</span>
+          <span class="hint">Pega el link completo (https://drive.google.com/drive/folders/…) o solo el ID. Vacío = carpeta COE.</span>
         </div>
       </div>
 
@@ -585,6 +585,15 @@ const DEFAULT_FIELD_MAP = {
   'Leadassist__Use_Round_Robin__c':'Leadassist__Use_Round_Robin__c','Status':'Status',
   'FacilitySize__c':'FacilitySize__c'
 };
+
+// Campos OBLIGATORIOS en el objeto Lead. Si alguno de estos no existe → error real, bloquear import.
+// Los demás campos del PT_HEADERS son OPCIONALES: si no existen en Lead, se auto-omiten del import.
+const CAMPOS_OBLIGATORIOS_LEAD = new Set([
+  'Contact__c', 'LastName', 'Email', 'OwnerId',
+  'BusinessLine__c', 'Lead_Type__c', 'ContactTypeSegment__c',
+  'Country__c', 'Leadassist__Use_Round_Robin__c', 'Status'
+]);
+// Los opcionales son (implícitamente): LastSource_SO__c, LastSourceAt__c, Company, FacilitySize__c
 
 // ══════════════════════════════════════════════════════════════════
 //  ESTADO GLOBAL
@@ -1092,18 +1101,43 @@ async function obtenerCamposLead(sid) {
 
 function validarFieldMapping(realFields) {
   const realSet = new Set(realFields.map(f => f.toLowerCase()));
-  const filasInvalidas = [];
+  const obligatoriosInvalidos = [];
+  const opcionalesOmitidos    = [];
+
   document.querySelectorAll('#fmapBody tr').forEach((tr, i) => {
     const csvCol = PT_HEADERS[i];
-    const sfVal = tr.querySelector('select').value;
+    const select = tr.querySelector('select');
+    const sfVal = select.value;
     const cell = document.getElementById(`fmap-ok-${csvCol}`);
     if (!cell) return;
     if (sfVal === '--skip--') { cell.textContent = '—'; cell.className = 'fmap-ok skip'; return; }
+
     const existe = realSet.has(sfVal.toLowerCase());
-    if (existe) { cell.textContent = '✓'; cell.className = 'fmap-ok ok'; }
-    else { cell.textContent = '✗'; cell.className = 'fmap-ok err'; filasInvalidas.push({ csvCol, sfVal }); }
+    if (existe) {
+      cell.textContent = '✓'; cell.className = 'fmap-ok ok';
+    } else {
+      // El campo NO existe en Lead → depende si es obligatorio u opcional
+      const esObligatorio = CAMPOS_OBLIGATORIOS_LEAD.has(csvCol);
+      if (esObligatorio) {
+        cell.textContent = '✗'; cell.className = 'fmap-ok err';
+        obligatoriosInvalidos.push({ csvCol, sfVal });
+      } else {
+        // OPCIONAL: auto-omitir del import y avisar
+        let hasSkipOption = false;
+        for (const opt of select.options) if (opt.value === '--skip--') hasSkipOption = true;
+        if (!hasSkipOption) {
+          const skipOpt = document.createElement('option');
+          skipOpt.value = '--skip--';
+          skipOpt.textContent = '— Omitir columna —';
+          select.appendChild(skipOpt);
+        }
+        select.value = '--skip--';
+        cell.textContent = '—'; cell.className = 'fmap-ok skip';
+        opcionalesOmitidos.push({ csvCol, sfVal });
+      }
+    }
   });
-  return filasInvalidas;
+  return { obligatoriosInvalidos, opcionalesOmitidos };
 }
 
 async function ejecutarImport() {
@@ -1136,16 +1170,30 @@ async function ejecutarImport() {
       ilog('⚠ Lead describe devolvió 0 campos. Continuando sin validación previa.', 'warn');
     } else {
       ilog(`✓ Lead tiene ${realFields.length} campos en Salesforce`, 'ok');
-      const filasInvalidas = validarFieldMapping(realFields);
-      if (filasInvalidas.length > 0) {
-        ilog(`✗ ${filasInvalidas.length} campo(s) NO existen en Lead:`, 'err');
-        filasInvalidas.forEach(f => ilog(`   • ${f.sfVal}  (CSV: ${f.csvCol})`, 'err'));
-        setImportStatus(`Faltan ${filasInvalidas.length} campos en Lead.`, 'err');
-        toast(`❌ ${filasInvalidas.length} campo(s) inválidos.`, 'bad');
+      const { obligatoriosInvalidos, opcionalesOmitidos } = validarFieldMapping(realFields);
+
+      // Avisar de campos OPCIONALES que se auto-omiten (no bloquea)
+      if (opcionalesOmitidos.length > 0) {
+        ilog(`⚠ ${opcionalesOmitidos.length} campo(s) OPCIONAL(es) no existen en Lead — se OMITEN del import:`, 'warn');
+        opcionalesOmitidos.forEach(f => ilog(`   • ${f.sfVal}`, 'warn'));
+      }
+
+      // Bloquear si algún campo OBLIGATORIO no existe en Lead
+      if (obligatoriosInvalidos.length > 0) {
+        ilog(`✗ ${obligatoriosInvalidos.length} campo(s) OBLIGATORIO(s) NO existen en Lead:`, 'err');
+        obligatoriosInvalidos.forEach(f => ilog(`   • ${f.sfVal}  (CSV: ${f.csvCol})`, 'err'));
+        ilog(`   → Estos campos DEBEN existir en el objeto Lead. Contacta a tu admin de Salesforce.`, 'err');
+        setImportStatus(`Faltan ${obligatoriosInvalidos.length} campos obligatorios en Lead.`, 'err');
+        toast(`❌ ${obligatoriosInvalidos.length} campo(s) obligatorios faltantes.`, 'bad');
         btn.disabled = false; btn.textContent = '📥 Ejecutar Import a Salesforce';
         return;
       }
-      ilog('✓ Todos los campos validados correctamente', 'ok');
+
+      if (opcionalesOmitidos.length === 0) {
+        ilog('✓ Todos los campos validados correctamente', 'ok');
+      } else {
+        ilog(`✓ Obligatorios OK. Continuando sin los ${opcionalesOmitidos.length} opcional(es) faltante(s).`, 'ok');
+      }
     }
   } catch (err) {
     ilog(`⚠ No se pudo validar campos: ${err.message}. Continuando…`, 'warn');
