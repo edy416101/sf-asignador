@@ -170,7 +170,7 @@
     .fmap-sf select { background: var(--sf2); border: 1px solid var(--border); border-radius: 5px; color: var(--text); font-size: 10px; padding: 3px 6px; outline: none; font-family: var(--mono); width: 100%; cursor: pointer; min-width: 120px; }
     .fmap-sf select:focus { border-color: var(--accent); }
     .fmap-ok { font-size: 13px; text-align: center; font-weight: 700; }
-    .fmap-ok.ok { color: var(--ok); } .fmap-ok.err { color: var(--err); } .fmap-ok.skip { color: var(--muted); } .fmap-ok.pending { color: var(--muted); }
+    .fmap-ok.ok { color: var(--ok); } .fmap-ok.err { color: var(--err); } .fmap-ok.skip { color: var(--muted); } .fmap-ok.pending { color: var(--muted); } .fmap-ok.warn { color: var(--warn); }
 
     .btn-import { flex: 1; padding: 12px; background: linear-gradient(135deg, var(--ac2) 0%, #9333ea 100%); color: white; border: none; border-radius: 10px; font-size: 13.5px; font-weight: 600; cursor: pointer; font-family: var(--sans); transition: opacity .15s, transform .1s; position: relative; overflow: hidden; }
     .btn-import::after { content: ''; position: absolute; inset: 0; background: linear-gradient(rgba(255,255,255,.1), transparent); }
@@ -550,7 +550,7 @@
 // ══════════════════════════════════════════════════════════════════
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════
-const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbyfhALkAAgVJLd6nxI3H-WzArC7xjx3xXf9AcKr54zTsH0SrlUOfCsU87iyNsrfMuVZ6w/exec";
+const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbz7wub_R-f8WJowZV_JkNPIpGdDnT5HopXiygZn_w_2RGGeamIse5Rw_84W56Zy_XcAxg/exec";
 const GOOGLE_CLIENT_ID = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 const INSTANCE_URL     = "https://docplanner.my.salesforce.com";
 
@@ -1102,7 +1102,7 @@ async function obtenerCamposLead(sid) {
 function validarFieldMapping(realFields) {
   const realSet = new Set(realFields.map(f => f.toLowerCase()));
   const obligatoriosInvalidos = [];
-  const opcionalesOmitidos    = [];
+  const opcionalesInvalidos   = [];
 
   document.querySelectorAll('#fmapBody tr').forEach((tr, i) => {
     const csvCol = PT_HEADERS[i];
@@ -1116,28 +1116,19 @@ function validarFieldMapping(realFields) {
     if (existe) {
       cell.textContent = '✓'; cell.className = 'fmap-ok ok';
     } else {
-      // El campo NO existe en Lead → depende si es obligatorio u opcional
+      // El campo NO se encontró en describe → obligatorio vs opcional
       const esObligatorio = CAMPOS_OBLIGATORIOS_LEAD.has(csvCol);
       if (esObligatorio) {
         cell.textContent = '✗'; cell.className = 'fmap-ok err';
         obligatoriosInvalidos.push({ csvCol, sfVal });
       } else {
-        // OPCIONAL: auto-omitir del import y avisar
-        let hasSkipOption = false;
-        for (const opt of select.options) if (opt.value === '--skip--') hasSkipOption = true;
-        if (!hasSkipOption) {
-          const skipOpt = document.createElement('option');
-          skipOpt.value = '--skip--';
-          skipOpt.textContent = '— Omitir columna —';
-          select.appendChild(skipOpt);
-        }
-        select.value = '--skip--';
-        cell.textContent = '—'; cell.className = 'fmap-ok skip';
-        opcionalesOmitidos.push({ csvCol, sfVal });
+        // OPCIONAL: solo reportamos, NO auto-omitimos. La decisión final es del usuario.
+        cell.textContent = '⚠'; cell.className = 'fmap-ok warn';
+        opcionalesInvalidos.push({ csvCol, sfVal });
       }
     }
   });
-  return { obligatoriosInvalidos, opcionalesOmitidos };
+  return { obligatoriosInvalidos, opcionalesInvalidos };
 }
 
 async function ejecutarImport() {
@@ -1170,15 +1161,9 @@ async function ejecutarImport() {
       ilog('⚠ Lead describe devolvió 0 campos. Continuando sin validación previa.', 'warn');
     } else {
       ilog(`✓ Lead tiene ${realFields.length} campos en Salesforce`, 'ok');
-      const { obligatoriosInvalidos, opcionalesOmitidos } = validarFieldMapping(realFields);
+      const { obligatoriosInvalidos, opcionalesInvalidos } = validarFieldMapping(realFields);
 
-      // Avisar de campos OPCIONALES que se auto-omiten (no bloquea)
-      if (opcionalesOmitidos.length > 0) {
-        ilog(`⚠ ${opcionalesOmitidos.length} campo(s) OPCIONAL(es) no existen en Lead — se OMITEN del import:`, 'warn');
-        opcionalesOmitidos.forEach(f => ilog(`   • ${f.sfVal}`, 'warn'));
-      }
-
-      // Bloquear si algún campo OBLIGATORIO no existe en Lead
+      // Bloquear SOLO si algún campo OBLIGATORIO no existe en Lead (falla de schema grave)
       if (obligatoriosInvalidos.length > 0) {
         ilog(`✗ ${obligatoriosInvalidos.length} campo(s) OBLIGATORIO(s) NO existen en Lead:`, 'err');
         obligatoriosInvalidos.forEach(f => ilog(`   • ${f.sfVal}  (CSV: ${f.csvCol})`, 'err'));
@@ -1189,10 +1174,40 @@ async function ejecutarImport() {
         return;
       }
 
-      if (opcionalesOmitidos.length === 0) {
-        ilog('✓ Todos los campos validados correctamente', 'ok');
+      // REGLA: SIEMPRE enviar todos los campos al batch.
+      // Los opcionales inválidos se INCLUYEN igual — nunca se pierden datos por decisión del sistema.
+      if (opcionalesInvalidos.length > 0) {
+        const impacto = opcionalesInvalidos.map(f => {
+          const idx = PT_HEADERS.indexOf(f.csvCol);
+          if (idx < 0) return { ...f, conValor: 0, total: preTemplateRows.length };
+          const conValor = preTemplateRows.filter(row => {
+            const val = row[idx];
+            return val !== null && val !== undefined && String(val).trim() !== '';
+          }).length;
+          return { ...f, conValor, total: preTemplateRows.length };
+        });
+
+        ilog(`ℹ ${opcionalesInvalidos.length} campo(s) opcional(es) NO aparecen en el describe de Lead — se INCLUYEN igual en el batch:`, 'warn');
+        impacto.forEach(f => {
+          if (f.conValor > 0) {
+            ilog(`   • ${f.sfVal} → ${f.conValor}/${f.total} filas con datos`, 'warn');
+          } else {
+            ilog(`   • ${f.sfVal} → todas las filas vacías`, 'info');
+          }
+        });
+        ilog(`   → Posibles causas: campo no creado en Lead, o FLS bloquea la visibilidad al usuario del SID.`, 'info');
+        ilog(`   → Si Salesforce rechaza el batch, revisa el errorMessage y ajusta el schema o los permisos.`, 'info');
+
+        // NO tocamos los selects — quedan con el mapeo original y se envían al batch.
+        // Solo marcamos visualmente con ⚠ para que sepas cuáles no fueron reconocidos por describe.
+        opcionalesInvalidos.forEach(f => {
+          const cell = document.getElementById(`fmap-ok-${f.csvCol}`);
+          if (cell) { cell.textContent = '⚠'; cell.className = 'fmap-ok warn'; }
+        });
+
+        ilog(`✓ Enviando TODOS los campos (${PT_HEADERS.length - obligatoriosInvalidos.length}) al batch.`, 'ok');
       } else {
-        ilog(`✓ Obligatorios OK. Continuando sin los ${opcionalesOmitidos.length} opcional(es) faltante(s).`, 'ok');
+        ilog('✓ Todos los campos validados correctamente', 'ok');
       }
     }
   } catch (err) {
