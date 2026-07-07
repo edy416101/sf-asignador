@@ -320,9 +320,9 @@
         <div>
           <div class="slabel">Parámetros</div>
           <div class="field">
-            <label>Días de exclusión <span style="color:var(--muted); font-weight:400;">(vacío = sin filtro)</span></label>
-            <input id="dias" type="number" value="30" min="0" placeholder="ej. 30, 60, 90 o vacío"/>
-            <span class="field-hint">Si lo dejas vacío, se aplica el query sin filtro de últimos N días.</span>
+            <label>Días de exclusión <span style="color:var(--muted); font-weight:400;">(vacío o 0 = solo hoy)</span></label>
+            <input id="dias" type="number" value="30" min="0" placeholder="ej. 30, 60, 90 o 0"/>
+            <span class="field-hint">Cantidad de días hacia atrás para excluir contactos con Opportunities cerradas o Leads recientes.</span>
           </div>
           <div class="field">
             <label>Business Line</label>
@@ -550,7 +550,7 @@
 // ══════════════════════════════════════════════════════════════════
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════
-const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbz7wub_R-f8WJowZV_JkNPIpGdDnT5HopXiygZn_w_2RGGeamIse5Rw_84W56Zy_XcAxg/exec";
+const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbxs6Y4mP-i_n7lM6eKEArbCvEmlD4ML1f4Q50SlHWkgqUiboW-SnFk-bMkUFq2HP7tAVQ/exec";
 const GOOGLE_CLIENT_ID = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 const INSTANCE_URL     = "https://docplanner.my.salesforce.com";
 
@@ -875,7 +875,7 @@ async function ejecutar() {
   setStatus('Conectando con Salesforce…', 'run');
   log('Iniciando proceso de asignación…', 'info');
   if (dias > 0) log(`Reps: ${reps.length} | IDs: ${ids.length} | Días: ${dias}`, 'info');
-  else log(`Reps: ${reps.length} | IDs: ${ids.length} | SIN filtro de días`, 'info');
+  else log(`Reps: ${reps.length} | IDs: ${ids.length} | Días: 0 (solo excluye actividad de hoy)`, 'info');
 
   try {
     const data = await backendFetch({ sid, instanceUrl: INSTANCE_URL, dias, businessLine, reps, ids });
