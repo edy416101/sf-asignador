@@ -393,6 +393,14 @@
           <button class="btn-run" id="runBtn" onclick="ejecutar()">⚡ Ejecutar Asignación</button>
           <button class="btn-clear" onclick="limpiarAsignacion()">🗑 Limpiar</button>
         </div>
+        <div style="display:flex; align-items:center; gap:8px; margin: 6px 0 -4px;">
+          <div style="flex:1; height:1px; background:var(--border);"></div>
+          <span style="font-size:10px; color:var(--muted); letter-spacing:.5px; text-transform:uppercase;">o carga un pre-template listo</span>
+          <div style="flex:1; height:1px; background:var(--border);"></div>
+        </div>
+        <button class="btn-sm" style="width:100%; padding:10px; border-style:dashed; color:var(--accent); border-color:var(--accent); font-size:12px;" onclick="abrirModalCargar()">
+          📥 Cargar datos manualmente…
+        </button>
       </aside>
       <section class="panel">
         <div class="status-row"><div class="dot" id="statusDot"></div><span id="statusMsg">Listo. Configura los parámetros y presiona Ejecutar.</span></div>
@@ -423,12 +431,9 @@
             <div class="slabel">Fuente de datos</div>
             <div class="source-badge">
               <div class="sb-label">Pre Template</div>
-              <div class="sb-val"><div class="sb-dot" id="srcDot"></div><span id="srcLabel">Sin datos — ejecuta la asignación primero</span></div>
+              <div class="sb-val"><div class="sb-dot" id="srcDot"></div><span id="srcLabel">Sin datos — ejecuta la asignación o carga datos manualmente</span></div>
               <div class="sb-count" id="srcCount"></div>
             </div>
-            <button class="btn-sm" style="width:100%; margin-top:8px; padding:9px; border-style:dashed; color:var(--accent); border-color:var(--accent);" onclick="abrirModalCargar()">
-              📥 Cargar datos manualmente…
-            </button>
           </div>
           <div class="isec">
             <div class="slabel">Configure Import</div>
@@ -578,27 +583,24 @@
 
 <!-- MODAL CARGAR DATOS MANUALMENTE -->
 <div class="modal-backdrop" id="loadModal">
-  <div class="modal" style="max-width:560px">
+  <div class="modal" style="max-width:900px; max-height:94vh;">
     <div class="modal-header">
       <h2>📥 Cargar datos manualmente</h2>
       <button class="modal-close" onclick="cerrarModalCargar()">✕</button>
     </div>
     <div class="modal-body">
-      <div style="background:rgba(75,124,243,0.06); border-left:3px solid var(--accent); border-radius:6px; padding:10px 12px; font-size:11.5px; color:var(--text); line-height:1.5;">
-        <strong>Reemplaza el pre-template actual con datos externos.</strong> Útil para reintentar con valores corregidos sin volver a asignar. El sistema detecta si tienes 13 columnas (pre-template) o 17 columnas (resultado exportado con las columnas __Status, __Id, __Action, __Errors) y toma solo los datos que necesita para el import.
+      <div style="background:rgba(75,124,243,0.06); border-left:3px solid var(--accent); border-radius:6px; padding:10px 12px; font-size:11.5px; color:var(--text); line-height:1.55;">
+        <strong>Detección automática de headers.</strong> El sistema lee los nombres de columnas de tu data y los reordena automáticamente al orden del pre-template. No importa el orden en que pegues las columnas — el sistema las acomoda solas siempre y cuando los nombres coincidan (Contact__c, Email, LastName, OwnerId, etc.).
       </div>
 
       <div class="modal-field">
         <label>Método de carga</label>
-        <div class="mode-tabs">
+        <div class="mode-tabs" style="grid-template-columns: 1fr 1fr;">
           <div class="mode-tab selected" data-lmode="paste" onclick="setLoadMode('paste')">
-            <div class="mt-icon">📋</div><div class="mt-label">Pegar desde<br>Sheets/Excel</div>
+            <div class="mt-icon">📋</div><div class="mt-label">Pegar desde<br>Sheets / Excel</div>
           </div>
-          <div class="mode-tab" data-lmode="csv" onclick="setLoadMode('csv')">
-            <div class="mt-icon">📁</div><div class="mt-label">Subir<br>CSV</div>
-          </div>
-          <div class="mode-tab" data-lmode="excel" onclick="setLoadMode('excel')">
-            <div class="mt-icon">📊</div><div class="mt-label">Subir<br>Excel</div>
+          <div class="mode-tab" data-lmode="file" onclick="setLoadMode('file')">
+            <div class="mt-icon">📁</div><div class="mt-label">Subir archivo<br>(CSV o Excel)</div>
           </div>
         </div>
       </div>
@@ -606,37 +608,32 @@
       <!-- PEGAR desde Sheets -->
       <div class="modal-conditional visible" id="loadSection-paste">
         <div class="modal-field">
-          <label>Pega los datos (con o sin fila de headers)</label>
-          <textarea id="pastedData" rows="6" oninput="actualizarPreviewCarga()" style="background:var(--sf2); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:var(--mono); font-size:10.5px; padding:10px 12px; width:100%; resize:vertical; outline:none;" placeholder="Copia desde Google Sheets o Excel las 13 columnas del pre-template (o las 17 del resultado exportado) y pégalo aquí."></textarea>
-          <span class="hint">Detecta automáticamente separador tab (Excel/Sheets) y headers opcionales.</span>
+          <label>Pega tus datos (incluye la fila de headers si es posible)</label>
+          <textarea id="pastedData" rows="5" oninput="actualizarPreviewCarga()" onpaste="setTimeout(actualizarPreviewCarga, 10)" style="background:var(--sf2); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:var(--mono); font-size:11px; padding:10px 12px; width:100%; resize:vertical; outline:none;" placeholder="Copia desde Google Sheets/Excel (Ctrl+C) y pega aquí (Ctrl+V).&#10;&#10;Los headers pueden estar en cualquier orden — el sistema los detecta y reordena."></textarea>
+          <span class="hint">Separador tab detectado automáticamente. La tabla preview de abajo muestra cómo quedará tu data.</span>
         </div>
       </div>
 
-      <!-- CSV -->
-      <div class="modal-conditional" id="loadSection-csv">
+      <!-- SUBIR archivo unificado -->
+      <div class="modal-conditional" id="loadSection-file">
         <div class="modal-field">
-          <label>Archivo CSV</label>
+          <label>Archivo (CSV / XLSX / XLS)</label>
           <div class="file-input-wrap">
-            <label class="file-input-label" id="loadCsvLabel" for="loadCsvFile">📁 Haz click para elegir un archivo CSV</label>
-            <input type="file" id="loadCsvFile" accept=".csv" onchange="onLoadFileSelected(this, 'csv')"/>
+            <label class="file-input-label" id="loadFileLabel" for="loadFile">
+              📁 Haz click o arrastra un archivo aquí
+            </label>
+            <input type="file" id="loadFile" accept=".csv,.xlsx,.xls" onchange="onLoadFileSelected(this)"/>
           </div>
+          <span class="hint">Se detecta el formato automáticamente por la extensión. Se lee la primera hoja del archivo.</span>
         </div>
       </div>
 
-      <!-- Excel -->
-      <div class="modal-conditional" id="loadSection-excel">
-        <div class="modal-field">
-          <label>Archivo Excel (.xlsx / .xls)</label>
-          <div class="file-input-wrap">
-            <label class="file-input-label" id="loadExcelLabel" for="loadExcelFile">📊 Haz click para elegir un archivo Excel</label>
-            <input type="file" id="loadExcelFile" accept=".xlsx,.xls" onchange="onLoadFileSelected(this, 'excel')"/>
-          </div>
-          <span class="hint">Se lee la primera hoja del archivo.</span>
-        </div>
+      <!-- Preview visual: mapeo + tabla -->
+      <div id="loadPreview" style="display:none;">
+        <div id="loadPreviewMapping" style="background:var(--sf2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:11px; margin-bottom:10px;"></div>
+        <div style="font-size:10.5px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--muted); margin-bottom:6px;">Vista previa del pre-template (primeras 5 filas)</div>
+        <div id="loadPreviewTableWrap" style="background:var(--sf2); border:1px solid var(--border); border-radius:8px; overflow:auto; max-height:280px;"></div>
       </div>
-
-      <!-- Preview -->
-      <div id="loadPreview" style="display:none; background:var(--sf2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:11.5px;"></div>
     </div>
     <div class="modal-footer">
       <button class="btn-modal-cancel" onclick="cerrarModalCargar()">Cancelar</button>
@@ -1813,19 +1810,58 @@ function mergeRetryResult(okRows, failRowsNuevos, intentoNum) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  CARGA MANUAL DE DATOS (Paste / CSV / Excel)
-//  Permite reemplazar el pre-template con datos externos ya corregidos,
-//  típicamente después de un import fallido donde el usuario editó
-//  los valores en Google Sheets y quiere reintentar sin re-asignar.
+//  CARGA MANUAL DE DATOS (Paste / Archivo CSV o Excel)
+//  Detecta headers y reordena automáticamente al orden del PT_HEADERS.
+//  Muestra tabla preview visual antes de aplicar.
 // ══════════════════════════════════════════════════════════════════
+
+// Aliases de headers: variaciones que aceptamos y a qué columna PT mapean.
+// La comparación es case-insensitive y normaliza espacios/guiones bajos/guiones.
+const HEADER_ALIASES = {
+  'Contact__c':                     ['contact__c', 'contact', 'contactid', 'contact_id', 'contact id', 'id contacto', 'contactoid'],
+  'LastSourceAt__c':                ['lastsourceat__c', 'lastsourceat', 'last_source_at', 'last source at'],
+  'Company':                        ['company', 'account', 'account_name', 'account name', 'cuenta', 'empresa'],
+  'LastName':                       ['lastname', 'last_name', 'last name', 'apellido', 'apellidos'],
+  'Email':                          ['email', 'e-mail', 'correo', 'mail'],
+  'OwnerId':                        ['ownerid', 'owner_id', 'owner id', 'owner', 'propietario'],
+  'BusinessLine__c':                ['businessline__c', 'businessline', 'business_line', 'business line', 'bl', 'linea de negocio'],
+  'Lead_Type__c':                   ['lead_type__c', 'leadtype', 'lead_type', 'lead type', 'tipo lead', 'tipo de lead'],
+  'ContactTypeSegment__c':          ['contacttypesegment__c', 'contacttypesegment', 'segment', 'segmento'],
+  'Country__c':                     ['country__c', 'country', 'pais'],
+  'Leadassist__Use_Round_Robin__c': ['leadassist__use_round_robin__c', 'roundrobin', 'round_robin', 'round robin', 'use_round_robin', 'useroundrobin'],
+  'Status':                         ['status', 'estado', 'estatus'],
+  'FacilitySize__c':                ['facilitysize__c', 'facilitysize', 'facility_size', 'facility size', 'tamano', 'tamaño']
+};
+
+// Columnas que consideramos técnicamente obligatorias para un import válido
+const MIN_REQUIRED_LOAD = ['Contact__c', 'LastName', 'Email', 'OwnerId'];
+
+function normalizarHeader(h) {
+  return String(h || '').trim().toLowerCase().replace(/[\s_\-]+/g, '');
+}
+
+// Devuelve el nombre PT_HEADER al que mapea un header dado, o null si no hay match
+function mapearHeaderAPT(headerName) {
+  const norm = normalizarHeader(headerName);
+  if (!norm) return null;
+  // Primero, coincidencia exacta con PT_HEADERS (normalizados)
+  for (const pt of PT_HEADERS) {
+    if (normalizarHeader(pt) === norm) return pt;
+  }
+  // Luego, coincidencia por alias
+  for (const [pt, aliases] of Object.entries(HEADER_ALIASES)) {
+    for (const alias of aliases) {
+      if (normalizarHeader(alias) === norm) return pt;
+    }
+  }
+  return null;
+}
+
 function abrirModalCargar() {
   document.getElementById('pastedData').value = '';
-  document.getElementById('loadCsvFile').value = '';
-  document.getElementById('loadExcelFile').value = '';
-  document.getElementById('loadCsvLabel').textContent = '📁 Haz click para elegir un archivo CSV';
-  document.getElementById('loadCsvLabel').classList.remove('has-file');
-  document.getElementById('loadExcelLabel').textContent = '📊 Haz click para elegir un archivo Excel';
-  document.getElementById('loadExcelLabel').classList.remove('has-file');
+  document.getElementById('loadFile').value = '';
+  document.getElementById('loadFileLabel').textContent = '📁 Haz click o arrastra un archivo aquí';
+  document.getElementById('loadFileLabel').classList.remove('has-file');
   document.getElementById('loadPreview').style.display = 'none';
   document.getElementById('btnLoadConfirm').disabled = true;
   loadedPreview = null;
@@ -1842,7 +1878,7 @@ function setLoadMode(mode) {
   loadMode = mode;
   document.querySelectorAll('.mode-tab[data-lmode]').forEach(t => t.classList.remove('selected'));
   document.querySelector(`.mode-tab[data-lmode="${mode}"]`).classList.add('selected');
-  ['paste', 'csv', 'excel'].forEach(m => {
+  ['paste', 'file'].forEach(m => {
     document.getElementById(`loadSection-${m}`).classList.remove('visible');
   });
   document.getElementById(`loadSection-${mode}`).classList.add('visible');
@@ -1851,25 +1887,29 @@ function setLoadMode(mode) {
   loadedPreview = null;
 }
 
-function onLoadFileSelected(input, tipo) {
+async function onLoadFileSelected(input) {
   const file = input.files[0];
   if (!file) return;
-  const label = document.getElementById(tipo === 'csv' ? 'loadCsvLabel' : 'loadExcelLabel');
-  label.textContent = `✓ ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+  const label = document.getElementById('loadFileLabel');
+  const ext = file.name.toLowerCase().split('.').pop();
+  const tipoTxt = (ext === 'csv') ? 'CSV' : ((ext === 'xlsx' || ext === 'xls') ? 'Excel' : 'archivo');
+  label.textContent = `✓ ${file.name} — ${tipoTxt} (${(file.size/1024).toFixed(1)} KB)`;
   label.classList.add('has-file');
   actualizarPreviewCarga();
 }
 
-// Parser TSV (para paste) — Excel/Sheets copia con tabs
+// Parser TSV (para paste desde Sheets/Excel)
 function parseTsv(text) {
   const lines = text.split('\n').map(l => l.replace(/\r$/, '')).filter(l => l.length > 0);
   return lines.map(l => l.split('\t'));
 }
 
-// Parser CSV con detección de delimitador (coma o punto y coma)
+// Parser CSV con detección de delimitador
 function parseCsvFullText(text) {
   const firstLine = text.split('\n')[0] || '';
-  const delim = (firstLine.split(';').length > firstLine.split(',').length) ? ';' : ',';
+  const commaCount = (firstLine.match(/,/g) || []).length;
+  const semiCount = (firstLine.match(/;/g) || []).length;
+  const delim = (semiCount > commaCount) ? ';' : ',';
   const lines = text.split('\n').map(l => l.replace(/\r$/, '')).filter(l => l.trim().length > 0);
   return lines.map(line => parseCsvRowWithDelim(line, delim));
 }
@@ -1889,7 +1929,7 @@ function parseCsvRowWithDelim(line, delim) {
   return result;
 }
 
-// Parser Excel usando SheetJS (primera hoja)
+// Parser Excel con SheetJS (primera hoja)
 async function parseExcelFile(file) {
   if (typeof XLSX === 'undefined') throw new Error('SheetJS no está disponible. Recarga la página.');
   const buf = await file.arrayBuffer();
@@ -1904,25 +1944,35 @@ async function parseExcelFile(file) {
 async function actualizarPreviewCarga() {
   const previewDiv = document.getElementById('loadPreview');
   const btnConfirm = document.getElementById('btnLoadConfirm');
+  const mappingDiv = document.getElementById('loadPreviewMapping');
+  const tableWrap = document.getElementById('loadPreviewTableWrap');
   let matrix = null;
+  let sourceFormat = '';
 
   try {
     if (loadMode === 'paste') {
       const text = document.getElementById('pastedData').value;
       if (!text.trim()) { previewDiv.style.display = 'none'; btnConfirm.disabled = true; loadedPreview = null; return; }
       matrix = parseTsv(text);
-    } else if (loadMode === 'csv') {
-      const file = document.getElementById('loadCsvFile').files[0];
+      sourceFormat = 'Paste (TSV)';
+    } else if (loadMode === 'file') {
+      const file = document.getElementById('loadFile').files[0];
       if (!file) return;
-      const text = await file.text();
-      matrix = parseCsvFullText(text);
-    } else if (loadMode === 'excel') {
-      const file = document.getElementById('loadExcelFile').files[0];
-      if (!file) return;
-      matrix = await parseExcelFile(file);
+      const ext = file.name.toLowerCase().split('.').pop();
+      if (ext === 'csv') {
+        const text = await file.text();
+        matrix = parseCsvFullText(text);
+        sourceFormat = 'CSV';
+      } else if (ext === 'xlsx' || ext === 'xls') {
+        matrix = await parseExcelFile(file);
+        sourceFormat = 'Excel';
+      } else {
+        throw new Error(`Extensión no soportada: .${ext}. Usa .csv, .xlsx o .xls.`);
+      }
     }
   } catch (err) {
-    previewDiv.innerHTML = `<div style="color:var(--err); font-weight:600;">❌ Error al leer: ${esc(err.message)}</div>`;
+    mappingDiv.innerHTML = `<div style="color:var(--err); font-weight:600;">❌ Error al leer: ${esc(err.message)}</div>`;
+    tableWrap.innerHTML = '';
     previewDiv.style.display = 'block';
     btnConfirm.disabled = true;
     loadedPreview = null;
@@ -1936,73 +1986,152 @@ async function actualizarPreviewCarga() {
     return;
   }
 
-  // Detectar si la primera fila es header
-  const firstRow = matrix[0].map(c => String(c || '').trim());
-  const primeraCelda = firstRow[0] || '';
-  const hasHeader = primeraCelda === 'Contact__c' || firstRow.filter(c => PT_HEADERS.includes(c)).length >= 3;
+  // ── PASO 1: intentar interpretar la primera fila como headers ──
+  const primeraFila = matrix[0].map(c => String(c || '').trim());
+  const mapeoInicial = primeraFila.map(mapearHeaderAPT);
+  const headersReconocidos = mapeoInicial.filter(m => m !== null).length;
 
-  let dataRows = hasHeader ? matrix.slice(1) : matrix;
+  // Si al menos 3 headers coinciden con PT_HEADERS o aliases → tratamos la primera fila como headers
+  const hayHeaders = headersReconocidos >= 3;
+  let dataRows = hayHeaders ? matrix.slice(1) : matrix;
 
   // Filtrar filas vacías
   dataRows = dataRows.filter(r => r.some(c => String(c || '').trim() !== ''));
 
   if (!dataRows.length) {
-    previewDiv.innerHTML = `<div style="color:var(--err); font-weight:600;">❌ Sin filas con datos.</div>`;
+    mappingDiv.innerHTML = `<div style="color:var(--err); font-weight:600;">❌ Sin filas de datos (solo se detectaron headers).</div>`;
+    tableWrap.innerHTML = '';
     previewDiv.style.display = 'block';
     btnConfirm.disabled = true;
     loadedPreview = null;
     return;
   }
 
-  // Determinar cuántas columnas por fila (tomar la que más tenga)
-  const numCols = Math.max(...dataRows.map(r => r.length));
+  // ── PASO 2: construir mapeo columna origen → columna PT ──
+  // Si HAY headers: usa el mapeo por nombre
+  // Si NO hay headers: asume orden posicional del PT_HEADERS
+  let mapeoColumnas = [];  // [{origen: 'Email' o 'col 3', ptIndex: 4, ptName: 'Email'}]
+  let ptToOrigenIdx = new Array(PT_HEADERS.length).fill(-1);  // para cada columna PT, qué col origen
 
-  const esperadoPT = PT_HEADERS.length;          // 13
-  const esperadoResult = IMPORT_RESULT_HEADERS.length;  // 17
-
-  if (numCols !== esperadoPT && numCols !== esperadoResult) {
-    previewDiv.innerHTML = `
-      <div style="color:var(--err); font-weight:600;">❌ ${dataRows.length} filas con ${numCols} columnas.</div>
-      <div style="font-size:10.5px; color:var(--muted); margin-top:4px;">Se esperan <strong>${esperadoPT}</strong> columnas (pre-template) o <strong>${esperadoResult}</strong> columnas (resultado exportado con __ cols).</div>
-    `;
-    previewDiv.style.display = 'block';
-    btnConfirm.disabled = true;
-    loadedPreview = null;
-    return;
-  }
-
-  const esFormatoResult = (numCols === esperadoResult);
-
-  // Si es formato resultado, tomamos solo las primeras 13 columnas
-  if (esFormatoResult) {
-    dataRows = dataRows.map(r => r.slice(0, esperadoPT));
-  }
-
-  // Normalizar cada fila a exactamente PT_HEADERS.length columnas
-  dataRows = dataRows.map(r => {
-    const norm = [];
-    for (let i = 0; i < esperadoPT; i++) {
-      norm.push(r[i] !== undefined && r[i] !== null ? String(r[i]) : '');
+  if (hayHeaders) {
+    primeraFila.forEach((headerOrig, colIdx) => {
+      const ptName = mapearHeaderAPT(headerOrig);
+      if (ptName) {
+        const ptIndex = PT_HEADERS.indexOf(ptName);
+        mapeoColumnas.push({ origen: headerOrig, colIdxOrigen: colIdx, ptIndex, ptName });
+        ptToOrigenIdx[ptIndex] = colIdx;
+      } else {
+        mapeoColumnas.push({ origen: headerOrig || `(col ${colIdx + 1} vacía)`, colIdxOrigen: colIdx, ptIndex: -1, ptName: null });
+      }
+    });
+  } else {
+    // Sin headers: mapear por posición contra PT_HEADERS
+    const numCols = Math.max(...dataRows.map(r => r.length));
+    for (let i = 0; i < numCols && i < PT_HEADERS.length; i++) {
+      mapeoColumnas.push({ origen: `col ${i + 1} (posicional)`, colIdxOrigen: i, ptIndex: i, ptName: PT_HEADERS[i] });
+      ptToOrigenIdx[i] = i;
     }
-    return norm;
+  }
+
+  // ── PASO 3: reordenar cada fila al orden del PT_HEADERS ──
+  const filasReordenadas = dataRows.map(row => {
+    const nuevaFila = new Array(PT_HEADERS.length).fill('');
+    for (let ptIdx = 0; ptIdx < PT_HEADERS.length; ptIdx++) {
+      const origIdx = ptToOrigenIdx[ptIdx];
+      if (origIdx >= 0 && origIdx < row.length) {
+        const val = row[origIdx];
+        nuevaFila[ptIdx] = (val !== null && val !== undefined) ? String(val) : '';
+      }
+    }
+    return nuevaFila;
   });
 
-  loadedPreview = { rows: dataRows, hasHeader, originalCols: numCols, esFormatoResult };
+  // ── PASO 4: validar campos mínimos obligatorios ──
+  const ptCubiertos = new Set(mapeoColumnas.filter(m => m.ptIndex >= 0).map(m => m.ptName));
+  const faltantesObligatorios = MIN_REQUIRED_LOAD.filter(campo => !ptCubiertos.has(campo));
 
-  previewDiv.innerHTML = `
-    <div style="color:var(--ok); font-weight:600;">✓ ${dataRows.length} fila(s) listas para cargar</div>
-    <div style="font-size:10.5px; color:var(--muted); margin-top:4px; line-height:1.6;">
-      Columnas detectadas: <strong>${numCols}</strong> ${esFormatoResult ? '(formato resultado — se ignoran las 4 columnas __ finales)' : '(formato pre-template)'}<br>
-      ${hasHeader ? '✓ Headers detectados y omitidos.' : 'ℹ Sin headers — se toma toda la data como filas.'}
-    </div>
-  `;
+  // ── PASO 5: renderizar mapeo ──
+  let mappingHtml = `<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
+    <span style="background:rgba(34,197,94,.15); color:var(--ok); border-radius:100px; padding:3px 10px; font-size:10.5px; font-weight:700;">✓ ${filasReordenadas.length} fila(s)</span>
+    <span style="color:var(--muted); font-size:10.5px;">Fuente: ${esc(sourceFormat)}</span>
+    <span style="color:var(--muted); font-size:10.5px;">Headers: ${hayHeaders ? '<strong style="color:var(--ok)">detectados por nombre</strong>' : '<strong style="color:var(--warn)">no detectados — mapeo posicional</strong>'}</span>
+  </div>`;
+
+  // Detalle del mapeo (compacto)
+  mappingHtml += `<div style="font-size:10.5px; line-height:1.9; color:var(--muted);">`;
+  mapeoColumnas.forEach(m => {
+    if (m.ptIndex >= 0) {
+      mappingHtml += `<span style="display:inline-block; margin-right:12px;"><span style="color:var(--text);">${esc(m.origen)}</span> → <span style="color:var(--ok); font-weight:600;">${esc(m.ptName)} ✓</span></span>`;
+    } else {
+      mappingHtml += `<span style="display:inline-block; margin-right:12px; color:var(--warn);">${esc(m.origen)} → <em>ignorada</em></span>`;
+    }
+  });
+
+  // Mostrar columnas del PT que NO recibieron datos (irán vacías)
+  const ptSinDatos = PT_HEADERS.filter((pt, idx) => ptToOrigenIdx[idx] === -1);
+  if (ptSinDatos.length > 0) {
+    mappingHtml += `<div style="margin-top:6px;">Columnas del pre-template que quedarán <strong style="color:var(--muted);">vacías</strong>: ${ptSinDatos.map(esc).join(', ')}</div>`;
+  }
+  mappingHtml += `</div>`;
+
+  // Advertencia por obligatorios faltantes
+  if (faltantesObligatorios.length > 0) {
+    mappingHtml += `<div style="margin-top:8px; padding:8px 10px; background:rgba(244,63,94,.08); border-left:3px solid var(--err); border-radius:6px; font-size:11px; color:var(--err); font-weight:600;">
+      ⚠ Faltan columnas obligatorias: ${faltantesObligatorios.map(esc).join(', ')}
+    </div>`;
+  }
+
+  mappingDiv.innerHTML = mappingHtml;
+
+  // ── PASO 6: renderizar tabla preview (primeras 5 filas) ──
+  const preview5 = filasReordenadas.slice(0, 5);
+  let tableHtml = `<table style="width:100%; border-collapse:collapse; font-size:10px;">
+    <thead>
+      <tr style="background:var(--surface); position:sticky; top:0; z-index:1;">`;
+  PT_HEADERS.forEach((h, idx) => {
+    const tieneOrigen = ptToOrigenIdx[idx] !== -1;
+    const bgColor = tieneOrigen ? 'var(--surface)' : 'rgba(107,114,154,.15)';
+    const color = tieneOrigen ? 'var(--text)' : 'var(--muted)';
+    tableHtml += `<th style="padding:6px 10px; text-align:left; font-weight:700; font-size:9px; color:${color}; background:${bgColor}; border-bottom:1px solid var(--border); white-space:nowrap;" title="${esc(h)}">${esc(h)}</th>`;
+  });
+  tableHtml += `</tr></thead><tbody>`;
+  preview5.forEach(row => {
+    tableHtml += `<tr>`;
+    row.forEach((cell, idx) => {
+      const tieneOrigen = ptToOrigenIdx[idx] !== -1;
+      const bg = tieneOrigen ? 'transparent' : 'rgba(107,114,154,.05)';
+      const val = String(cell || '');
+      const displayVal = val.length > 30 ? val.slice(0, 30) + '…' : val;
+      tableHtml += `<td style="padding:6px 10px; border-bottom:1px solid var(--border); background:${bg}; color:var(--text); white-space:nowrap; max-width:180px; overflow:hidden; text-overflow:ellipsis;" title="${esc(val)}">${esc(displayVal) || '<span style="color:var(--muted); font-style:italic;">(vacío)</span>'}</td>`;
+    });
+    tableHtml += `</tr>`;
+  });
+  if (filasReordenadas.length > 5) {
+    tableHtml += `<tr><td colspan="${PT_HEADERS.length}" style="padding:6px 10px; text-align:center; color:var(--muted); font-size:10px; font-style:italic; border-top:1px dashed var(--border);">… y ${filasReordenadas.length - 5} fila(s) más</td></tr>`;
+  }
+  tableHtml += `</tbody></table>`;
+  tableWrap.innerHTML = tableHtml;
+
+  loadedPreview = {
+    rows: filasReordenadas,
+    hasHeader: hayHeaders,
+    sourceFormat,
+    mapeoColumnas,
+    faltantesObligatorios
+  };
+
   previewDiv.style.display = 'block';
-  btnConfirm.disabled = false;
+  btnConfirm.disabled = (faltantesObligatorios.length > 0);
 }
 
 function aplicarCarga() {
   if (!loadedPreview || !loadedPreview.rows || !loadedPreview.rows.length) {
     toast('❌ No hay datos válidos.', 'bad');
+    return;
+  }
+
+  if (loadedPreview.faltantesObligatorios && loadedPreview.faltantesObligatorios.length > 0) {
+    toast('❌ Faltan columnas obligatorias.', 'bad');
     return;
   }
 
@@ -2025,7 +2154,7 @@ function aplicarCarga() {
   // Reemplazar preTemplateRows
   preTemplateRows = loadedPreview.rows;
   totalAsignados = preTemplateRows.length;
-  ownerStatsCache = [];  // No hay stats por rep en carga manual
+  ownerStatsCache = [];
   ultimaAsignacion = {
     businessLine: '(cargado manualmente)',
     leadType: '(cargado manualmente)',
@@ -2036,7 +2165,7 @@ function aplicarCarga() {
     repsActivos: 0
   };
 
-  // Actualizar UI del tab Asignación (para consistencia visual)
+  // Renderizar en el tab Asignación
   renderPreTemplate(PT_HEADERS, preTemplateRows);
   document.getElementById('badge-asig').textContent = preTemplateRows.length;
   document.getElementById('sAsignados').textContent = preTemplateRows.length;
@@ -2063,9 +2192,7 @@ function aplicarCarga() {
   document.getElementById('importLog').innerHTML = '<span class="info">// El log del import aparecerá aquí…</span>';
   setImportStatus(`Datos cargados manualmente. Listo para ejecutar Import.`, 'ok');
 
-  // Actualizar fuente del Data Import
   actualizarFuenteImport();
-
   cerrarModalCargar();
   toast(`✅ ${preTemplateRows.length} fila(s) cargadas al pre-template.`, 'ok');
 }
