@@ -199,6 +199,21 @@
     .result-header h2 { font-size: 13px; font-weight: 600; }
     .result-btns { display: flex; gap: 8px; }
     .res-tbl-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: auto; flex: 1; min-height: 120px; }
+
+    /* ══ RETRY: panel de historial ══ */
+    .retry-history { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; display: none; flex-direction: column; gap: 8px; }
+    .retry-history.visible { display: flex; }
+    .rh-title { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+    .rh-item { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 11.5px; }
+    .rh-item:last-child { border-bottom: none; }
+    .rh-badge { background: var(--sf2); border: 1px solid var(--border); border-radius: 100px; padding: 2px 8px; font-size: 10px; font-family: var(--mono); font-weight: 600; }
+    .rh-badge.orig { color: var(--accent); border-color: rgba(75,124,243,.4); }
+    .rh-badge.retry { color: var(--warn); border-color: rgba(245,158,11,.4); }
+    .rh-jobid { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+    .rh-stats { margin-left: auto; display: flex; gap: 10px; font-family: var(--mono); font-size: 11px; }
+    .rh-stat-ok { color: var(--ok); }
+    .rh-stat-err { color: var(--err); }
+    .rh-ts { font-size: 10px; color: var(--muted); }
     table.res-import { width: 100%; border-collapse: collapse; font-size: 10.5px; }
     table.res-import th { background: var(--sf2); color: var(--muted); font-weight: 700; font-size: 9.5px; padding: 9px 13px; border-bottom: 1px solid var(--border); white-space: nowrap; position: sticky; top: 0; z-index: 1; }
     table.res-import td { padding: 8px 13px; border-bottom: 1px solid var(--border); white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
@@ -335,6 +350,14 @@
               <option value="First Class">First Class</option>
             </select>
           </div>
+          <div class="field">
+            <label>Lead Type <span style="color:var(--muted); font-weight:400;">(control manual)</span></label>
+            <select id="leadType">
+              <option value="New Business" selected>New Business</option>
+              <option value="Existing Business">Existing Business</option>
+            </select>
+            <span class="field-hint">Se aplica a todas las filas del pre-template. Cambia según el contexto de tu asignación.</span>
+          </div>
         </div>
         <div>
           <div class="reps-top">
@@ -345,8 +368,9 @@
             </div>
           </div>
           <div class="bulk-panel" id="bulkPanel">
-            <p>Pega los emails aquí, uno por línea:</p>
-            <textarea id="bulkEmails" placeholder="email@docplanner.com"></textarea>
+            <p>Pega emails (con o sin cuota, uno por línea):</p>
+            <textarea id="bulkEmails" placeholder="email@docplanner.com&#10;otro@docplanner.com&#9;12&#10;tercero@docplanner.com&#9;8"></textarea>
+            <p style="font-size:10px; color: var(--muted); font-style: italic;">Puedes pegar directamente desde Excel (email + cuota separados por tab).</p>
             <div class="bulk-actions">
               <button class="btn-apply" onclick="aplicarBulk()">✓ Agregar</button>
               <button class="btn-cancel-bulk" onclick="toggleBulk()">Cancelar</button>
@@ -443,9 +467,11 @@
           <h2>Resultado del Import</h2>
           <div class="result-btns">
             <button class="btn-icon" style="background:var(--accent)" id="copyResultBtn" onclick="copiarResultado()" disabled>📋 Copiar</button>
+            <button class="btn-icon" style="background:var(--warn)" id="retryBtn" onclick="abrirModalRetry()" disabled>🔁 Reintentar (0)</button>
             <button class="btn-icon" style="background:var(--ok)" id="dlResultBtn" onclick="abrirModalExport()" disabled>💾 Guardar</button>
           </div>
         </div>
+        <div id="retryHistoryPanel" class="retry-history"></div>
         <div class="res-tbl-wrap" id="resTblWrap"><div class="empty"><div class="empty-ico">📥</div><p>El resultado del import aparecerá aquí.</p></div></div>
       </div>
     </div>
@@ -546,16 +572,47 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- MODAL RETRY -->
+<div class="modal-backdrop" id="retryModal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h2>🔁 Reintentar filas fallidas</h2>
+      <button class="modal-close" onclick="cerrarModalRetry()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--sf2); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
+        <div style="font-size:12px; color:var(--muted); margin-bottom:4px;">Filas a re-enviar</div>
+        <div style="font-size:24px; font-weight:700; color:var(--warn); font-family:var(--mono);" id="retryCount">0</div>
+        <div style="font-size:11px; color:var(--muted); margin-top:2px;" id="retryContext">de 0 filas totales</div>
+      </div>
+
+      <div class="modal-field">
+        <label>Errores agrupados</label>
+        <div id="retryErrorGroups" style="background:var(--sf2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; max-height:200px; overflow-y:auto; font-size:11.5px;"></div>
+      </div>
+
+      <div style="background:rgba(245,158,11,0.08); border-left:3px solid var(--warn); border-radius:6px; padding:10px 12px; font-size:11.5px; color:var(--text); line-height:1.5;">
+        <strong>⚠ Antes de reintentar:</strong> los mismos errores volverán a ocurrir a menos que corrijas los datos. Si necesitas editar valores manualmente, descarga las filas fallidas como CSV primero.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal-cancel" onclick="cerrarModalRetry()">Cancelar</button>
+      <button class="btn-modal-cancel" onclick="descargarFallidosCSV()">⬇ Descargar CSV</button>
+      <button class="btn-modal-primary" id="btnRetryConfirm" onclick="ejecutarRetry()" style="background: linear-gradient(135deg, var(--warn), #f97316);">🔁 Reintentar ahora</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════════════════════
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════
-const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbxs6Y4mP-i_n7lM6eKEArbCvEmlD4ML1f4Q50SlHWkgqUiboW-SnFk-bMkUFq2HP7tAVQ/exec";
+const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbxlEq79mf5TP_q7xnVY9Dq5c5X3dPfKdZqhECdNWb3-FtZynxSWw6jha31P2Auy3JH3fA/exec";
 const GOOGLE_CLIENT_ID = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 const INSTANCE_URL     = "https://docplanner.my.salesforce.com";
 
 const PT_HEADERS = [
-  'Contact__c', 'LastSource_SO__c', 'LastSourceAt__c',
+  'Contact__c', 'LastSourceAt__c',
   'Company', 'LastName', 'Email',
   'OwnerId', 'BusinessLine__c',
   'Lead_Type__c', 'ContactTypeSegment__c', 'Country__c',
@@ -568,7 +625,7 @@ const PT_HEADERS = [
 const ENVIAR_VACIO_AL_IMPORT = new Set(['FacilitySize__c']);
 
 const IMPORT_RESULT_HEADERS = [
-  'Contact__c', 'LastSource_SO__c', 'LastSourceAt__c',
+  'Contact__c', 'LastSourceAt__c',
   'Company', 'LastName', 'Email',
   'OwnerId', 'BusinessLine__c',
   'Lead_Type__c', 'ContactTypeSegment__c', 'Country__c',
@@ -578,7 +635,7 @@ const IMPORT_RESULT_HEADERS = [
 ];
 
 const DEFAULT_FIELD_MAP = {
-  'Contact__c':'Contact__c','LastSource_SO__c':'LastSource_SO__c','LastSourceAt__c':'LastSourceAt__c',
+  'Contact__c':'Contact__c','LastSourceAt__c':'LastSourceAt__c',
   'Company':'Company','LastName':'LastName','Email':'Email',
   'OwnerId':'OwnerId','BusinessLine__c':'BusinessLine__c','Lead_Type__c':'Lead_Type__c',
   'ContactTypeSegment__c':'ContactTypeSegment__c','Country__c':'Country__c',
@@ -593,7 +650,7 @@ const CAMPOS_OBLIGATORIOS_LEAD = new Set([
   'BusinessLine__c', 'Lead_Type__c', 'ContactTypeSegment__c',
   'Country__c', 'Leadassist__Use_Round_Robin__c', 'Status'
 ]);
-// Los opcionales son (implícitamente): LastSource_SO__c, LastSourceAt__c, Company, FacilitySize__c
+// Los opcionales son (implícitamente): LastSourceAt__c, Company, FacilitySize__c
 
 // ══════════════════════════════════════════════════════════════════
 //  ESTADO GLOBAL
@@ -611,6 +668,10 @@ let currentMode      = "new";
 let currentSubmode   = "link";
 let uploadedFile     = null;
 let uploadedFileBase64 = "";
+
+// ── Estado del Retry ──
+let ultimoImportConfig = null;  // { action, object, extId, sfHeaders, colIndexes, colNames } del import base
+let historialRetries   = [];    // [{ intento, jobId, jobState, total, exitosos, fallidos, timestamp }]
 
 // ══════════════════════════════════════════════════════════════════
 //  GOOGLE SIGN-IN
@@ -782,12 +843,40 @@ function toggleBulk() {
 
 function aplicarBulk() {
   const raw = document.getElementById('bulkEmails').value;
-  const emails = raw.split(/[\n,;\s]+/).map(e => e.trim()).filter(e => e.includes('@') && e.includes('.'));
-  if (!emails.length) { toast('No se encontraron emails válidos.', 'bad'); return; }
-  emails.forEach(e => addRep(e, ''));  // addRep ya activa el input si hay email
+  if (!raw.trim()) { toast('No pegaste nada.', 'bad'); return; }
+
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+  const entradas = [];
+  lines.forEach(line => {
+    const emailMatch = line.match(emailRegex);
+    if (!emailMatch) return;
+    const email = emailMatch[0];
+    // Sacar el email de la línea y buscar un número en el resto
+    const resto = line.replace(email, '').trim();
+    // El número puede estar separado por tab, coma, punto y coma, o espacios
+    const numMatch = resto.match(/[-+]?\d+/);
+    const numero = numMatch ? parseInt(numMatch[0]) : null;
+    entradas.push({ email, numero: (numero !== null && numero > 0) ? numero : '' });
+  });
+
+  if (!entradas.length) { toast('No se encontraron emails válidos.', 'bad'); return; }
+
+  // Contar cuántos vinieron con número vs sin número
+  const conNumero = entradas.filter(e => e.numero !== '').length;
+  entradas.forEach(e => addRep(e.email, e.numero));
+
   document.getElementById('bulkEmails').value = '';
   toggleBulk();
-  toast(`✅ ${emails.length} representante(s) agregados`, 'ok');
+
+  if (conNumero === entradas.length) {
+    toast(`✅ ${entradas.length} representante(s) agregados con cuota`, 'ok');
+  } else if (conNumero === 0) {
+    toast(`✅ ${entradas.length} email(s) agregados. Falta la cuota.`, 'ok');
+  } else {
+    toast(`✅ ${entradas.length} agregados (${conNumero} con cuota, ${entradas.length - conNumero} sin)`, 'ok');
+  }
 }
 
 function getReps() {
@@ -840,9 +929,10 @@ function resetAsigUI() {
 }
 
 function limpiarAsignacion() {
-  if (!confirm('¿Limpiar días, Business Line, representantes e IDs?')) return;
+  if (!confirm('¿Limpiar días, Business Line, Lead Type, representantes e IDs?')) return;
   document.getElementById('dias').value = '';
   document.getElementById('businessLine').value = '';
+  document.getElementById('leadType').value = 'New Business';
   document.getElementById('repsBody').innerHTML = '';
   document.getElementById('idsArea').value = '';
   updateCount(); actualizarRepsTotal();
@@ -857,11 +947,13 @@ async function ejecutar() {
   const diasInput = document.getElementById('dias').value.trim();
   const dias = diasInput === '' ? 0 : parseInt(diasInput);
   const businessLine = document.getElementById('businessLine').value;
+  const leadType = document.getElementById('leadType').value;
   const reps = getReps();
   const ids = getIds();
 
   if (!sid) return toast('Falta el Session ID (SID).', 'bad');
   if (!businessLine) return toast('Selecciona una Business Line.', 'bad');
+  if (!leadType) return toast('Selecciona un Lead Type.', 'bad');
   if (!reps.length) return toast('Agrega al menos un representante con Nº Asignaciones > 0.', 'bad');
   if (!ids.length) return toast('Pega al menos un ID de contacto.', 'bad');
 
@@ -878,12 +970,12 @@ async function ejecutar() {
   else log(`Reps: ${reps.length} | IDs: ${ids.length} | Días: 0 (solo excluye actividad de hoy)`, 'info');
 
   try {
-    const data = await backendFetch({ sid, instanceUrl: INSTANCE_URL, dias, businessLine, reps, ids });
+    const data = await backendFetch({ sid, instanceUrl: INSTANCE_URL, dias, businessLine, leadType, reps, ids });
 
     preTemplateRows = data.rows || [];
     ownerStatsCache = data.ownerStats || [];
     ultimaAsignacion = {
-      businessLine, dias, fecha: new Date().toLocaleString('es-MX'),
+      businessLine, leadType, dias, fecha: new Date().toLocaleString('es-MX'),
       contactosQueryPass: data.poolTotal,
       contactosAsignados: data.assigned,
       repsActivos: reps.length
@@ -943,12 +1035,12 @@ function renderPreTemplate(headers, rows) {
     wrap.innerHTML = `<div class="empty"><div class="empty-ico">📋</div><p>El pre template aparecerá aquí después de ejecutar.</p></div>`;
     return;
   }
-  // Índices en PT_HEADERS:
-  //  0: Contact__c, 1: LastSource_SO__c, 2: LastSourceAt__c,
-  //  3: Company,    4: LastName,          5: Email,
-  //  6: OwnerId,    7: BusinessLine__c,
-  //  8-13: fijos (Lead_Type, ContactTypeSegment, Country, RoundRobin, Status, FacilitySize)
-  const IDX_OWNER = 6, IDX_BL = 7, FIXED = 8;
+  // Índices en PT_HEADERS (13 columnas):
+  //  0: Contact__c, 1: LastSourceAt__c,
+  //  2: Company,    3: LastName,   4: Email,
+  //  5: OwnerId,    6: BusinessLine__c,
+  //  7-12: fijos (Lead_Type, ContactTypeSegment, Country, RoundRobin, Status, FacilitySize)
+  const IDX_OWNER = 5, IDX_BL = 6, FIXED = 7;
   let html = `<table class="pt"><thead><tr>`;
   PT_HEADERS.forEach(h => { html += `<th title="${esc(h)}">${esc(h)}</th>`; });
   html += `</tr></thead><tbody>`;
@@ -958,7 +1050,6 @@ function renderPreTemplate(headers, rows) {
       const v = String(cell ?? '');
       if (i === IDX_OWNER) {
         // Resaltar en rojo si el OwnerId es inválido
-        // (un OwnerId válido de SF empieza con "005" y tiene 15 o 18 caracteres)
         const esValido = v.startsWith('005') && (v.length === 15 || v.length === 18);
         if (!esValido) html += `<td title="${esc(v)}"><span class="chip" style="background:rgba(244,63,94,.15); border-color:rgba(244,63,94,.4); color:var(--err)">⚠ ${esc(v || 'VACÍO')}</span></td>`;
         else html += `<td title="${esc(v)}"><span class="chip">${esc(v)}</span></td>`;
@@ -1067,6 +1158,13 @@ function resetImportUI() {
   document.getElementById('dlResultBtn').disabled = true;
   document.getElementById('copyResultBtn').disabled = true;
   document.getElementById('badge-import').textContent = '—';
+  // Limpiar estado y UI del retry
+  ultimoImportConfig = null;
+  historialRetries = [];
+  document.getElementById('retryHistoryPanel').classList.remove('visible');
+  document.getElementById('retryHistoryPanel').innerHTML = '';
+  const retryBtn = document.getElementById('retryBtn');
+  if (retryBtn) { retryBtn.disabled = true; retryBtn.textContent = '🔁 Reintentar (0)'; }
 }
 
 function limpiarImport() {
@@ -1265,12 +1363,29 @@ async function ejecutarImport() {
     importResultRows = okRows.concat(failRows);
     const success = okRows.length, failed = failRows.length;
 
+    // ── RETRY: guardar configuración del import base para reutilizar en retries ──
+    ultimoImportConfig = {
+      action, object, extId,
+      sfHeaders: [...sfHeaders],
+      colIndexes: [...colIndexes],
+      colNames: [...colNames]
+    };
+    historialRetries = [{
+      intento: 0,
+      jobId: data.jobId || 'N/A',
+      jobState: data.jobState || 'N/A',
+      total, exitosos: success, fallidos: failed,
+      timestamp: new Date().toLocaleString('es-MX')
+    }];
+
     updateProgress(total, success + failed, success, failed);
     document.getElementById('progPct').textContent = '100%';
     document.getElementById('progBar').style.width = '100%';
     ilog(`✓ Exitosos: ${success} | Fallidos: ${failed}`, success > 0 ? 'ok' : 'warn');
 
     renderImportResult(importResultRows);
+    renderRetryHistory();
+    actualizarBotonRetry();
     setImportStatus(`Import completado: ${success} exitosos, ${failed} fallidos.`, failed === 0 && success > 0 ? 'ok' : 'err');
     document.getElementById('dlResultBtn').disabled = importResultRows.length === 0;
     document.getElementById('copyResultBtn').disabled = importResultRows.length === 0;
@@ -1366,6 +1481,214 @@ async function copiarResultado() {
   ];
   try { await navigator.clipboard.writeText(lines.join('\n')); toast('📋 Resultado copiado.', 'ok'); }
   catch { toast('No se pudo copiar.', 'bad'); }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  RETRY DE FILAS FALLIDAS
+// ══════════════════════════════════════════════════════════════════
+function actualizarBotonRetry() {
+  const failedCount = importResultRows.filter(r => r.__Status === 'Failed').length;
+  const btn = document.getElementById('retryBtn');
+  btn.disabled = failedCount === 0 || !ultimoImportConfig;
+  btn.textContent = `🔁 Reintentar (${failedCount})`;
+}
+
+function renderRetryHistory() {
+  const panel = document.getElementById('retryHistoryPanel');
+  if (!historialRetries.length) { panel.classList.remove('visible'); return; }
+  let html = `<div class="rh-title">Historial de intentos (${historialRetries.length})</div>`;
+  historialRetries.forEach(h => {
+    const isOrig = h.intento === 0;
+    html += `
+      <div class="rh-item">
+        <span class="rh-badge ${isOrig ? 'orig' : 'retry'}">${isOrig ? 'Import #0' : 'Retry #' + h.intento}</span>
+        <span class="rh-jobid" title="${esc(h.jobId)}">${esc(h.jobId.slice(0, 22))}${h.jobId.length > 22 ? '…' : ''}</span>
+        <span class="rh-ts">${esc(h.timestamp)}</span>
+        <span class="rh-stats">
+          <span class="rh-stat-ok">✓ ${h.exitosos}</span>
+          <span class="rh-stat-err">✗ ${h.fallidos}</span>
+          <span style="color:var(--muted)">de ${h.total}</span>
+        </span>
+      </div>
+    `;
+  });
+  panel.innerHTML = html;
+  panel.classList.add('visible');
+}
+
+function agruparErrores(failedRows) {
+  const grupos = {};
+  failedRows.forEach(r => {
+    const errMsg = String(r.__Errors || 'Sin mensaje');
+    // Agrupar por prefijo del error (antes del primer ":" o "," o los primeros 80 chars)
+    const separador = errMsg.search(/[:,]/);
+    const key = (separador > 0 ? errMsg.slice(0, separador) : errMsg).trim().slice(0, 100) || 'Sin mensaje';
+    grupos[key] = (grupos[key] || 0) + 1;
+  });
+  return Object.entries(grupos).sort((a, b) => b[1] - a[1]);
+}
+
+function abrirModalRetry() {
+  if (!ultimoImportConfig) { toast('No hay un import base para reintentar.', 'bad'); return; }
+  const failedRows = importResultRows.filter(r => r.__Status === 'Failed');
+  if (!failedRows.length) { toast('No hay filas fallidas.', 'bad'); return; }
+
+  document.getElementById('retryCount').textContent = failedRows.length;
+  document.getElementById('retryContext').textContent = `de ${importResultRows.length} filas totales`;
+
+  const grupos = agruparErrores(failedRows);
+  const grupoHtml = grupos.map(([msg, count]) => `
+    <div style="display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border);">
+      <span style="font-family:var(--mono); background:rgba(244,63,94,.15); color:var(--err); border-radius:100px; padding:2px 8px; font-size:10px; font-weight:600; flex-shrink:0;">${count}</span>
+      <span style="color:var(--text); font-size:11px; word-break:break-word;">${esc(msg)}</span>
+    </div>
+  `).join('');
+  document.getElementById('retryErrorGroups').innerHTML = grupoHtml || '<div style="color:var(--muted);">Sin agrupación de errores.</div>';
+
+  const btn = document.getElementById('btnRetryConfirm');
+  btn.disabled = false;
+  btn.textContent = '🔁 Reintentar ahora';
+  document.getElementById('retryModal').classList.add('open');
+}
+
+function cerrarModalRetry() {
+  document.getElementById('retryModal').classList.remove('open');
+}
+
+function descargarFallidosCSV() {
+  const failedRows = importResultRows.filter(r => r.__Status === 'Failed');
+  if (!failedRows.length) { toast('No hay filas fallidas.', 'bad'); return; }
+  const e = v => `"${String(v ?? '').replace(/"/g,'""')}"`;
+  const lines = [
+    IMPORT_RESULT_HEADERS.map(e).join(','),
+    ...failedRows.map(r => IMPORT_RESULT_HEADERS.map(h => e(r[h] || '')).join(','))
+  ];
+  descargarBlob('\uFEFF' + lines.join('\r\n'), 'text/csv', `filas_fallidas_${hoy()}.csv`);
+  toast(`⬇ ${failedRows.length} fila(s) fallida(s) descargadas.`, 'ok');
+}
+
+async function ejecutarRetry() {
+  const sid = document.getElementById('sid').value.trim();
+  if (!sid) { toast('Falta el Session ID.', 'bad'); return; }
+  if (!ultimoImportConfig) { toast('No hay import base.', 'bad'); return; }
+
+  const failedRows = importResultRows.filter(r => r.__Status === 'Failed');
+  if (!failedRows.length) { toast('No hay filas fallidas.', 'bad'); return; }
+
+  const cfg = ultimoImportConfig;
+  const intentoNuevo = historialRetries.length;  // 0 = original, 1 = primer retry, ...
+
+  // Construir rows para el retry a partir de las failedRows (solo columnas del pre-template)
+  // Necesitamos aplicar el mismo colIndexes/ENVIAR_VACIO_AL_IMPORT que el import base
+  const rowsRetry = failedRows.map(row => {
+    const newRow = [];
+    for (let j = 0; j < cfg.colIndexes.length; j++) {
+      const colName = cfg.colNames[j];
+      if (ENVIAR_VACIO_AL_IMPORT.has(colName)) { newRow.push(''); continue; }
+      newRow.push(row[colName] !== undefined && row[colName] !== null ? row[colName] : '');
+    }
+    return newRow;
+  });
+
+  const btn = document.getElementById('btnRetryConfirm');
+  btn.disabled = true; btn.textContent = '⏳ Reintentando…';
+
+  cerrarModalRetry();
+
+  document.getElementById('progressWrap').classList.add('visible');
+  document.getElementById('progPct').textContent = '0%';
+  document.getElementById('progBar').style.width = '0%';
+  updateProgress(rowsRetry.length, 0, 0, 0);
+  setImportStatus(`Retry #${intentoNuevo}: reintentando ${rowsRetry.length} filas…`, 'run');
+  ilog(`🔁 Retry #${intentoNuevo}: enviando ${rowsRetry.length} filas fallidas al import…`, 'warn');
+
+  try {
+    const data = await backendFetch({
+      action: 'import', sid, instanceUrl: INSTANCE_URL,
+      object: cfg.object, operation: cfg.action, externalId: cfg.extId,
+      headers: cfg.sfHeaders, rows: rowsRetry
+    });
+
+    ilog(`✓ Retry #${intentoNuevo} — Job ID: ${data.jobId || 'N/A'}`, 'ok');
+    ilog(`✓ Estado final: ${data.jobState || 'N/A'}`, data.jobState === 'JobComplete' ? 'ok' : 'warn');
+    if (data.errorMessage) ilog(`⚠ Salesforce dice: ${data.errorMessage}`, 'err');
+
+    const okRows = parseSfResultCsv(data.successCsv || '', true, cfg.action);
+    const failRowsNuevos = parseSfResultCsv(data.failedCsv || '', false, cfg.action);
+    const success = okRows.length, failed = failRowsNuevos.length;
+
+    // Fusionar resultados en importResultRows usando Contact__c como key
+    mergeRetryResult(okRows, failRowsNuevos, intentoNuevo);
+
+    updateProgress(rowsRetry.length, success + failed, success, failed);
+    document.getElementById('progPct').textContent = '100%';
+    document.getElementById('progBar').style.width = '100%';
+
+    // Registrar en el historial
+    historialRetries.push({
+      intento: intentoNuevo,
+      jobId: data.jobId || 'N/A',
+      jobState: data.jobState || 'N/A',
+      total: rowsRetry.length, exitosos: success, fallidos: failed,
+      timestamp: new Date().toLocaleString('es-MX')
+    });
+
+    ilog(`✓ Retry #${intentoNuevo} exitosos: ${success} | fallidos: ${failed}`, success > 0 ? 'ok' : 'warn');
+
+    renderImportResult(importResultRows);
+    renderRetryHistory();
+    actualizarBotonRetry();
+
+    const totalFallidosAhora = importResultRows.filter(r => r.__Status === 'Failed').length;
+    const totalExitososAhora = importResultRows.filter(r => r.__Status === 'Succeeded').length;
+    setImportStatus(
+      `Retry #${intentoNuevo} completado. Total actual: ${totalExitososAhora} OK · ${totalFallidosAhora} pendientes.`,
+      totalFallidosAhora === 0 ? 'ok' : 'err'
+    );
+    document.getElementById('badge-import').textContent = `${totalExitososAhora} ✓`;
+    toast(`✅ Retry #${intentoNuevo}: +${success} recuperados, ${failed} siguen fallando`, success > 0 ? 'ok' : 'bad');
+
+  } catch (err) {
+    console.error(err);
+    ilog(`✗ Error en retry: ${err.message}`, 'err');
+    setImportStatus('Error en el retry. Revisa el log.', 'err');
+    toast('❌ ' + err.message, 'bad');
+  }
+}
+
+function mergeRetryResult(okRows, failRowsNuevos, intentoNum) {
+  // Mapa por Contact__c del resultado del retry
+  const porContact = new Map();
+  okRows.forEach(r => { if (r.Contact__c) porContact.set(String(r.Contact__c).trim(), { ...r, _ok: true }); });
+  failRowsNuevos.forEach(r => { if (r.Contact__c) porContact.set(String(r.Contact__c).trim(), { ...r, _ok: false }); });
+
+  importResultRows = importResultRows.map(originalRow => {
+    // Solo actualizar filas que estaban Failed y estaban en el batch de retry
+    if (originalRow.__Status !== 'Failed') return originalRow;
+
+    const contactKey = String(originalRow.Contact__c || '').trim();
+    const resultadoRetry = porContact.get(contactKey);
+    if (!resultadoRetry) return originalRow;  // No estaba en el retry
+
+    if (resultadoRetry._ok) {
+      // Ahora sí tuvo éxito
+      return {
+        ...originalRow,
+        __Status: 'Succeeded',
+        __Id: resultadoRetry.__Id || '',
+        __Action: `${resultadoRetry.__Action || 'Inserted'} (retry #${intentoNum})`,
+        __Errors: ''
+      };
+    } else {
+      // Sigue fallando
+      return {
+        ...originalRow,
+        __Status: 'Failed',
+        __Action: `Failed (retry #${intentoNum})`,
+        __Errors: resultadoRetry.__Errors || originalRow.__Errors
+      };
+    }
+  });
 }
 
 // ══════════════════════════════════════════════════════════════════
