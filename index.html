@@ -590,7 +590,7 @@
     </div>
     <div class="modal-body">
       <div style="background:rgba(75,124,243,0.06); border-left:3px solid var(--accent); border-radius:6px; padding:10px 12px; font-size:11.5px; color:var(--text); line-height:1.55;">
-        <strong>Detección automática de headers.</strong> El sistema lee los nombres de columnas de tu data y los reordena automáticamente al orden del pre-template. No importa el orden en que pegues las columnas — el sistema las acomoda solas siempre y cuando los nombres coincidan (Contact__c, Email, LastName, OwnerId, etc.).
+        <strong>Los headers deben ser los API Field Names exactos de Salesforce</strong> (los mismos del pre-template). El orden es libre — el sistema reordena. Los nombres deben ser exactos (case-insensitive): <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Contact__c</code>, <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Email</code>, <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">OwnerId</code>, <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">LastName</code>, etc. Cualquier columna con nombre distinto (por ejemplo <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">__Status</code>, <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Notas</code>) será ignorada.
       </div>
 
       <div class="modal-field">
@@ -1811,48 +1811,29 @@ function mergeRetryResult(okRows, failRowsNuevos, intentoNum) {
 
 // ══════════════════════════════════════════════════════════════════
 //  CARGA MANUAL DE DATOS (Paste / Archivo CSV o Excel)
-//  Detecta headers y reordena automáticamente al orden del PT_HEADERS.
+//  Detecta headers ESTRICTAMENTE y reordena al orden del PT_HEADERS.
 //  Muestra tabla preview visual antes de aplicar.
 // ══════════════════════════════════════════════════════════════════
 
-// Aliases de headers: variaciones que aceptamos y a qué columna PT mapean.
-// La comparación es case-insensitive y normaliza espacios/guiones bajos/guiones.
-const HEADER_ALIASES = {
-  'Contact__c':                     ['contact__c', 'contact', 'contactid', 'contact_id', 'contact id', 'id contacto', 'contactoid'],
-  'LastSourceAt__c':                ['lastsourceat__c', 'lastsourceat', 'last_source_at', 'last source at'],
-  'Company':                        ['company', 'account', 'account_name', 'account name', 'cuenta', 'empresa'],
-  'LastName':                       ['lastname', 'last_name', 'last name', 'apellido', 'apellidos'],
-  'Email':                          ['email', 'e-mail', 'correo', 'mail'],
-  'OwnerId':                        ['ownerid', 'owner_id', 'owner id', 'owner', 'propietario'],
-  'BusinessLine__c':                ['businessline__c', 'businessline', 'business_line', 'business line', 'bl', 'linea de negocio'],
-  'Lead_Type__c':                   ['lead_type__c', 'leadtype', 'lead_type', 'lead type', 'tipo lead', 'tipo de lead'],
-  'ContactTypeSegment__c':          ['contacttypesegment__c', 'contacttypesegment', 'segment', 'segmento'],
-  'Country__c':                     ['country__c', 'country', 'pais'],
-  'Leadassist__Use_Round_Robin__c': ['leadassist__use_round_robin__c', 'roundrobin', 'round_robin', 'round robin', 'use_round_robin', 'useroundrobin'],
-  'Status':                         ['status', 'estado', 'estatus'],
-  'FacilitySize__c':                ['facilitysize__c', 'facilitysize', 'facility_size', 'facility size', 'tamano', 'tamaño']
-};
-
-// Columnas que consideramos técnicamente obligatorias para un import válido
+// Match estricto: el header debe coincidir exactamente con el API Field Name
+// de Salesforce (los nombres del PT_HEADERS). Case-insensitive PERO respeta
+// guiones bajos y guiones, para que "Status" NUNCA se confunda con "__Status".
+// Columnas que no matcheen exactamente se IGNORAN.
 const MIN_REQUIRED_LOAD = ['Contact__c', 'LastName', 'Email', 'OwnerId'];
 
 function normalizarHeader(h) {
-  return String(h || '').trim().toLowerCase().replace(/[\s_\-]+/g, '');
+  // Solo baja a minúsculas y quita espacios en los extremos.
+  // NO quita underscores ni guiones — esos caracteres son parte del API Field Name.
+  return String(h || '').trim().toLowerCase();
 }
 
-// Devuelve el nombre PT_HEADER al que mapea un header dado, o null si no hay match
+// Devuelve el nombre PT_HEADER exacto si coincide, o null si no
 function mapearHeaderAPT(headerName) {
   const norm = normalizarHeader(headerName);
   if (!norm) return null;
-  // Primero, coincidencia exacta con PT_HEADERS (normalizados)
+  // Coincidencia estricta contra PT_HEADERS (solo lowercase)
   for (const pt of PT_HEADERS) {
-    if (normalizarHeader(pt) === norm) return pt;
-  }
-  // Luego, coincidencia por alias
-  for (const [pt, aliases] of Object.entries(HEADER_ALIASES)) {
-    for (const alias of aliases) {
-      if (normalizarHeader(alias) === norm) return pt;
-    }
+    if (pt.toLowerCase() === norm) return pt;
   }
   return null;
 }
