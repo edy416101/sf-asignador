@@ -341,7 +341,7 @@
           </div>
           <div class="field">
             <label>Business Line</label>
-            <select id="businessLine">
+            <select id="businessLine" onchange="onBusinessLineChange()">
               <option value="">— Selecciona una línea —</option>
               <option value="Noa Notes">Noa Notes</option>
               <option value="Agenda Premium">Agenda Premium</option>
@@ -352,7 +352,7 @@
           </div>
           <div class="field">
             <label>Lead Type <span style="color:var(--muted); font-weight:400;">(control manual)</span></label>
-            <select id="leadType">
+            <select id="leadType" onchange="onLeadTypeChange()">
               <option value="New Business" selected>New Business</option>
               <option value="Existing Business">Existing Business</option>
             </select>
@@ -876,6 +876,50 @@ function aplicarBulk() {
     toast(`✅ ${entradas.length} email(s) agregados. Falta la cuota.`, 'ok');
   } else {
     toast(`✅ ${entradas.length} agregados (${conNumero} con cuota, ${entradas.length - conNumero} sin)`, 'ok');
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  COHERENCIA Business Line ↔ Lead Type
+//  Regla: First Class y Media 360 solo se venden a customers activos,
+//  por lo que Lead_Type__c debe ser "Existing Business" por defecto.
+//  El usuario puede forzar la excepción manualmente, con confirmación.
+// ══════════════════════════════════════════════════════════════════
+const BL_EXISTING_CUSTOMER = new Set(['First Class', 'Media 360']);
+
+function onBusinessLineChange() {
+  const bl = document.getElementById('businessLine').value;
+  const leadTypeSelect = document.getElementById('leadType');
+
+  if (BL_EXISTING_CUSTOMER.has(bl)) {
+    // Auto-cambio silencioso a "Existing Business" solo si actualmente está en "New Business"
+    if (leadTypeSelect.value !== 'Existing Business') {
+      leadTypeSelect.value = 'Existing Business';
+      toast(`ℹ Lead Type ajustado a "Existing Business" (regla de ${bl})`, 'ok');
+    }
+  }
+}
+
+function onLeadTypeChange() {
+  const bl = document.getElementById('businessLine').value;
+  const leadTypeSelect = document.getElementById('leadType');
+
+  // Solo validar si BL es First Class o Media 360 Y el usuario está poniendo "New Business"
+  if (BL_EXISTING_CUSTOMER.has(bl) && leadTypeSelect.value === 'New Business') {
+    const confirmar = confirm(
+      `⚠ Regla de negocio\n\n` +
+      `${bl} solo se vende a customers activos, por lo que Lead_Type__c debe ser "Existing Business".\n\n` +
+      `¿Confirmas que este es un caso de EXCEPCIÓN validado?\n\n` +
+      `• OK — Aplicar "New Business" como excepción (asegúrate de validarlo con tu líder).\n` +
+      `• Cancelar — Volver a "Existing Business".`
+    );
+    if (!confirmar) {
+      // Revertir
+      leadTypeSelect.value = 'Existing Business';
+      toast(`Lead Type revertido a "Existing Business"`, 'ok');
+    } else {
+      toast(`⚠ "New Business" aplicado como excepción en ${bl}`, 'bad');
+    }
   }
 }
 
