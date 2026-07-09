@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SF Asignador · Docplanner</title>
   <script src="https://accounts.google.com/gsi/client" async></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
   <style>
     :root {
@@ -425,6 +426,9 @@
               <div class="sb-val"><div class="sb-dot" id="srcDot"></div><span id="srcLabel">Sin datos — ejecuta la asignación primero</span></div>
               <div class="sb-count" id="srcCount"></div>
             </div>
+            <button class="btn-sm" style="width:100%; margin-top:8px; padding:9px; border-style:dashed; color:var(--accent); border-color:var(--accent);" onclick="abrirModalCargar()">
+              📥 Cargar datos manualmente…
+            </button>
           </div>
           <div class="isec">
             <div class="slabel">Configure Import</div>
@@ -572,6 +576,75 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- MODAL CARGAR DATOS MANUALMENTE -->
+<div class="modal-backdrop" id="loadModal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <h2>📥 Cargar datos manualmente</h2>
+      <button class="modal-close" onclick="cerrarModalCargar()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:rgba(75,124,243,0.06); border-left:3px solid var(--accent); border-radius:6px; padding:10px 12px; font-size:11.5px; color:var(--text); line-height:1.5;">
+        <strong>Reemplaza el pre-template actual con datos externos.</strong> Útil para reintentar con valores corregidos sin volver a asignar. El sistema detecta si tienes 13 columnas (pre-template) o 17 columnas (resultado exportado con las columnas __Status, __Id, __Action, __Errors) y toma solo los datos que necesita para el import.
+      </div>
+
+      <div class="modal-field">
+        <label>Método de carga</label>
+        <div class="mode-tabs">
+          <div class="mode-tab selected" data-lmode="paste" onclick="setLoadMode('paste')">
+            <div class="mt-icon">📋</div><div class="mt-label">Pegar desde<br>Sheets/Excel</div>
+          </div>
+          <div class="mode-tab" data-lmode="csv" onclick="setLoadMode('csv')">
+            <div class="mt-icon">📁</div><div class="mt-label">Subir<br>CSV</div>
+          </div>
+          <div class="mode-tab" data-lmode="excel" onclick="setLoadMode('excel')">
+            <div class="mt-icon">📊</div><div class="mt-label">Subir<br>Excel</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PEGAR desde Sheets -->
+      <div class="modal-conditional visible" id="loadSection-paste">
+        <div class="modal-field">
+          <label>Pega los datos (con o sin fila de headers)</label>
+          <textarea id="pastedData" rows="6" oninput="actualizarPreviewCarga()" style="background:var(--sf2); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:var(--mono); font-size:10.5px; padding:10px 12px; width:100%; resize:vertical; outline:none;" placeholder="Copia desde Google Sheets o Excel las 13 columnas del pre-template (o las 17 del resultado exportado) y pégalo aquí."></textarea>
+          <span class="hint">Detecta automáticamente separador tab (Excel/Sheets) y headers opcionales.</span>
+        </div>
+      </div>
+
+      <!-- CSV -->
+      <div class="modal-conditional" id="loadSection-csv">
+        <div class="modal-field">
+          <label>Archivo CSV</label>
+          <div class="file-input-wrap">
+            <label class="file-input-label" id="loadCsvLabel" for="loadCsvFile">📁 Haz click para elegir un archivo CSV</label>
+            <input type="file" id="loadCsvFile" accept=".csv" onchange="onLoadFileSelected(this, 'csv')"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Excel -->
+      <div class="modal-conditional" id="loadSection-excel">
+        <div class="modal-field">
+          <label>Archivo Excel (.xlsx / .xls)</label>
+          <div class="file-input-wrap">
+            <label class="file-input-label" id="loadExcelLabel" for="loadExcelFile">📊 Haz click para elegir un archivo Excel</label>
+            <input type="file" id="loadExcelFile" accept=".xlsx,.xls" onchange="onLoadFileSelected(this, 'excel')"/>
+          </div>
+          <span class="hint">Se lee la primera hoja del archivo.</span>
+        </div>
+      </div>
+
+      <!-- Preview -->
+      <div id="loadPreview" style="display:none; background:var(--sf2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:11.5px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal-cancel" onclick="cerrarModalCargar()">Cancelar</button>
+      <button class="btn-modal-primary" id="btnLoadConfirm" onclick="aplicarCarga()" disabled>Cargar al pre-template</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL RETRY -->
 <div class="modal-backdrop" id="retryModal">
   <div class="modal" style="max-width:520px">
@@ -672,6 +745,10 @@ let uploadedFileBase64 = "";
 // ── Estado del Retry ──
 let ultimoImportConfig = null;  // { action, object, extId, sfHeaders, colIndexes, colNames } del import base
 let historialRetries   = [];    // [{ intento, jobId, jobState, total, exitosos, fallidos, timestamp }]
+
+// ── Estado de la Carga manual ──
+let loadMode         = 'paste';  // 'paste' | 'csv' | 'excel'
+let loadedPreview    = null;      // { rows, hasHeader, originalCols } listo para aplicar
 
 // ══════════════════════════════════════════════════════════════════
 //  GOOGLE SIGN-IN
@@ -1733,6 +1810,264 @@ function mergeRetryResult(okRows, failRowsNuevos, intentoNum) {
       };
     }
   });
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  CARGA MANUAL DE DATOS (Paste / CSV / Excel)
+//  Permite reemplazar el pre-template con datos externos ya corregidos,
+//  típicamente después de un import fallido donde el usuario editó
+//  los valores en Google Sheets y quiere reintentar sin re-asignar.
+// ══════════════════════════════════════════════════════════════════
+function abrirModalCargar() {
+  document.getElementById('pastedData').value = '';
+  document.getElementById('loadCsvFile').value = '';
+  document.getElementById('loadExcelFile').value = '';
+  document.getElementById('loadCsvLabel').textContent = '📁 Haz click para elegir un archivo CSV';
+  document.getElementById('loadCsvLabel').classList.remove('has-file');
+  document.getElementById('loadExcelLabel').textContent = '📊 Haz click para elegir un archivo Excel';
+  document.getElementById('loadExcelLabel').classList.remove('has-file');
+  document.getElementById('loadPreview').style.display = 'none';
+  document.getElementById('btnLoadConfirm').disabled = true;
+  loadedPreview = null;
+  setLoadMode('paste');
+  document.getElementById('loadModal').classList.add('open');
+  setTimeout(() => document.getElementById('pastedData').focus(), 100);
+}
+
+function cerrarModalCargar() {
+  document.getElementById('loadModal').classList.remove('open');
+}
+
+function setLoadMode(mode) {
+  loadMode = mode;
+  document.querySelectorAll('.mode-tab[data-lmode]').forEach(t => t.classList.remove('selected'));
+  document.querySelector(`.mode-tab[data-lmode="${mode}"]`).classList.add('selected');
+  ['paste', 'csv', 'excel'].forEach(m => {
+    document.getElementById(`loadSection-${m}`).classList.remove('visible');
+  });
+  document.getElementById(`loadSection-${mode}`).classList.add('visible');
+  document.getElementById('loadPreview').style.display = 'none';
+  document.getElementById('btnLoadConfirm').disabled = true;
+  loadedPreview = null;
+}
+
+function onLoadFileSelected(input, tipo) {
+  const file = input.files[0];
+  if (!file) return;
+  const label = document.getElementById(tipo === 'csv' ? 'loadCsvLabel' : 'loadExcelLabel');
+  label.textContent = `✓ ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+  label.classList.add('has-file');
+  actualizarPreviewCarga();
+}
+
+// Parser TSV (para paste) — Excel/Sheets copia con tabs
+function parseTsv(text) {
+  const lines = text.split('\n').map(l => l.replace(/\r$/, '')).filter(l => l.length > 0);
+  return lines.map(l => l.split('\t'));
+}
+
+// Parser CSV con detección de delimitador (coma o punto y coma)
+function parseCsvFullText(text) {
+  const firstLine = text.split('\n')[0] || '';
+  const delim = (firstLine.split(';').length > firstLine.split(',').length) ? ';' : ',';
+  const lines = text.split('\n').map(l => l.replace(/\r$/, '')).filter(l => l.trim().length > 0);
+  return lines.map(line => parseCsvRowWithDelim(line, delim));
+}
+
+function parseCsvRowWithDelim(line, delim) {
+  const result = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQ && line[i+1] === '"') { cur += '"'; i++; }
+      else inQ = !inQ;
+    } else if (c === delim && !inQ) { result.push(cur); cur = ''; }
+    else { cur += c; }
+  }
+  result.push(cur);
+  return result;
+}
+
+// Parser Excel usando SheetJS (primera hoja)
+async function parseExcelFile(file) {
+  if (typeof XLSX === 'undefined') throw new Error('SheetJS no está disponible. Recarga la página.');
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array' });
+  const firstSheetName = wb.SheetNames[0];
+  if (!firstSheetName) throw new Error('El archivo Excel no tiene hojas.');
+  const ws = wb.Sheets[firstSheetName];
+  const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', blankrows: false });
+  return data.map(row => row.map(cell => cell === null || cell === undefined ? '' : String(cell)));
+}
+
+async function actualizarPreviewCarga() {
+  const previewDiv = document.getElementById('loadPreview');
+  const btnConfirm = document.getElementById('btnLoadConfirm');
+  let matrix = null;
+
+  try {
+    if (loadMode === 'paste') {
+      const text = document.getElementById('pastedData').value;
+      if (!text.trim()) { previewDiv.style.display = 'none'; btnConfirm.disabled = true; loadedPreview = null; return; }
+      matrix = parseTsv(text);
+    } else if (loadMode === 'csv') {
+      const file = document.getElementById('loadCsvFile').files[0];
+      if (!file) return;
+      const text = await file.text();
+      matrix = parseCsvFullText(text);
+    } else if (loadMode === 'excel') {
+      const file = document.getElementById('loadExcelFile').files[0];
+      if (!file) return;
+      matrix = await parseExcelFile(file);
+    }
+  } catch (err) {
+    previewDiv.innerHTML = `<div style="color:var(--err); font-weight:600;">❌ Error al leer: ${esc(err.message)}</div>`;
+    previewDiv.style.display = 'block';
+    btnConfirm.disabled = true;
+    loadedPreview = null;
+    return;
+  }
+
+  if (!matrix || !matrix.length) {
+    previewDiv.style.display = 'none';
+    btnConfirm.disabled = true;
+    loadedPreview = null;
+    return;
+  }
+
+  // Detectar si la primera fila es header
+  const firstRow = matrix[0].map(c => String(c || '').trim());
+  const primeraCelda = firstRow[0] || '';
+  const hasHeader = primeraCelda === 'Contact__c' || firstRow.filter(c => PT_HEADERS.includes(c)).length >= 3;
+
+  let dataRows = hasHeader ? matrix.slice(1) : matrix;
+
+  // Filtrar filas vacías
+  dataRows = dataRows.filter(r => r.some(c => String(c || '').trim() !== ''));
+
+  if (!dataRows.length) {
+    previewDiv.innerHTML = `<div style="color:var(--err); font-weight:600;">❌ Sin filas con datos.</div>`;
+    previewDiv.style.display = 'block';
+    btnConfirm.disabled = true;
+    loadedPreview = null;
+    return;
+  }
+
+  // Determinar cuántas columnas por fila (tomar la que más tenga)
+  const numCols = Math.max(...dataRows.map(r => r.length));
+
+  const esperadoPT = PT_HEADERS.length;          // 13
+  const esperadoResult = IMPORT_RESULT_HEADERS.length;  // 17
+
+  if (numCols !== esperadoPT && numCols !== esperadoResult) {
+    previewDiv.innerHTML = `
+      <div style="color:var(--err); font-weight:600;">❌ ${dataRows.length} filas con ${numCols} columnas.</div>
+      <div style="font-size:10.5px; color:var(--muted); margin-top:4px;">Se esperan <strong>${esperadoPT}</strong> columnas (pre-template) o <strong>${esperadoResult}</strong> columnas (resultado exportado con __ cols).</div>
+    `;
+    previewDiv.style.display = 'block';
+    btnConfirm.disabled = true;
+    loadedPreview = null;
+    return;
+  }
+
+  const esFormatoResult = (numCols === esperadoResult);
+
+  // Si es formato resultado, tomamos solo las primeras 13 columnas
+  if (esFormatoResult) {
+    dataRows = dataRows.map(r => r.slice(0, esperadoPT));
+  }
+
+  // Normalizar cada fila a exactamente PT_HEADERS.length columnas
+  dataRows = dataRows.map(r => {
+    const norm = [];
+    for (let i = 0; i < esperadoPT; i++) {
+      norm.push(r[i] !== undefined && r[i] !== null ? String(r[i]) : '');
+    }
+    return norm;
+  });
+
+  loadedPreview = { rows: dataRows, hasHeader, originalCols: numCols, esFormatoResult };
+
+  previewDiv.innerHTML = `
+    <div style="color:var(--ok); font-weight:600;">✓ ${dataRows.length} fila(s) listas para cargar</div>
+    <div style="font-size:10.5px; color:var(--muted); margin-top:4px; line-height:1.6;">
+      Columnas detectadas: <strong>${numCols}</strong> ${esFormatoResult ? '(formato resultado — se ignoran las 4 columnas __ finales)' : '(formato pre-template)'}<br>
+      ${hasHeader ? '✓ Headers detectados y omitidos.' : 'ℹ Sin headers — se toma toda la data como filas.'}
+    </div>
+  `;
+  previewDiv.style.display = 'block';
+  btnConfirm.disabled = false;
+}
+
+function aplicarCarga() {
+  if (!loadedPreview || !loadedPreview.rows || !loadedPreview.rows.length) {
+    toast('❌ No hay datos válidos.', 'bad');
+    return;
+  }
+
+  const nuevasFilas = loadedPreview.rows.length;
+
+  // Confirmación si hay datos previos
+  if (preTemplateRows.length > 0 || importResultRows.length > 0) {
+    const proceder = confirm(
+      `⚠ Reemplazar datos actuales\n\n` +
+      `Vas a reemplazar el pre-template actual con ${nuevasFilas} filas cargadas manualmente.\n\n` +
+      `Se descartan:\n` +
+      `• Pre-template actual (${preTemplateRows.length} filas)\n` +
+      `• Resultado del import previo (${importResultRows.length} filas)\n` +
+      `• Historial de retries (${historialRetries.length} intentos)\n\n` +
+      `¿Continuar?`
+    );
+    if (!proceder) return;
+  }
+
+  // Reemplazar preTemplateRows
+  preTemplateRows = loadedPreview.rows;
+  totalAsignados = preTemplateRows.length;
+  ownerStatsCache = [];  // No hay stats por rep en carga manual
+  ultimaAsignacion = {
+    businessLine: '(cargado manualmente)',
+    leadType: '(cargado manualmente)',
+    dias: null,
+    fecha: new Date().toLocaleString('es-MX'),
+    contactosQueryPass: preTemplateRows.length,
+    contactosAsignados: preTemplateRows.length,
+    repsActivos: 0
+  };
+
+  // Actualizar UI del tab Asignación (para consistencia visual)
+  renderPreTemplate(PT_HEADERS, preTemplateRows);
+  document.getElementById('badge-asig').textContent = preTemplateRows.length;
+  document.getElementById('sAsignados').textContent = preTemplateRows.length;
+  document.getElementById('sCandidatos').textContent = preTemplateRows.length;
+  document.getElementById('sReps').textContent = '—';
+  document.getElementById('copyBtn').disabled = false;
+  document.getElementById('dlBtn').disabled = false;
+  document.getElementById('goImportBtn').disabled = false;
+  setStatus(`Cargados ${preTemplateRows.length} fila(s) manualmente. Listo para import.`, 'ok');
+  log(`📥 Datos cargados manualmente (${preTemplateRows.length} filas). Se saltó la asignación.`, 'info');
+
+  // Limpiar estado del import previo y retry
+  importResultRows = [];
+  renderImportResult([]);
+  ultimoImportConfig = null;
+  historialRetries = [];
+  document.getElementById('retryHistoryPanel').classList.remove('visible');
+  document.getElementById('retryHistoryPanel').innerHTML = '';
+  document.getElementById('retryBtn').disabled = true;
+  document.getElementById('retryBtn').textContent = '🔁 Reintentar (0)';
+  document.getElementById('copyResultBtn').disabled = true;
+  document.getElementById('dlResultBtn').disabled = true;
+  document.getElementById('progressWrap').classList.remove('visible');
+  document.getElementById('importLog').innerHTML = '<span class="info">// El log del import aparecerá aquí…</span>';
+  setImportStatus(`Datos cargados manualmente. Listo para ejecutar Import.`, 'ok');
+
+  // Actualizar fuente del Data Import
+  actualizarFuenteImport();
+
+  cerrarModalCargar();
+  toast(`✅ ${preTemplateRows.length} fila(s) cargadas al pre-template.`, 'ok');
 }
 
 // ══════════════════════════════════════════════════════════════════
