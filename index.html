@@ -677,7 +677,7 @@
 // ══════════════════════════════════════════════════════════════════
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════
-const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbxlEq79mf5TP_q7xnVY9Dq5c5X3dPfKdZqhECdNWb3-FtZynxSWw6jha31P2Auy3JH3fA/exec";
+const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycby3wFL8mNSBU8AtVgMr_qwvshkc9pv_U548IbaDJGRkvKfc5Yl5SxMNEd-cELlj0X4m-w/exec";
 const GOOGLE_CLIENT_ID = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 const INSTANCE_URL     = "https://docplanner.my.salesforce.com";
 
@@ -2347,16 +2347,27 @@ async function ejecutarExport() {
 
     linkDiv.innerHTML = `<a href="${esc(data.url)}" target="_blank">${esc(data.url)}</a>`;
 
-    if (data.mode === 'attached') {
-      ownDiv.textContent = 'ℹ El Sheet destino mantiene su ownership original.';
-      ownDiv.className = 'el-ownership';
-    } else if (data.ownershipTransferred) {
-      ownDiv.textContent = `✓ Ownership transferido a ${data.executedBy}`;
-      ownDiv.className = 'el-ownership ok';
-    } else if (data.ownershipError) {
-      ownDiv.textContent = `⚠ Ownership no transferido: ${data.ownershipError}`;
-      ownDiv.className = 'el-ownership err';
+    // Construir mensajes de estado: carpeta + ownership
+    let estadoMsgs = [];
+    if (data.mode !== 'attached') {
+      // Estado del movimiento a carpeta
+      if (data.folderMoved) {
+        estadoMsgs.push(`<span style="color:var(--ok)">✓ Guardado en carpeta: <strong>${esc(data.folderMovedTo || 'COE')}</strong></span>`);
+      } else if (data.folderMoveError) {
+        estadoMsgs.push(`<span style="color:var(--warn)">⚠ NO se movió a la carpeta COE: ${esc(data.folderMoveError)}</span>`);
+      }
+      // Estado del ownership
+      if (data.ownershipTransferred) {
+        estadoMsgs.push(`<span style="color:var(--ok)">✓ Ownership transferido a ${esc(data.executedBy)}</span>`);
+      } else if (data.ownershipError) {
+        estadoMsgs.push(`<span style="color:var(--warn)">⚠ Ownership no transferido: ${esc(data.ownershipError)}</span>`);
+      }
+    } else {
+      estadoMsgs.push('<span style="color:var(--muted)">ℹ El Sheet destino mantiene su ownership original.</span>');
     }
+
+    ownDiv.innerHTML = estadoMsgs.join('<br>');
+    ownDiv.className = 'el-ownership';
 
     linksDiv.classList.add('visible');
     window.open(data.url, '_blank');
