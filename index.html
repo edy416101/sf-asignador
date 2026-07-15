@@ -414,6 +414,7 @@
           <h2>Pre Template — Resultado de asignación</h2>
           <div class="res-btns">
             <button class="btn-icon btn-copy-tbl" id="copyBtn" onclick="copiarTabla()" disabled>📋 Copiar</button>
+            <button class="btn-icon" style="background:linear-gradient(135deg, var(--ac2), #9333ea)" id="customFieldsBtn" onclick="abrirModalCustomFields()">➕ Campos custom (0)</button>
             <button class="btn-icon btn-csv" id="dlBtn" onclick="descargarCSV()" disabled>⬇ CSV</button>
             <button class="btn-go-import" id="goImportBtn" onclick="irAImport()" disabled>📥 Pasar a Data Import →</button>
           </div>
@@ -581,6 +582,38 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- MODAL CAMPOS CUSTOM -->
+<div class="modal-backdrop" id="customFieldsModal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h2>➕ Campos custom del Contact</h2>
+      <button class="modal-close" onclick="cerrarModalCustomFields()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:rgba(124,58,237,0.06); border-left:3px solid var(--ac2); border-radius:6px; padding:10px 12px; font-size:11.5px; color:var(--text); line-height:1.55;">
+        <strong>Añade campos extra del objeto Contact que quieras traer al pre-template.</strong> Deben ser API Field Names exactos (ej. <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Phone</code>, <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">MobilePhone</code>, <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Description</code>). Se valida contra Salesforce antes de aceptarlos. Al ejecutar la asignación, aparecerán como columnas adicionales al final del pre-template y pasarán por el Field Mapping normal para el import.
+      </div>
+
+      <div class="modal-field">
+        <label>Añadir nuevo campo</label>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="newCustomFieldInput" placeholder="ej. Phone, MobilePhone, Description" style="flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault();agregarCustomField();}"/>
+          <button class="btn-modal-primary" style="padding:9px 16px; font-size:12px;" onclick="agregarCustomField()">Validar y añadir</button>
+        </div>
+        <span class="hint" id="customFieldHint">El campo debe existir en el objeto Contact. Requiere SID activo para validación.</span>
+      </div>
+
+      <div class="modal-field">
+        <label>Campos activos (<span id="customFieldsCount">0</span>)</label>
+        <div id="customFieldsList" style="background:var(--sf2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; min-height:60px; max-height:250px; overflow-y:auto;"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal-cancel" onclick="cerrarModalCustomFields()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL CARGAR DATOS MANUALMENTE -->
 <div class="modal-backdrop" id="loadModal">
   <div class="modal" style="max-width:900px; max-height:94vh;">
@@ -590,7 +623,7 @@
     </div>
     <div class="modal-body">
       <div style="background:rgba(75,124,243,0.06); border-left:3px solid var(--accent); border-radius:6px; padding:10px 12px; font-size:11.5px; color:var(--text); line-height:1.55;">
-        <strong>Los headers deben ser los API Field Names exactos de Salesforce</strong> (los mismos del pre-template). El orden es libre — el sistema reordena. Los nombres deben ser exactos (case-insensitive): <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Contact__c</code>, <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Email</code>, <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">OwnerId</code>, <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">LastName</code>, etc. Cualquier columna con nombre distinto (por ejemplo <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">__Status</code>, <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Notas</code>) será ignorada.
+        <strong>Los headers deben ser los API Field Names exactos de Salesforce.</strong> El orden es libre. Los headers reconocidos se mapean a las columnas del pre-template. Los headers que <em>no</em> matchean con las columnas base (13 campos) pero tienen sintaxis válida se agregan automáticamente como <strong style="color:#c4b5fd;">custom fields</strong> y aparecerán en el Field Mapping. Columnas con nombre inválido (espacios, puntos) o que empiezan con <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">__</code> se ignoran.
       </div>
 
       <div class="modal-field">
@@ -677,11 +710,15 @@
 // ══════════════════════════════════════════════════════════════════
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════
-const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycby3wFL8mNSBU8AtVgMr_qwvshkc9pv_U548IbaDJGRkvKfc5Yl5SxMNEd-cELlj0X4m-w/exec";
+const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycby4u1OtJLvA2ZR4h53gjFdh1_NnDGPaKe98mkl_Gzat9JMqQJw-Oehe72519ux5-jhLYg/exec";
 const GOOGLE_CLIENT_ID = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 const INSTANCE_URL     = "https://docplanner.my.salesforce.com";
 
-const PT_HEADERS = [
+// ══════════════════════════════════════════════════════════════════
+//  HEADERS: base fijo + custom fields dinámicos
+//  Los custom se AGREGAN al final del pre-template, siempre.
+// ══════════════════════════════════════════════════════════════════
+const PT_HEADERS_BASE = [
   'Contact__c', 'LastSourceAt__c',
   'Company', 'LastName', 'Email',
   'OwnerId', 'BusinessLine__c',
@@ -690,37 +727,45 @@ const PT_HEADERS = [
   'FacilitySize__c'
 ];
 
+// Constantes con posición fija (base = 13 columnas)
+const IDX_OWNER_PT       = 5;   // OwnerId
+const IDX_BL_PT          = 6;   // BusinessLine__c
+const IDX_FIRST_FIXED_PT = 7;   // Lead_Type__c (fijos empiezan aquí)
+const IDX_LAST_FIXED_PT  = 12;  // FacilitySize__c (fin de los fijos base)
+
+// Variables dinámicas — se actualizan con actualizarHeadersDinamicos()
+let PT_HEADERS            = [...PT_HEADERS_BASE];
+let IMPORT_RESULT_HEADERS = [...PT_HEADERS_BASE, '__Status', '__Id', '__Action', '__Errors'];
+let DEFAULT_FIELD_MAP     = {};
+PT_HEADERS_BASE.forEach(h => DEFAULT_FIELD_MAP[h] = h);
+
 // FacilitySize__c va como columna vacía: existe en el template pero se envía vacío al import
-// (no queremos migrar el valor real del Contact al Lead)
 const ENVIAR_VACIO_AL_IMPORT = new Set(['FacilitySize__c']);
 
-const IMPORT_RESULT_HEADERS = [
-  'Contact__c', 'LastSourceAt__c',
-  'Company', 'LastName', 'Email',
-  'OwnerId', 'BusinessLine__c',
-  'Lead_Type__c', 'ContactTypeSegment__c', 'Country__c',
-  'Leadassist__Use_Round_Robin__c', 'Status',
-  'FacilitySize__c',
-  '__Status', '__Id', '__Action', '__Errors'
-];
-
-const DEFAULT_FIELD_MAP = {
-  'Contact__c':'Contact__c','LastSourceAt__c':'LastSourceAt__c',
-  'Company':'Company','LastName':'LastName','Email':'Email',
-  'OwnerId':'OwnerId','BusinessLine__c':'BusinessLine__c','Lead_Type__c':'Lead_Type__c',
-  'ContactTypeSegment__c':'ContactTypeSegment__c','Country__c':'Country__c',
-  'Leadassist__Use_Round_Robin__c':'Leadassist__Use_Round_Robin__c','Status':'Status',
-  'FacilitySize__c':'FacilitySize__c'
-};
-
-// Campos OBLIGATORIOS en el objeto Lead. Si alguno de estos no existe → error real, bloquear import.
-// Los demás campos del PT_HEADERS son OPCIONALES: si no existen en Lead, se auto-omiten del import.
+// Campos OBLIGATORIOS en el objeto Lead
 const CAMPOS_OBLIGATORIOS_LEAD = new Set([
   'Contact__c', 'LastName', 'Email', 'OwnerId',
   'BusinessLine__c', 'Lead_Type__c', 'ContactTypeSegment__c',
   'Country__c', 'Leadassist__Use_Round_Robin__c', 'Status'
 ]);
 // Los opcionales son (implícitamente): LastSourceAt__c, Company, FacilitySize__c
+// Los custom fields NO son obligatorios (a menos que los mapee explícitamente el usuario)
+
+// Regex para validar API Name válido en Salesforce
+const VALID_FIELD_REGEX = /^[A-Za-z][A-Za-z0-9_]*$/;
+
+// Función que reconstruye los headers dinámicos según customFields
+function actualizarHeadersDinamicos() {
+  PT_HEADERS = [...PT_HEADERS_BASE, ...customFields];
+  IMPORT_RESULT_HEADERS = [...PT_HEADERS, '__Status', '__Id', '__Action', '__Errors'];
+  DEFAULT_FIELD_MAP = {};
+  PT_HEADERS_BASE.forEach(h => DEFAULT_FIELD_MAP[h] = h);
+  customFields.forEach(f => DEFAULT_FIELD_MAP[f] = f);
+
+  // Actualizar contador del botón
+  const btn = document.getElementById('customFieldsBtn');
+  if (btn) btn.textContent = `➕ Campos custom (${customFields.length})`;
+}
 
 // ══════════════════════════════════════════════════════════════════
 //  ESTADO GLOBAL
@@ -743,9 +788,13 @@ let uploadedFileBase64 = "";
 let ultimoImportConfig = null;  // { action, object, extId, sfHeaders, colIndexes, colNames } del import base
 let historialRetries   = [];    // [{ intento, jobId, jobState, total, exitosos, fallidos, timestamp }]
 
-// ── Estado de la Carga manual ──
-let loadMode         = 'paste';  // 'paste' | 'csv' | 'excel'
-let loadedPreview    = null;      // { rows, hasHeader, originalCols } listo para aplicar
+// ── Estado de Carga manual ──
+let loadMode         = 'paste';
+let loadedPreview    = null;
+
+// ── Estado de Custom Fields ──
+let customFields         = [];       // ['Phone', 'MobilePhone', ...] extra fields del Contact
+let contactFieldsCache   = null;     // Cache de campos de Contact (para validación al agregar)
 
 // ══════════════════════════════════════════════════════════════════
 //  GOOGLE SIGN-IN
@@ -1047,7 +1096,7 @@ function resetAsigUI() {
 }
 
 function limpiarAsignacion() {
-  if (!confirm('¿Limpiar días, Business Line, Lead Type, representantes e IDs?')) return;
+  if (!confirm('¿Limpiar días, Business Line, Lead Type, campos custom, representantes e IDs?')) return;
   document.getElementById('dias').value = '';
   document.getElementById('businessLine').value = '';
   document.getElementById('leadType').value = 'New Business';
@@ -1055,6 +1104,9 @@ function limpiarAsignacion() {
   document.getElementById('idsArea').value = '';
   updateCount(); actualizarRepsTotal();
   addRep('', '');
+  // Limpiar custom fields
+  customFields = [];
+  actualizarHeadersDinamicos();
   resetAsigUI();
   preTemplateRows = []; totalAsignados = 0; ownerStatsCache = [];
   toast('🗑 Asignación limpiada.', 'ok');
@@ -1088,7 +1140,17 @@ async function ejecutar() {
   else log(`Reps: ${reps.length} | IDs: ${ids.length} | Días: 0 (solo excluye actividad de hoy)`, 'info');
 
   try {
-    const data = await backendFetch({ sid, instanceUrl: INSTANCE_URL, dias, businessLine, leadType, reps, ids });
+    const data = await backendFetch({ sid, instanceUrl: INSTANCE_URL, dias, businessLine, leadType, extraFields: customFields, reps, ids });
+
+    // Sincronizar customFields con lo que efectivamente usó el backend (por si algún nombre inválido fue rechazado)
+    if (data.extraFieldsUsados) {
+      customFields = [...data.extraFieldsUsados];
+      actualizarHeadersDinamicos();
+    }
+    if (data.extraFieldsRechazados && data.extraFieldsRechazados.length > 0) {
+      log(`⚠ ${data.extraFieldsRechazados.length} campo(s) custom rechazado(s) por el backend:`, 'warn');
+      data.extraFieldsRechazados.forEach(r => log(`   ✗ ${r.name} — ${r.reason}`, 'err'));
+    }
 
     preTemplateRows = data.rows || [];
     ownerStatsCache = data.ownerStats || [];
@@ -1153,28 +1215,27 @@ function renderPreTemplate(headers, rows) {
     wrap.innerHTML = `<div class="empty"><div class="empty-ico">📋</div><p>El pre template aparecerá aquí después de ejecutar.</p></div>`;
     return;
   }
-  // Índices en PT_HEADERS (13 columnas):
-  //  0: Contact__c, 1: LastSourceAt__c,
-  //  2: Company,    3: LastName,   4: Email,
-  //  5: OwnerId,    6: BusinessLine__c,
-  //  7-12: fijos (Lead_Type, ContactTypeSegment, Country, RoundRobin, Status, FacilitySize)
-  const IDX_OWNER = 5, IDX_BL = 6, FIXED = 7;
+  // Usa constantes globales IDX_OWNER_PT, IDX_BL_PT, IDX_FIRST_FIXED_PT, IDX_LAST_FIXED_PT
+  // Cualquier columna posterior a IDX_LAST_FIXED_PT es un custom field
   let html = `<table class="pt"><thead><tr>`;
-  PT_HEADERS.forEach(h => { html += `<th title="${esc(h)}">${esc(h)}</th>`; });
+  PT_HEADERS.forEach(h => {
+    const esCustom = !PT_HEADERS_BASE.includes(h);
+    const badge = esCustom ? ' <span style="background:rgba(124,58,237,.25); color:#c4b5fd; border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">CUSTOM</span>' : '';
+    html += `<th title="${esc(h)}">${esc(h)}${badge}</th>`;
+  });
   html += `</tr></thead><tbody>`;
   rows.forEach(row => {
     html += `<tr>`;
     row.forEach((cell, i) => {
       const v = String(cell ?? '');
-      if (i === IDX_OWNER) {
-        // Resaltar en rojo si el OwnerId es inválido
+      if (i === IDX_OWNER_PT) {
         const esValido = v.startsWith('005') && (v.length === 15 || v.length === 18);
         if (!esValido) html += `<td title="${esc(v)}"><span class="chip" style="background:rgba(244,63,94,.15); border-color:rgba(244,63,94,.4); color:var(--err)">⚠ ${esc(v || 'VACÍO')}</span></td>`;
         else html += `<td title="${esc(v)}"><span class="chip">${esc(v)}</span></td>`;
       }
-      else if (i === IDX_BL) html += `<td title="${esc(v)}"><span class="bl-chip">${esc(v)}</span></td>`;
-      else if (i >= FIXED) html += `<td class="fixed" title="${esc(v)}">${esc(v)}</td>`;
-      else html += `<td title="${esc(v)}">${esc(v)}</td>`;
+      else if (i === IDX_BL_PT) html += `<td title="${esc(v)}"><span class="bl-chip">${esc(v)}</span></td>`;
+      else if (i >= IDX_FIRST_FIXED_PT && i <= IDX_LAST_FIXED_PT) html += `<td class="fixed" title="${esc(v)}">${esc(v)}</td>`;
+      else html += `<td title="${esc(v)}">${esc(v)}</td>`;  // base 0-4 o custom (>12)
     });
     html += `</tr>`;
   });
@@ -1315,6 +1376,126 @@ async function obtenerCamposLead(sid) {
   return leadFieldsCache;
 }
 
+async function obtenerCamposContact(sid) {
+  if (contactFieldsCache) return contactFieldsCache;
+  const data = await backendFetch({ action: 'describe', sid: sid, instanceUrl: INSTANCE_URL, object: 'Contact' });
+  contactFieldsCache = data.fields || [];
+  return contactFieldsCache;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  MODAL CAMPOS CUSTOM
+// ══════════════════════════════════════════════════════════════════
+function abrirModalCustomFields() {
+  document.getElementById('newCustomFieldInput').value = '';
+  document.getElementById('customFieldHint').textContent = 'El campo debe existir en el objeto Contact. Requiere SID activo para validación.';
+  document.getElementById('customFieldHint').style.color = 'var(--muted)';
+  renderCustomFieldsList();
+  document.getElementById('customFieldsModal').classList.add('open');
+  setTimeout(() => document.getElementById('newCustomFieldInput').focus(), 100);
+}
+
+function cerrarModalCustomFields() {
+  document.getElementById('customFieldsModal').classList.remove('open');
+}
+
+function renderCustomFieldsList() {
+  const list = document.getElementById('customFieldsList');
+  document.getElementById('customFieldsCount').textContent = customFields.length;
+  if (!customFields.length) {
+    list.innerHTML = `<div style="color:var(--muted); font-style:italic; font-size:11.5px; text-align:center; padding:12px;">Aún no has añadido ningún campo custom.</div>`;
+    return;
+  }
+  let html = '';
+  customFields.forEach((f, idx) => {
+    html += `
+      <div style="display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--border);">
+        <span style="background:rgba(124,58,237,.15); color:#a78bfa; border-radius:100px; padding:2px 10px; font-size:10px; font-weight:700; font-family:var(--mono);">custom</span>
+        <span style="font-family:var(--mono); font-size:12px; color:var(--text); flex:1;">${esc(f)}</span>
+        <button class="rep-del" style="color:var(--err); font-size:16px;" onclick="quitarCustomField(${idx})" title="Quitar">✕</button>
+      </div>
+    `;
+  });
+  list.innerHTML = html;
+}
+
+async function agregarCustomField() {
+  const input = document.getElementById('newCustomFieldInput');
+  const hint = document.getElementById('customFieldHint');
+  const raw = input.value.trim();
+
+  if (!raw) { hint.textContent = '❌ Escribe un nombre.'; hint.style.color = 'var(--err)'; return; }
+
+  // Validación sintáctica
+  if (raw.startsWith('__')) {
+    hint.textContent = '❌ No puede empezar con "__" (nombres reservados).'; hint.style.color = 'var(--err)'; return;
+  }
+  if (!VALID_FIELD_REGEX.test(raw)) {
+    hint.textContent = '❌ Solo letras, números y guiones bajos. Debe empezar con letra.'; hint.style.color = 'var(--err)'; return;
+  }
+  if (PT_HEADERS_BASE.includes(raw)) {
+    hint.textContent = `❌ "${raw}" ya es un campo base del pre-template.`; hint.style.color = 'var(--err)'; return;
+  }
+  if (customFields.includes(raw)) {
+    hint.textContent = `⚠ "${raw}" ya está agregado.`; hint.style.color = 'var(--warn)'; return;
+  }
+
+  // Warning si ya hay pre-template generado
+  if (preTemplateRows.length > 0) {
+    const proceder = confirm(
+      `⚠ Ya tienes un pre-template generado.\n\n` +
+      `Añadir el campo "${raw}" no lo afecta directamente, pero necesitas RE-EJECUTAR LA ASIGNACIÓN para traer los datos de este nuevo campo.\n\n` +
+      `¿Quieres añadir el campo de todas formas?`
+    );
+    if (!proceder) return;
+  }
+
+  // Validación contra Salesforce (si hay SID)
+  const sid = document.getElementById('sid').value.trim();
+  if (sid) {
+    hint.textContent = '⏳ Validando contra Salesforce…';
+    hint.style.color = 'var(--muted)';
+    try {
+      const contactFields = await obtenerCamposContact(sid);
+      const existe = contactFields.some(f => f.toLowerCase() === raw.toLowerCase());
+      if (!existe) {
+        hint.textContent = `❌ "${raw}" no existe en el objeto Contact. Verifica el API Name en Salesforce Setup → Object Manager → Contact → Fields.`;
+        hint.style.color = 'var(--err)';
+        return;
+      }
+      // Reemplazar por el casing oficial de Salesforce
+      const oficial = contactFields.find(f => f.toLowerCase() === raw.toLowerCase());
+      customFields.push(oficial);
+      hint.textContent = `✓ "${oficial}" validado y añadido.`;
+      hint.style.color = 'var(--ok)';
+    } catch (err) {
+      hint.textContent = `⚠ No se pudo validar (${err.message}). Se añadirá sin validar.`;
+      hint.style.color = 'var(--warn)';
+      customFields.push(raw);
+    }
+  } else {
+    customFields.push(raw);
+    hint.textContent = `ℹ "${raw}" añadido sin validar (falta SID). Se validará al ejecutar la asignación.`;
+    hint.style.color = 'var(--warn)';
+  }
+
+  actualizarHeadersDinamicos();
+  renderCustomFieldsList();
+  input.value = '';
+  input.focus();
+}
+
+function quitarCustomField(idx) {
+  const nombre = customFields[idx];
+  if (preTemplateRows.length > 0) {
+    if (!confirm(`Quitar "${nombre}" del pre-template. ¿Continuar?\n\nNecesitarás re-ejecutar la asignación para que el cambio surta efecto.`)) return;
+  }
+  customFields.splice(idx, 1);
+  actualizarHeadersDinamicos();
+  renderCustomFieldsList();
+  toast(`✓ Campo "${nombre}" quitado.`, 'ok');
+}
+
 function validarFieldMapping(realFields) {
   const realSet = new Set(realFields.map(f => f.toLowerCase()));
   const obligatoriosInvalidos = [];
@@ -1379,52 +1560,36 @@ async function ejecutarImport() {
       ilog(`✓ Lead tiene ${realFields.length} campos en Salesforce`, 'ok');
       const { obligatoriosInvalidos, opcionalesInvalidos } = validarFieldMapping(realFields);
 
-      // Bloquear SOLO si algún campo OBLIGATORIO no existe en Lead (falla de schema grave)
-      if (obligatoriosInvalidos.length > 0) {
-        ilog(`✗ ${obligatoriosInvalidos.length} campo(s) OBLIGATORIO(s) NO existen en Lead:`, 'err');
-        obligatoriosInvalidos.forEach(f => ilog(`   • ${f.sfVal}  (CSV: ${f.csvCol})`, 'err'));
-        ilog(`   → Estos campos DEBEN existir en el objeto Lead. Contacta a tu admin de Salesforce.`, 'err');
-        setImportStatus(`Faltan ${obligatoriosInvalidos.length} campos obligatorios en Lead.`, 'err');
-        toast(`❌ ${obligatoriosInvalidos.length} campo(s) obligatorios faltantes.`, 'bad');
+      // ── NUEVA REGLA: BLOQUEAR el import si hay CUALQUIER campo mapeado que no existe en Lead ──
+      // El usuario debe manualmente marcar los campos problemáticos como "Omitir columna"
+      // en el Field Mapping antes de poder ejecutar el import.
+      const todosInvalidos = [...obligatoriosInvalidos, ...opcionalesInvalidos];
+
+      if (todosInvalidos.length > 0) {
+        ilog(`⛔ Import BLOQUEADO: ${todosInvalidos.length} campo(s) NO existen en Lead:`, 'err');
+        todosInvalidos.forEach(f => {
+          const tipo = obligatoriosInvalidos.some(x => x.csvCol === f.csvCol) ? 'OBLIGATORIO' : 'opcional';
+          ilog(`   • ${f.sfVal}  (CSV: ${f.csvCol}) [${tipo}]`, 'err');
+        });
+
+        const listaSimple = todosInvalidos.map(f => `  • ${f.sfVal}`).join('\n');
+        alert(
+          `⛔ Campos no encontrados en Lead\n\n` +
+          `Los siguientes campos NO existen en el objeto Lead de Salesforce:\n\n` +
+          listaSimple +
+          `\n\n` +
+          `Para continuar con el import, ve al panel Field Mapping (a la izquierda) y cambia manualmente cada uno de estos campos a "— Omitir columna —".\n\n` +
+          `Si crees que estos campos SÍ deberían existir en Lead, contacta a tu admin de Salesforce.\n\n` +
+          `Import bloqueado hasta que resuelvas esto.`
+        );
+
+        setImportStatus(`Import bloqueado: ${todosInvalidos.length} campo(s) sin resolver en Field Mapping.`, 'err');
+        toast(`⛔ ${todosInvalidos.length} campo(s) requieren atención en Field Mapping.`, 'bad');
         btn.disabled = false; btn.textContent = '📥 Ejecutar Import a Salesforce';
         return;
       }
 
-      // REGLA: SIEMPRE enviar todos los campos al batch.
-      // Los opcionales inválidos se INCLUYEN igual — nunca se pierden datos por decisión del sistema.
-      if (opcionalesInvalidos.length > 0) {
-        const impacto = opcionalesInvalidos.map(f => {
-          const idx = PT_HEADERS.indexOf(f.csvCol);
-          if (idx < 0) return { ...f, conValor: 0, total: preTemplateRows.length };
-          const conValor = preTemplateRows.filter(row => {
-            const val = row[idx];
-            return val !== null && val !== undefined && String(val).trim() !== '';
-          }).length;
-          return { ...f, conValor, total: preTemplateRows.length };
-        });
-
-        ilog(`ℹ ${opcionalesInvalidos.length} campo(s) opcional(es) NO aparecen en el describe de Lead — se INCLUYEN igual en el batch:`, 'warn');
-        impacto.forEach(f => {
-          if (f.conValor > 0) {
-            ilog(`   • ${f.sfVal} → ${f.conValor}/${f.total} filas con datos`, 'warn');
-          } else {
-            ilog(`   • ${f.sfVal} → todas las filas vacías`, 'info');
-          }
-        });
-        ilog(`   → Posibles causas: campo no creado en Lead, o FLS bloquea la visibilidad al usuario del SID.`, 'info');
-        ilog(`   → Si Salesforce rechaza el batch, revisa el errorMessage y ajusta el schema o los permisos.`, 'info');
-
-        // NO tocamos los selects — quedan con el mapeo original y se envían al batch.
-        // Solo marcamos visualmente con ⚠ para que sepas cuáles no fueron reconocidos por describe.
-        opcionalesInvalidos.forEach(f => {
-          const cell = document.getElementById(`fmap-ok-${f.csvCol}`);
-          if (cell) { cell.textContent = '⚠'; cell.className = 'fmap-ok warn'; }
-        });
-
-        ilog(`✓ Enviando TODOS los campos (${PT_HEADERS.length - obligatoriosInvalidos.length}) al batch.`, 'ok');
-      } else {
-        ilog('✓ Todos los campos validados correctamente', 'ok');
-      }
+      ilog('✓ Todos los campos activos validados correctamente contra Lead', 'ok');
     }
   } catch (err) {
     ilog(`⚠ No se pudo validar campos: ${err.message}. Continuando…`, 'warn');
@@ -1967,16 +2132,38 @@ async function actualizarPreviewCarga() {
     return;
   }
 
-  // ── PASO 1: intentar interpretar la primera fila como headers ──
+  // ── PASO 1: Detectar headers y AUTO-AGREGAR customs válidos ──
   const primeraFila = matrix[0].map(c => String(c || '').trim());
-  const mapeoInicial = primeraFila.map(mapearHeaderAPT);
+
+  // Primera pasada: contar cuántos headers coinciden con PT_HEADERS actual (base + customs ya activos)
+  const mapeoInicial = primeraFila.map(h => mapearHeaderAPT(h));
   const headersReconocidos = mapeoInicial.filter(m => m !== null).length;
 
-  // Si al menos 3 headers coinciden con PT_HEADERS o aliases → tratamos la primera fila como headers
-  const hayHeaders = headersReconocidos >= 3;
-  let dataRows = hayHeaders ? matrix.slice(1) : matrix;
+  // Detectar candidatos a nuevos custom fields de esta carga (nombres que no matchean pero son sintaxis válida)
+  const nuevosCustomDetectados = [];
+  primeraFila.forEach((headerOrig, colIdx) => {
+    const h = String(headerOrig || '').trim();
+    if (!h) return;
+    if (h.startsWith('__')) return;                  // reservado (columna de resultado)
+    if (mapearHeaderAPT(h)) return;                  // ya se mapea a algo del PT actual
+    if (!VALID_FIELD_REGEX.test(h)) return;          // sintaxis inválida (espacios, puntos, etc.)
+    if (PT_HEADERS_BASE.includes(h)) return;         // ya es base
+    if (nuevosCustomDetectados.includes(h)) return;  // ya detectado en esta carga
+    nuevosCustomDetectados.push(h);
+  });
 
-  // Filtrar filas vacías
+  // Si al menos 3 headers son reconocidos (incluyendo nuevos custom), tratamos primera fila como headers
+  const hayHeaders = (headersReconocidos + nuevosCustomDetectados.length) >= 3;
+
+  // Agregar los nuevos customs detectados al estado global ANTES de continuar
+  if (hayHeaders && nuevosCustomDetectados.length > 0) {
+    nuevosCustomDetectados.forEach(f => {
+      if (!customFields.includes(f)) customFields.push(f);
+    });
+    actualizarHeadersDinamicos();
+  }
+
+  let dataRows = hayHeaders ? matrix.slice(1) : matrix;
   dataRows = dataRows.filter(r => r.some(c => String(c || '').trim() !== ''));
 
   if (!dataRows.length) {
@@ -2037,6 +2224,14 @@ async function actualizarPreviewCarga() {
     <span style="color:var(--muted); font-size:10.5px;">Fuente: ${esc(sourceFormat)}</span>
     <span style="color:var(--muted); font-size:10.5px;">Headers: ${hayHeaders ? '<strong style="color:var(--ok)">detectados por nombre</strong>' : '<strong style="color:var(--warn)">no detectados — mapeo posicional</strong>'}</span>
   </div>`;
+
+  // Aviso de custom fields auto-agregados desde esta carga
+  if (nuevosCustomDetectados.length > 0) {
+    mappingHtml += `<div style="background:rgba(124,58,237,0.08); border-left:3px solid var(--ac2); border-radius:6px; padding:8px 10px; font-size:11px; margin-bottom:8px; color:var(--text);">
+      <strong style="color:#c4b5fd;">➕ ${nuevosCustomDetectados.length} campo(s) custom auto-detectado(s):</strong> ${nuevosCustomDetectados.map(esc).join(', ')}<br>
+      <span style="color:var(--muted); font-size:10.5px;">Se agregaron automáticamente y aparecerán en el Field Mapping para validación contra Lead.</span>
+    </div>`;
+  }
 
   // Detalle del mapeo (compacto)
   mappingHtml += `<div style="font-size:10.5px; line-height:1.9; color:var(--muted);">`;
