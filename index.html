@@ -170,6 +170,10 @@
     .fmap-sf { font-size: 10px; }
     .fmap-sf select { background: var(--sf2); border: 1px solid var(--border); border-radius: 5px; color: var(--text); font-size: 10px; padding: 3px 6px; outline: none; font-family: var(--mono); width: 100%; cursor: pointer; min-width: 120px; }
     .fmap-sf select:focus { border-color: var(--accent); }
+    .fmap-sf-wrap { position: relative; width: 100%; }
+    .fmap-sf-wrap .fmap-custom-input { background: rgba(245,158,11,.08); border: 1px solid var(--warn); border-radius: 5px; color: var(--text); font-size: 10px; padding: 3px 6px; outline: none; font-family: var(--mono); width: 100%; min-width: 120px; box-sizing: border-box; }
+    .fmap-sf-wrap .fmap-custom-input:focus { border-color: var(--accent); background: var(--sf2); }
+    .fmap-sf-wrap .fmap-custom-input::placeholder { color: var(--muted); font-style: italic; }
     .fmap-ok { font-size: 13px; text-align: center; font-weight: 700; }
     .fmap-ok.ok { color: var(--ok); } .fmap-ok.err { color: var(--err); } .fmap-ok.skip { color: var(--muted); } .fmap-ok.pending { color: var(--muted); } .fmap-ok.warn { color: var(--warn); }
 
@@ -1299,10 +1303,14 @@ function buildFieldMapping() {
       <td class="fmap-csv">${esc(col)}</td>
       <td class="fmap-arr">→</td>
       <td class="fmap-sf">
-        <select onchange="syncMapCheck(this, '${esc(col)}')">
-          <option value="${esc(mapped)}" selected>${esc(mapped)}</option>
-          <option value="--skip--">— Omitir columna —</option>
-        </select>
+        <div class="fmap-sf-wrap" data-col="${esc(col)}">
+          <select onchange="onFmapSelectChange(this, '${esc(col)}')">
+            <option value="${esc(mapped)}" selected>${esc(mapped)}</option>
+            <option value="--custom--">✏ Otro API Name…</option>
+            <option value="--skip--">— Omitir columna —</option>
+          </select>
+          <input type="text" class="fmap-custom-input" placeholder="API Name en Lead" style="display:none;" oninput="onFmapCustomInput(this, '${esc(col)}')" onblur="onFmapCustomBlur(this, '${esc(col)}')"/>
+        </div>
       </td>
       <td class="fmap-ok pending" id="fmap-ok-${esc(col)}">•</td>
     `;
@@ -1310,10 +1318,76 @@ function buildFieldMapping() {
   });
 }
 
+// Al cambiar el select principal
+function onFmapSelectChange(select, col) {
+  const wrap = select.closest('.fmap-sf-wrap');
+  const input = wrap.querySelector('.fmap-custom-input');
+  const cell = document.getElementById(`fmap-ok-${col}`);
+
+  if (select.value === '--custom--') {
+    // Mostrar input inline en modo custom
+    select.style.display = 'none';
+    input.style.display = 'block';
+    input.value = input.dataset.savedValue || '';
+    setTimeout(() => input.focus(), 50);
+    cell.textContent = '✏';
+    cell.className = 'fmap-ok warn';
+  } else if (select.value === '--skip--') {
+    cell.textContent = '—';
+    cell.className = 'fmap-ok skip';
+  } else {
+    cell.textContent = '•';
+    cell.className = 'fmap-ok pending';
+  }
+}
+
+// Mientras escribe en el input custom
+function onFmapCustomInput(input, col) {
+  const val = input.value.trim();
+  input.dataset.savedValue = val;
+  const cell = document.getElementById(`fmap-ok-${col}`);
+  if (!val) {
+    cell.textContent = '✏';
+    cell.className = 'fmap-ok warn';
+  } else {
+    cell.textContent = '•';
+    cell.className = 'fmap-ok pending';
+  }
+}
+
+// Al perder foco del input custom
+function onFmapCustomBlur(input, col) {
+  const val = input.value.trim();
+  const wrap = input.closest('.fmap-sf-wrap');
+  const select = wrap.querySelector('select');
+
+  if (!val) {
+    // Vacío: volver al select con la opción original seleccionada
+    select.style.display = 'block';
+    input.style.display = 'none';
+    select.value = DEFAULT_FIELD_MAP[col] || col;
+    onFmapSelectChange(select, col);
+  }
+  // Si tiene valor, se queda en modo custom. El valor se lee al ejecutar el import.
+}
+
+// Devuelve el valor efectivo del mapeo de una fila (select o input custom)
+function getMapeoValor(tr) {
+  const wrap = tr.querySelector('.fmap-sf-wrap');
+  const select = wrap.querySelector('select');
+  const input = wrap.querySelector('.fmap-custom-input');
+  // Si el input custom está visible y tiene valor, es el que manda
+  if (input.style.display !== 'none' && input.value.trim()) {
+    return input.value.trim();
+  }
+  return select.value;
+}
+
 function syncMapCheck(sel, col) {
   const cell = document.getElementById(`fmap-ok-${col}`);
   if (!cell) return;
   if (sel.value === '--skip--') { cell.textContent = '—'; cell.className = 'fmap-ok skip'; }
+  else if (sel.value === '--custom--') { cell.textContent = '✏'; cell.className = 'fmap-ok warn'; }
   else { cell.textContent = '•'; cell.className = 'fmap-ok pending'; }
 }
 
@@ -1503,8 +1577,7 @@ function validarFieldMapping(realFields) {
 
   document.querySelectorAll('#fmapBody tr').forEach((tr, i) => {
     const csvCol = PT_HEADERS[i];
-    const select = tr.querySelector('select');
-    const sfVal = select.value;
+    const sfVal = getMapeoValor(tr);  // lee del select o del input custom
     const cell = document.getElementById(`fmap-ok-${csvCol}`);
     if (!cell) return;
     if (sfVal === '--skip--') { cell.textContent = '—'; cell.className = 'fmap-ok skip'; return; }
@@ -1598,8 +1671,12 @@ async function ejecutarImport() {
   const fmapRows = document.querySelectorAll('#fmapBody tr');
   const sfHeaders = [], colIndexes = [], colNames = [];
   fmapRows.forEach((tr, i) => {
-    const sfVal = tr.querySelector('select').value;
-    if (sfVal !== '--skip--') { sfHeaders.push(sfVal); colIndexes.push(i); colNames.push(PT_HEADERS[i]); }
+    const sfVal = getMapeoValor(tr);  // respeta el modo custom si está activo
+    if (sfVal !== '--skip--' && sfVal !== '--custom--' && sfVal.trim()) {
+      sfHeaders.push(sfVal.trim());
+      colIndexes.push(i);
+      colNames.push(PT_HEADERS[i]);
+    }
   });
 
   if (!sfHeaders.length) {
