@@ -4,13 +4,35 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SF Asignador · Docplanner</title>
+
+  <!-- Favicon (todos los tamaños) -->
+  <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico"/>
+  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg"/>
+  <link rel="icon" type="image/png" sizes="96x96" href="assets/img/favicon-96x96.png"/>
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/img/apple-touch-icon.png"/>
+
+  <!-- Web App Manifest (PWA) -->
+  <link rel="manifest" href="site.webmanifest"/>
+
+  <!-- Theme color de la barra del navegador -->
+  <meta name="theme-color" content="#0d0f18"/>
+  <meta name="msapplication-TileColor" content="#0d0f18"/>
+
+  <!-- Open Graph / Preview al compartir link (Slack, email) -->
+  <meta property="og:title" content="SF Asignador · Docplanner Ops Suite"/>
+  <meta property="og:description" content="Herramientas internas de RevOps para asignación de leads y automatización de operaciones en Salesforce."/>
+  <meta property="og:image" content="assets/img/web-app-manifest-512x512.png"/>
+  <meta property="og:type" content="website"/>
+  <meta name="twitter:card" content="summary"/>
+
   <script src="https://accounts.google.com/gsi/client" async></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
   <style>
     :root {
       --bg: #0d0f18; --surface: #161929; --sf2: #1e2235; --border: #272c45;
-      --accent: #4b7cf3; --ac2: #7c3aed; --ok: #22c55e; --err: #f43f5e; --warn: #f59e0b;
+      --accent: #4b7cf3; --ac2: #7c3aed; --ac3: #d97706;
+      --ok: #22c55e; --err: #f43f5e; --warn: #f59e0b;
       --text: #e4e8f7; --muted: #6b729a;
       --mono: 'JetBrains Mono', monospace; --sans: 'Inter', sans-serif;
     }
@@ -19,7 +41,9 @@
 
     #loginScreen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--bg); background-image: radial-gradient(ellipse 60% 50% at 25% 60%, rgba(75,124,243,.1) 0%, transparent 70%), radial-gradient(ellipse 50% 40% at 75% 40%, rgba(124,58,237,.08) 0%, transparent 70%); z-index: 100; }
     .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 22px; padding: 48px 44px 40px; width: 370px; text-align: center; box-shadow: 0 32px 80px rgba(0,0,0,.5); }
-    .login-logo { width: 60px; height: 60px; border-radius: 18px; background: linear-gradient(135deg, var(--accent), var(--ac2)); display: flex; align-items: center; justify-content: center; font-size: 28px; margin: 0 auto 22px; box-shadow: 0 8px 24px rgba(75,124,243,.35); }
+    .login-logo { width: 100px; height: 100px; border-radius: 24px; background: linear-gradient(135deg, rgba(75,124,243,.12), rgba(124,58,237,.12)); border: 1px solid rgba(75,124,243,.25); display: flex; align-items: center; justify-content: center; margin: 0 auto 22px; box-shadow: 0 8px 32px rgba(75,124,243,.25), inset 0 1px 0 rgba(255,255,255,.05); overflow: hidden; position: relative; }
+    .login-logo img { width: 100%; height: 100%; object-fit: contain; padding: 10px; box-sizing: border-box; position: relative; z-index: 2; }
+    .login-logo::before { content: ""; position: absolute; inset: -20px; background: radial-gradient(circle at center, rgba(217,119,6,.15) 0%, transparent 60%); z-index: 1; }
     .login-card h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
     .login-card .sub { font-size: 13px; color: var(--muted); line-height: 1.55; margin-bottom: 24px; }
     .domain-chip { display: inline-flex; align-items: center; gap: 6px; background: rgba(75,124,243,.12); border: 1px solid rgba(75,124,243,.3); border-radius: 100px; padding: 5px 14px; font-size: 11px; font-weight: 600; color: var(--accent); margin-bottom: 28px; }
@@ -30,7 +54,8 @@
     #mainApp { display: none; flex-direction: column; height: 100vh; }
 
     header { border-bottom: 1px solid var(--border); padding: 13px 28px; display: flex; align-items: center; gap: 12px; background: var(--surface); flex-shrink: 0; }
-    .logo-mark { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, var(--accent), var(--ac2)); display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+    .logo-mark { width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, rgba(75,124,243,.15), rgba(124,58,237,.15)); border: 1px solid rgba(75,124,243,.3); display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; box-shadow: 0 0 12px rgba(75,124,243,.15); }
+    .logo-mark img { width: 100%; height: 100%; object-fit: contain; padding: 3px; box-sizing: border-box; }
     header h1 { font-size: 13.5px; font-weight: 600; flex: 1; }
     header h1 span { color: var(--muted); font-weight: 400; }
     .user-bar { display: flex; align-items: center; gap: 10px; }
@@ -299,7 +324,7 @@
 
 <div id="loginScreen">
   <div class="login-card">
-    <div class="login-logo">⚡</div>
+    <div class="login-logo"><img src="assets/img/logo-hero.png" alt="Docplanner Ops Suite"/></div>
     <h1>SF Asignador</h1>
     <p class="sub">Herramienta interna para asignación e importación de contactos en Salesforce</p>
     <div class="domain-chip">Solo cuentas @docplanner.com</div>
@@ -310,7 +335,7 @@
 
 <div id="mainApp">
   <header>
-    <div class="logo-mark">⚡</div>
+    <div class="logo-mark"><img src="assets/img/logo-hero.png" alt="Docplanner Ops Suite"/></div>
     <h1>SF Asignador <span>· Docplanner</span></h1>
     <div class="user-bar">
       <div class="user-avatar" id="userAvatar">U</div>
