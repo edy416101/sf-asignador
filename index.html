@@ -325,11 +325,11 @@
 <div id="loginScreen">
   <div class="login-card">
     <div class="login-logo"><img src="assets/img/logo-hero.png" alt="Docplanner Ops Suite"/></div>
-    <h1>CAT-ALYST</h1>
+    <h1>SF Asignador</h1>
     <p class="sub">Herramienta interna para asignación e importación de contactos en Salesforce</p>
     <div class="domain-chip">Solo cuentas @docplanner.com</div>
     <div id="gSigninBtn"></div>
-    <p class="login-note">¿Problemas para entrar? Contacta a el administrador</p>
+    <p class="login-note">¿Problemas para entrar? Contacta a tu administrador de RevOps.</p>
   </div>
 </div>
 
@@ -443,7 +443,7 @@
           <h2>Pre Template — Resultado de asignación</h2>
           <div class="res-btns">
             <button class="btn-icon btn-copy-tbl" id="copyBtn" onclick="copiarTabla()" disabled>📋 Copiar</button>
-            <button class="btn-icon" style="background:linear-gradient(135deg, var(--ac2), #9333ea)" id="customFieldsBtn" onclick="abrirModalCustomFields()">➕ Campos custom (0)</button>
+            <button class="btn-icon" style="background:linear-gradient(135deg, var(--ac2), #9333ea)" id="customFieldsBtn" onclick="abrirModalCustomFields()">⚙ Config. campos</button>
             <button class="btn-icon btn-csv" id="dlBtn" onclick="descargarCSV()" disabled>⬇ CSV</button>
             <button class="btn-go-import" id="goImportBtn" onclick="irAImport()" disabled>📥 Pasar a Data Import →</button>
           </div>
@@ -613,18 +613,37 @@
 
 <!-- MODAL CAMPOS CUSTOM -->
 <div class="modal-backdrop" id="customFieldsModal">
-  <div class="modal" style="max-width:520px">
+  <div class="modal" style="max-width:640px">
     <div class="modal-header">
-      <h2>➕ Campos custom del Contact</h2>
+      <h2>⚙ Configuración de campos</h2>
       <button class="modal-close" onclick="cerrarModalCustomFields()">✕</button>
     </div>
     <div class="modal-body">
-      <div style="background:rgba(124,58,237,0.06); border-left:3px solid var(--ac2); border-radius:6px; padding:10px 12px; font-size:11.5px; color:var(--text); line-height:1.55;">
-        <strong>Añade campos extra del objeto Contact que quieras traer al pre-template.</strong> Deben ser API Field Names exactos (ej. <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Phone</code>, <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">MobilePhone</code>, <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Description</code>). Se valida contra Salesforce antes de aceptarlos. Al ejecutar la asignación, aparecerán como columnas adicionales al final del pre-template y pasarán por el Field Mapping normal para el import.
+
+      <!-- SECCIÓN 1: Campos base (fuente pre-template vs SF) -->
+      <div style="background:rgba(6,182,212,0.06); border-left:3px solid #06b6d4; border-radius:6px; padding:10px 12px; font-size:11.5px; color:var(--text); line-height:1.55;">
+        <strong>📋 Campos base del pre-template.</strong> Por defecto usan valores hardcodeados (el dropdown de la UI, "DOCTOR", "Mexico", etc). Puedes cambiar cualquiera para que <strong>traiga el valor real del Contact desde Salesforce</strong>. Útil cuando te especifican "usa el ContactTypeSegment y FacilitySize que ya tiene el Contact". La validación verifica que el campo exista en el objeto Contact antes de aceptar.
       </div>
 
       <div class="modal-field">
-        <label>Añadir nuevo campo</label>
+        <label>Fuente de cada campo (<span id="fieldsFromSFCount">0</span> de 7 traídos desde SF)</label>
+        <div id="fixedFieldsList" style="background:var(--sf2); border:1px solid var(--border); border-radius:8px; overflow:hidden;"></div>
+      </div>
+
+      <!-- Divider -->
+      <div style="display:flex; align-items:center; gap:10px; margin: 6px 0;">
+        <div style="flex:1; height:1px; background:var(--border);"></div>
+        <span style="font-size:10px; color:var(--muted); letter-spacing:1px; text-transform:uppercase;">Campos adicionales</span>
+        <div style="flex:1; height:1px; background:var(--border);"></div>
+      </div>
+
+      <!-- SECCIÓN 2: Custom fields (columnas adicionales) -->
+      <div style="background:rgba(124,58,237,0.06); border-left:3px solid var(--ac2); border-radius:6px; padding:10px 12px; font-size:11.5px; color:var(--text); line-height:1.55;">
+        <strong>➕ Campos custom del Contact.</strong> Añade columnas nuevas al pre-template (ej. <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Phone</code>, <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">MobilePhone</code>). Se validan contra Salesforce y aparecen como columnas extra al final del pre-template.
+      </div>
+
+      <div class="modal-field">
+        <label>Añadir nuevo campo custom</label>
         <div style="display:flex; gap:6px;">
           <input type="text" id="newCustomFieldInput" placeholder="ej. Phone, MobilePhone, Description" style="flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault();agregarCustomField();}"/>
           <button class="btn-modal-primary" style="padding:9px 16px; font-size:12px;" onclick="agregarCustomField()">Validar y añadir</button>
@@ -633,9 +652,10 @@
       </div>
 
       <div class="modal-field">
-        <label>Campos activos (<span id="customFieldsCount">0</span>)</label>
-        <div id="customFieldsList" style="background:var(--sf2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; min-height:60px; max-height:250px; overflow-y:auto;"></div>
+        <label>Campos custom activos (<span id="customFieldsCount">0</span>)</label>
+        <div id="customFieldsList" style="background:var(--sf2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; min-height:60px; max-height:180px; overflow-y:auto;"></div>
       </div>
+
     </div>
     <div class="modal-footer">
       <button class="btn-modal-cancel" onclick="cerrarModalCustomFields()">Cerrar</button>
@@ -739,7 +759,7 @@
 // ══════════════════════════════════════════════════════════════════
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════
-const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycby4u1OtJLvA2ZR4h53gjFdh1_NnDGPaKe98mkl_Gzat9JMqQJw-Oehe72519ux5-jhLYg/exec";
+const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbwzwR-WIQgUmoj7RSCrhdX-LeIBWnnGDYAhjPIWjad9zu78E3bHnPrEfugCXRkkFjdKhg/exec";
 const GOOGLE_CLIENT_ID = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 const INSTANCE_URL     = "https://docplanner.my.salesforce.com";
 
@@ -791,9 +811,14 @@ function actualizarHeadersDinamicos() {
   PT_HEADERS_BASE.forEach(h => DEFAULT_FIELD_MAP[h] = h);
   customFields.forEach(f => DEFAULT_FIELD_MAP[f] = f);
 
-  // Actualizar contador del botón
+  // Actualizar contador del botón: custom fields + fields desde SF
   const btn = document.getElementById('customFieldsBtn');
-  if (btn) btn.textContent = `➕ Campos custom (${customFields.length})`;
+  if (btn) {
+    const totalConfig = customFields.length + fieldsFromSF.length;
+    btn.textContent = totalConfig > 0
+      ? `⚙ Config. campos (${totalConfig})`
+      : `⚙ Config. campos`;
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -824,6 +849,21 @@ let loadedPreview    = null;
 // ── Estado de Custom Fields ──
 let customFields         = [];       // ['Phone', 'MobilePhone', ...] extra fields del Contact
 let contactFieldsCache   = null;     // Cache de campos de Contact (para validación al agregar)
+
+// ── Estado de Campos base "desde SF" ──
+// Los campos hardcodeados del pre-template que el usuario decidió traer del Contact real
+let fieldsFromSF         = [];  // ['ContactTypeSegment__c', 'FacilitySize__c', ...]
+
+// Los 7 campos base del pre-template que se pueden alternar entre "pre-template" y "desde SF"
+const CAMPOS_FIJOS_UI = [
+  { name: 'BusinessLine__c',                default: 'Valor del dropdown Business Line' },
+  { name: 'Lead_Type__c',                   default: 'Valor del dropdown Lead Type' },
+  { name: 'ContactTypeSegment__c',          default: 'DOCTOR' },
+  { name: 'Country__c',                     default: 'Mexico' },
+  { name: 'Leadassist__Use_Round_Robin__c', default: 'FALSE' },
+  { name: 'Status',                         default: 'Assigned' },
+  { name: 'FacilitySize__c',                default: '(vacío)' }
+];
 
 // ══════════════════════════════════════════════════════════════════
 //  GOOGLE SIGN-IN
@@ -871,6 +911,7 @@ function logout() {
   preTemplateRows = []; importResultRows = [];
   leadFieldsCache = null; ownerStatsCache = [];
   ultimaAsignacion = {}; loggedInEmail = ""; idTokenCache = "";
+  customFields = []; fieldsFromSF = []; contactFieldsCache = null;
   resetAsigUI(); resetImportUI();
 }
 
@@ -1125,7 +1166,7 @@ function resetAsigUI() {
 }
 
 function limpiarAsignacion() {
-  if (!confirm('¿Limpiar días, Business Line, Lead Type, campos custom, representantes e IDs?')) return;
+  if (!confirm('¿Limpiar días, Business Line, Lead Type, campos custom, config de campos base, representantes e IDs?')) return;
   document.getElementById('dias').value = '';
   document.getElementById('businessLine').value = '';
   document.getElementById('leadType').value = 'New Business';
@@ -1133,8 +1174,9 @@ function limpiarAsignacion() {
   document.getElementById('idsArea').value = '';
   updateCount(); actualizarRepsTotal();
   addRep('', '');
-  // Limpiar custom fields
+  // Limpiar custom fields Y fields desde SF
   customFields = [];
+  fieldsFromSF = [];
   actualizarHeadersDinamicos();
   resetAsigUI();
   preTemplateRows = []; totalAsignados = 0; ownerStatsCache = [];
@@ -1169,7 +1211,7 @@ async function ejecutar() {
   else log(`Reps: ${reps.length} | IDs: ${ids.length} | Días: 0 (solo excluye actividad de hoy)`, 'info');
 
   try {
-    const data = await backendFetch({ sid, instanceUrl: INSTANCE_URL, dias, businessLine, leadType, extraFields: customFields, reps, ids });
+    const data = await backendFetch({ sid, instanceUrl: INSTANCE_URL, dias, businessLine, leadType, extraFields: customFields, fieldsFromSF: fieldsFromSF, reps, ids });
 
     // Sincronizar customFields con lo que efectivamente usó el backend (por si algún nombre inválido fue rechazado)
     if (data.extraFieldsUsados) {
@@ -1179,6 +1221,14 @@ async function ejecutar() {
     if (data.extraFieldsRechazados && data.extraFieldsRechazados.length > 0) {
       log(`⚠ ${data.extraFieldsRechazados.length} campo(s) custom rechazado(s) por el backend:`, 'warn');
       data.extraFieldsRechazados.forEach(r => log(`   ✗ ${r.name} — ${r.reason}`, 'err'));
+    }
+
+    // Sincronizar fieldsFromSF con lo que efectivamente usó el backend
+    if (data.fieldsFromSFUsados) {
+      fieldsFromSF = [...data.fieldsFromSFUsados];
+      if (fieldsFromSF.length > 0) {
+        log(`ℹ ${fieldsFromSF.length} campo(s) del pre-template se trajeron desde SF: ${fieldsFromSF.join(', ')}`, 'info');
+      }
     }
 
     preTemplateRows = data.rows || [];
@@ -1246,24 +1296,39 @@ function renderPreTemplate(headers, rows) {
   }
   // Usa constantes globales IDX_OWNER_PT, IDX_BL_PT, IDX_FIRST_FIXED_PT, IDX_LAST_FIXED_PT
   // Cualquier columna posterior a IDX_LAST_FIXED_PT es un custom field
+  const fromSFSet = new Set(fieldsFromSF);  // para búsqueda rápida
   let html = `<table class="pt"><thead><tr>`;
   PT_HEADERS.forEach(h => {
     const esCustom = !PT_HEADERS_BASE.includes(h);
-    const badge = esCustom ? ' <span style="background:rgba(124,58,237,.25); color:#c4b5fd; border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">CUSTOM</span>' : '';
-    html += `<th title="${esc(h)}">${esc(h)}${badge}</th>`;
+    const esFromSF = fromSFSet.has(h);
+    let badges = '';
+    if (esCustom) badges += ' <span style="background:rgba(124,58,237,.25); color:#c4b5fd; border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">CUSTOM</span>';
+    if (esFromSF) badges += ' <span style="background:rgba(6,182,212,.25); color:#67e8f9; border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">☁ SF</span>';
+    html += `<th title="${esc(h)}">${esc(h)}${badges}</th>`;
   });
   html += `</tr></thead><tbody>`;
   rows.forEach(row => {
     html += `<tr>`;
     row.forEach((cell, i) => {
       const v = String(cell ?? '');
+      const headerName = PT_HEADERS[i];
+      const esFromSF = fromSFSet.has(headerName);
+
       if (i === IDX_OWNER_PT) {
         const esValido = v.startsWith('005') && (v.length === 15 || v.length === 18);
         if (!esValido) html += `<td title="${esc(v)}"><span class="chip" style="background:rgba(244,63,94,.15); border-color:rgba(244,63,94,.4); color:var(--err)">⚠ ${esc(v || 'VACÍO')}</span></td>`;
         else html += `<td title="${esc(v)}"><span class="chip">${esc(v)}</span></td>`;
       }
-      else if (i === IDX_BL_PT) html += `<td title="${esc(v)}"><span class="bl-chip">${esc(v)}</span></td>`;
-      else if (i >= IDX_FIRST_FIXED_PT && i <= IDX_LAST_FIXED_PT) html += `<td class="fixed" title="${esc(v)}">${esc(v)}</td>`;
+      else if (i === IDX_BL_PT) {
+        // BusinessLine__c: badge distinto si viene de SF
+        if (esFromSF) html += `<td title="${esc(v)} (desde SF)"><span class="bl-chip" style="background:rgba(6,182,212,.15); border-color:rgba(6,182,212,.4); color:#67e8f9;">☁ ${esc(v)}</span></td>`;
+        else html += `<td title="${esc(v)}"><span class="bl-chip">${esc(v)}</span></td>`;
+      }
+      else if (i >= IDX_FIRST_FIXED_PT && i <= IDX_LAST_FIXED_PT) {
+        // Fijos: color/estilo diferente si viene de SF
+        if (esFromSF) html += `<td class="fixed" style="color:#67e8f9;" title="${esc(v)} (desde SF)">☁ ${esc(v)}</td>`;
+        else html += `<td class="fixed" title="${esc(v)}">${esc(v)}</td>`;
+      }
       else html += `<td title="${esc(v)}">${esc(v)}</td>`;  // base 0-4 o custom (>12)
     });
     html += `</tr>`;
@@ -1489,6 +1554,7 @@ function abrirModalCustomFields() {
   document.getElementById('newCustomFieldInput').value = '';
   document.getElementById('customFieldHint').textContent = 'El campo debe existir en el objeto Contact. Requiere SID activo para validación.';
   document.getElementById('customFieldHint').style.color = 'var(--muted)';
+  renderFixedFieldsList();  // NUEVO: campos base con toggle
   renderCustomFieldsList();
   document.getElementById('customFieldsModal').classList.add('open');
   setTimeout(() => document.getElementById('newCustomFieldInput').focus(), 100);
@@ -1496,6 +1562,95 @@ function abrirModalCustomFields() {
 
 function cerrarModalCustomFields() {
   document.getElementById('customFieldsModal').classList.remove('open');
+}
+
+// ── Sección "Campos base" (fuente pre-template vs SF) ──
+function renderFixedFieldsList() {
+  const container = document.getElementById('fixedFieldsList');
+  document.getElementById('fieldsFromSFCount').textContent = fieldsFromSF.length;
+  let html = `<table style="width:100%; border-collapse:collapse; font-size:11.5px;">
+    <thead>
+      <tr style="background:var(--surface); border-bottom:1px solid var(--border);">
+        <th style="padding:8px 12px; text-align:left; font-weight:700; font-size:10px; color:var(--muted); letter-spacing:.5px; text-transform:uppercase;">Campo</th>
+        <th style="padding:8px 12px; text-align:left; font-weight:700; font-size:10px; color:var(--muted); letter-spacing:.5px; text-transform:uppercase; width:150px;">Fuente</th>
+        <th style="padding:8px 12px; text-align:left; font-weight:700; font-size:10px; color:var(--muted); letter-spacing:.5px; text-transform:uppercase;">Default (pre-template)</th>
+      </tr>
+    </thead>
+    <tbody>`;
+  CAMPOS_FIJOS_UI.forEach(f => {
+    const isFromSF = fieldsFromSF.includes(f.name);
+    html += `
+      <tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:6px 12px; font-family:var(--mono); font-size:10.5px; color:var(--text);">${esc(f.name)}</td>
+        <td style="padding:6px 12px;">
+          <select onchange="onFieldSourceChange(this, '${esc(f.name)}')" style="background:var(--surface); border:1px solid var(--border); border-radius:5px; color:var(--text); font-size:10.5px; padding:4px 8px; outline:none; font-family:var(--mono); width:100%; cursor:pointer;">
+            <option value="pretemplate" ${!isFromSF ? 'selected' : ''}>📋 Pre-template</option>
+            <option value="sf" ${isFromSF ? 'selected' : ''}>☁ Desde SF</option>
+          </select>
+        </td>
+        <td style="padding:6px 12px; color:var(--muted); font-size:10.5px; font-style:italic;">${esc(f.default)}</td>
+      </tr>
+    `;
+  });
+  html += `</tbody></table>`;
+  container.innerHTML = html;
+}
+
+async function onFieldSourceChange(select, fieldName) {
+  const newValue = select.value;
+
+  if (newValue === 'pretemplate') {
+    // Quitar de fieldsFromSF
+    const idx = fieldsFromSF.indexOf(fieldName);
+    if (idx >= 0) fieldsFromSF.splice(idx, 1);
+    document.getElementById('fieldsFromSFCount').textContent = fieldsFromSF.length;
+    toast(`ℹ ${fieldName} vuelve a usar valor del pre-template`, 'ok');
+
+    // Warning si ya hay pre-template generado
+    if (preTemplateRows.length > 0) {
+      toast(`⚠ Re-ejecuta la asignación para aplicar el cambio`, 'bad');
+    }
+    return;
+  }
+
+  // newValue === 'sf' — Traer desde SF
+  const sid = document.getElementById('sid').value.trim();
+
+  if (!sid) {
+    // Sin SID, permitir pero avisar
+    if (!fieldsFromSF.includes(fieldName)) fieldsFromSF.push(fieldName);
+    document.getElementById('fieldsFromSFCount').textContent = fieldsFromSF.length;
+    toast(`ℹ ${fieldName} traerá valor de SF (sin validar, falta SID)`, 'bad');
+    return;
+  }
+
+  // Validar contra Contact
+  try {
+    const contactFieldsList = await obtenerCamposContact(sid);
+    const existe = contactFieldsList.some(f => f.toLowerCase() === fieldName.toLowerCase());
+    if (!existe) {
+      alert(
+        `⛔ Campo no existe en Contact\n\n` +
+        `El campo "${fieldName}" NO existe en el objeto Contact de Salesforce.\n\n` +
+        `Este campo probablemente solo existe en Lead (algunos como Status, Lead_Type__c, Leadassist__Use_Round_Robin__c son exclusivos de Lead y NO están en Contact).\n\n` +
+        `Se mantiene el valor hardcodeado del pre-template.`
+      );
+      select.value = 'pretemplate';
+      return;
+    }
+    // Éxito
+    if (!fieldsFromSF.includes(fieldName)) fieldsFromSF.push(fieldName);
+    document.getElementById('fieldsFromSFCount').textContent = fieldsFromSF.length;
+    toast(`✓ ${fieldName} traerá valor real desde SF`, 'ok');
+
+    // Warning si ya hay pre-template generado
+    if (preTemplateRows.length > 0) {
+      toast(`⚠ Re-ejecuta la asignación para aplicar el cambio`, 'bad');
+    }
+  } catch (err) {
+    toast(`⚠ No se pudo validar: ${err.message}`, 'bad');
+    select.value = 'pretemplate';
+  }
 }
 
 function renderCustomFieldsList() {
