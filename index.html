@@ -639,21 +639,45 @@
 
       <!-- SECCIÓN 2: Custom fields (columnas adicionales) -->
       <div style="background:rgba(124,58,237,0.06); border-left:3px solid var(--ac2); border-radius:6px; padding:10px 12px; font-size:11.5px; color:var(--text); line-height:1.55;">
-        <strong>➕ Campos custom del Contact.</strong> Añade columnas nuevas al pre-template (ej. <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Phone</code>, <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">MobilePhone</code>). Se validan contra Salesforce y aparecen como columnas extra al final del pre-template.
+        <strong>➕ Campos custom adicionales.</strong> Agregan columnas nuevas al pre-template. Elige la <strong>fuente del valor</strong>:
+        <br>· <span style="color:#67e8f9;">☁ Desde SF</span> — trae el valor del Contact real (útil para <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Phone</code>, <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">MobilePhone</code>, etc).
+        <br>· <span style="color:#fbbf24;">✎ Manual</span> — tú escribes el valor, se estampa idéntico en todos los registros (útil para <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Suffix</code>, campaign codes, códigos de tracking, etc).
       </div>
 
       <div class="modal-field">
         <label>Añadir nuevo campo custom</label>
-        <div style="display:flex; gap:6px;">
-          <input type="text" id="newCustomFieldInput" placeholder="ej. Phone, MobilePhone, Description" style="flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault();agregarCustomField();}"/>
-          <button class="btn-modal-primary" style="padding:9px 16px; font-size:12px;" onclick="agregarCustomField()">Validar y añadir</button>
+
+        <!-- Paso 1: Nombre -->
+        <input type="text" id="newCustomFieldInput" placeholder="API Name del campo (ej. Phone, Suffix, MobilePhone)" oninput="onCustomFieldNameChange()" onkeydown="if(event.key==='Enter'){event.preventDefault();agregarCustomField();}"/>
+
+        <!-- Paso 2: Selector de modo -->
+        <div style="display:flex; gap:6px; margin-top:8px;">
+          <div class="mode-tab selected" data-cmode="sf" onclick="setCustomMode('sf')" style="padding:8px 10px;">
+            <div style="font-size:11.5px; font-weight:600; color:var(--text);">☁ Desde SF</div>
+            <div style="font-size:9.5px; color:var(--muted); margin-top:2px;">Traer del Contact</div>
+          </div>
+          <div class="mode-tab" data-cmode="manual" onclick="setCustomMode('manual')" style="padding:8px 10px;">
+            <div style="font-size:11.5px; font-weight:600; color:var(--text);">✎ Manual</div>
+            <div style="font-size:9.5px; color:var(--muted); margin-top:2px;">Yo escribo el valor</div>
+          </div>
         </div>
-        <span class="hint" id="customFieldHint">El campo debe existir en el objeto Contact. Requiere SID activo para validación.</span>
+
+        <!-- Paso 3: Solo si Manual, input del valor con hint del tipo -->
+        <div id="customManualSection" style="display:none; margin-top:8px; padding:10px 12px; background:rgba(251,191,36,0.06); border-left:3px solid var(--warn); border-radius:6px;">
+          <div id="customTypeInfo" style="font-size:11px; color:var(--muted); margin-bottom:6px; font-family:var(--mono);">Escribe el nombre del campo para ver su tipo…</div>
+          <input type="text" id="customManualValue" placeholder="Valor a estampar en todos los registros (ej. CHREACT)" oninput="onCustomManualValueInput()" style="background:var(--sf2); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:var(--mono); font-size:12px; padding:8px 11px; outline:none; width:100%;"/>
+          <div id="customManualValidation" style="font-size:10.5px; margin-top:5px; min-height:14px;"></div>
+        </div>
+
+        <div style="display:flex; gap:6px; margin-top:10px;">
+          <button class="btn-modal-primary" style="flex:1; padding:9px 16px; font-size:12px;" id="btnAddCustom" onclick="agregarCustomField()">Validar y añadir</button>
+        </div>
+        <span class="hint" id="customFieldHint" style="margin-top:6px;">Escribe el API Name y elige la fuente del valor.</span>
       </div>
 
       <div class="modal-field">
         <label>Campos custom activos (<span id="customFieldsCount">0</span>)</label>
-        <div id="customFieldsList" style="background:var(--sf2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; min-height:60px; max-height:180px; overflow-y:auto;"></div>
+        <div id="customFieldsList" style="background:var(--sf2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; min-height:60px; max-height:220px; overflow-y:auto;"></div>
       </div>
 
     </div>
@@ -759,7 +783,7 @@
 // ══════════════════════════════════════════════════════════════════
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════
-const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbwzwR-WIQgUmoj7RSCrhdX-LeIBWnnGDYAhjPIWjad9zu78E3bHnPrEfugCXRkkFjdKhg/exec";
+const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbz0-Cs5dndyw_B_D8Gslpbw4xaGaUV--lNBoFUAV1xZrccNVNrs4bqixbic5yTm6Aozkg/exec";
 const GOOGLE_CLIENT_ID = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 const INSTANCE_URL     = "https://docplanner.my.salesforce.com";
 
@@ -805,11 +829,12 @@ const VALID_FIELD_REGEX = /^[A-Za-z][A-Za-z0-9_]*$/;
 
 // Función que reconstruye los headers dinámicos según customFields
 function actualizarHeadersDinamicos() {
-  PT_HEADERS = [...PT_HEADERS_BASE, ...customFields];
+  const customNames = customFields.map(cf => cf.name);
+  PT_HEADERS = [...PT_HEADERS_BASE, ...customNames];
   IMPORT_RESULT_HEADERS = [...PT_HEADERS, '__Status', '__Id', '__Action', '__Errors'];
   DEFAULT_FIELD_MAP = {};
   PT_HEADERS_BASE.forEach(h => DEFAULT_FIELD_MAP[h] = h);
-  customFields.forEach(f => DEFAULT_FIELD_MAP[f] = f);
+  customNames.forEach(f => DEFAULT_FIELD_MAP[f] = f);
 
   // Actualizar contador del botón: custom fields + fields desde SF
   const btn = document.getElementById('customFieldsBtn');
@@ -847,8 +872,12 @@ let loadMode         = 'paste';
 let loadedPreview    = null;
 
 // ── Estado de Custom Fields ──
-let customFields         = [];       // ['Phone', 'MobilePhone', ...] extra fields del Contact
-let contactFieldsCache   = null;     // Cache de campos de Contact (para validación al agregar)
+// customFields es array de objetos: {name, mode, value?}
+//   mode='sf':     trae el valor desde Contact (comportamiento original)
+//   mode='manual': valor fijo, mismo para todas las filas (útil para Suffix, campaign codes, etc.)
+let customFields         = [];
+let contactFieldsCache   = null;     // ['Id', 'Phone', ...] — para validar modo SF
+let leadFieldsMetadata   = null;     // { 'Suffix': {type, length, picklistValues, ...} } — para validar tipos en modo Manual
 
 // ── Estado de Campos base "desde SF" ──
 // Los campos hardcodeados del pre-template que el usuario decidió traer del Contact real
@@ -864,6 +893,13 @@ const CAMPOS_FIJOS_UI = [
   { name: 'Status',                         default: 'Assigned' },
   { name: 'FacilitySize__c',                default: '(vacío)' }
 ];
+
+// Estado del formulario "añadir custom" en el modal
+let addCustomFormState = {
+  mode: 'sf',        // 'sf' o 'manual'
+  metadata: null,    // metadata del campo en Lead cuando modo Manual
+  metadataCargando: false
+};
 
 // ══════════════════════════════════════════════════════════════════
 //  GOOGLE SIGN-IN
@@ -1198,6 +1234,19 @@ async function ejecutar() {
   if (!reps.length) return toast('Agrega al menos un representante con Nº Asignaciones > 0.', 'bad');
   if (!ids.length) return toast('Pega al menos un ID de contacto.', 'bad');
 
+  // ── Advertir si hay custom fields en modo Manual con valor vacío ──
+  const manualVacios = customFields.filter(cf => cf.mode === 'manual' && !(cf.value && String(cf.value).trim()));
+  if (manualVacios.length > 0) {
+    const lista = manualVacios.map(cf => `  • ${cf.name}`).join('\n');
+    const proceder = confirm(
+      `⚠ Campos manuales con valor vacío\n\n` +
+      `Los siguientes campos custom Manual NO tienen valor asignado:\n\n${lista}\n\n` +
+      `Se enviarán como cadena vacía a Salesforce. Si el campo es obligatorio en Lead, el import fallará para todas las filas.\n\n` +
+      `¿Continuar de todas formas? (Cancelar para volver a editarlos)`
+    );
+    if (!proceder) return;
+  }
+
   const btn = document.getElementById('runBtn');
   btn.disabled = true; btn.textContent = '⏳ Ejecutando…';
   ['dlBtn','copyBtn','goImportBtn'].forEach(id => document.getElementById(id).disabled = true);
@@ -1215,8 +1264,13 @@ async function ejecutar() {
 
     // Sincronizar customFields con lo que efectivamente usó el backend (por si algún nombre inválido fue rechazado)
     if (data.extraFieldsUsados) {
-      customFields = [...data.extraFieldsUsados];
+      customFields = [...data.extraFieldsUsados];  // ya viene como array de objetos {name, mode, value?}
       actualizarHeadersDinamicos();
+      const sfCount = customFields.filter(cf => cf.mode === 'sf').length;
+      const manualCount = customFields.filter(cf => cf.mode === 'manual').length;
+      if (sfCount + manualCount > 0) {
+        log(`ℹ Campos custom usados: ${sfCount} desde SF · ${manualCount} manual`, 'info');
+      }
     }
     if (data.extraFieldsRechazados && data.extraFieldsRechazados.length > 0) {
       log(`⚠ ${data.extraFieldsRechazados.length} campo(s) custom rechazado(s) por el backend:`, 'warn');
@@ -1297,12 +1351,23 @@ function renderPreTemplate(headers, rows) {
   // Usa constantes globales IDX_OWNER_PT, IDX_BL_PT, IDX_FIRST_FIXED_PT, IDX_LAST_FIXED_PT
   // Cualquier columna posterior a IDX_LAST_FIXED_PT es un custom field
   const fromSFSet = new Set(fieldsFromSF);  // para búsqueda rápida
+  // Mapa: nombre de custom field → modo ('sf' | 'manual')
+  const customModeMap = {};
+  customFields.forEach(cf => { customModeMap[cf.name] = cf.mode; });
+
   let html = `<table class="pt"><thead><tr>`;
   PT_HEADERS.forEach(h => {
     const esCustom = !PT_HEADERS_BASE.includes(h);
     const esFromSF = fromSFSet.has(h);
     let badges = '';
-    if (esCustom) badges += ' <span style="background:rgba(124,58,237,.25); color:#c4b5fd; border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">CUSTOM</span>';
+    if (esCustom) {
+      const modo = customModeMap[h];
+      if (modo === 'manual') {
+        badges += ' <span style="background:rgba(251,191,36,.25); color:var(--warn); border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">✎ MANUAL</span>';
+      } else {
+        badges += ' <span style="background:rgba(6,182,212,.25); color:#67e8f9; border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">☁ SF</span>';
+      }
+    }
     if (esFromSF) badges += ' <span style="background:rgba(6,182,212,.25); color:#67e8f9; border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">☁ SF</span>';
     html += `<th title="${esc(h)}">${esc(h)}${badges}</th>`;
   });
@@ -1313,6 +1378,8 @@ function renderPreTemplate(headers, rows) {
       const v = String(cell ?? '');
       const headerName = PT_HEADERS[i];
       const esFromSF = fromSFSet.has(headerName);
+      const esCustom = i > IDX_LAST_FIXED_PT;
+      const modoCustom = esCustom ? customModeMap[headerName] : null;
 
       if (i === IDX_OWNER_PT) {
         const esValido = v.startsWith('005') && (v.length === 15 || v.length === 18);
@@ -1329,7 +1396,11 @@ function renderPreTemplate(headers, rows) {
         if (esFromSF) html += `<td class="fixed" style="color:#67e8f9;" title="${esc(v)} (desde SF)">☁ ${esc(v)}</td>`;
         else html += `<td class="fixed" title="${esc(v)}">${esc(v)}</td>`;
       }
-      else html += `<td title="${esc(v)}">${esc(v)}</td>`;  // base 0-4 o custom (>12)
+      else if (esCustom && modoCustom === 'manual') {
+        // Custom manual: color warn tenue para distinguir que es el mismo valor en toda la columna
+        html += `<td style="color:#fbbf24;" title="${esc(v)} (manual · estampado idéntico en todas las filas)">${esc(v) || '<span style="color:var(--muted); font-style:italic;">(vacío)</span>'}</td>`;
+      }
+      else html += `<td title="${esc(v)}">${esc(v)}</td>`;  // base 0-4 o custom SF (>12)
     });
     html += `</tr>`;
   });
@@ -1537,7 +1608,17 @@ async function obtenerCamposLead(sid) {
   if (leadFieldsCache) return leadFieldsCache;
   const data = await backendFetch({ action: 'describe', sid: sid, instanceUrl: INSTANCE_URL, object: 'Lead' });
   leadFieldsCache = data.fields || [];
+  leadFieldsMetadata = data.fieldsMetadata || {};
   return leadFieldsCache;
+}
+
+async function obtenerMetadataCampoLead(sid, fieldName) {
+  // Devuelve la metadata de UN campo específico de Lead (llama describe si no está cacheado)
+  if (!leadFieldsMetadata) await obtenerCamposLead(sid);
+  if (!leadFieldsMetadata) return null;
+  // Case-insensitive lookup
+  const key = Object.keys(leadFieldsMetadata).find(k => k.toLowerCase() === String(fieldName).toLowerCase());
+  return key ? leadFieldsMetadata[key] : null;
 }
 
 async function obtenerCamposContact(sid) {
@@ -1548,13 +1629,146 @@ async function obtenerCamposContact(sid) {
 }
 
 // ══════════════════════════════════════════════════════════════════
+//  VALIDACIÓN DE VALORES POR TIPO DE SALESFORCE
+//  Devuelve { valid: bool, error?: string, hint: string }
+// ══════════════════════════════════════════════════════════════════
+function validarValorParaTipo(valor, metadata) {
+  const v = String(valor ?? '').trim();
+  if (!metadata) return { valid: true, hint: 'Tipo desconocido (metadata no disponible).' };
+
+  const { type, length, picklistValues, nillable } = metadata;
+  const typeLabel = etiquetaDeTipo(type);
+  const lengthLabel = length ? ` · máx ${length} caracteres` : '';
+  const baseHint = `Tipo: ${typeLabel}${lengthLabel}`;
+
+  // Vacío: permitido siempre (avisamos antes de ejecutar si es manual y vacío)
+  if (!v) return { valid: true, hint: baseHint + ' · valor vacío' };
+
+  // Length check universal para tipos de texto
+  if (length > 0 && v.length > length) {
+    return { valid: false, error: `Excede ${length} caracteres (tienes ${v.length}).`, hint: baseHint };
+  }
+
+  switch (type) {
+    case 'string':
+    case 'textarea':
+    case 'encryptedstring':
+      return { valid: true, hint: baseHint };
+
+    case 'email':
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
+        ? { valid: true, hint: baseHint }
+        : { valid: false, error: 'Formato de email inválido (ej. nombre@dominio.com).', hint: baseHint };
+
+    case 'phone':
+      // Salesforce acepta cualquier formato de teléfono, pero limitamos caracteres razonables
+      return /^[\d\s\-+()extEXT.,]+$/.test(v)
+        ? { valid: true, hint: baseHint + ' · solo dígitos, +, -, ( ), espacios, ext' }
+        : { valid: false, error: 'Solo dígitos y +, -, (, ), espacios, punto, ext.', hint: baseHint };
+
+    case 'url':
+      try { new URL(v); return { valid: true, hint: baseHint }; }
+      catch { return { valid: false, error: 'URL inválida (debe incluir http:// o https://).', hint: baseHint }; }
+
+    case 'boolean':
+      const bl = v.toLowerCase();
+      if (['true', 'false', '1', '0', 'yes', 'no'].includes(bl)) {
+        return { valid: true, hint: baseHint + ' · TRUE o FALSE (también 1/0 o yes/no)' };
+      }
+      return { valid: false, error: 'Debe ser TRUE o FALSE.', hint: baseHint };
+
+    case 'int':
+      return /^-?\d+$/.test(v)
+        ? { valid: true, hint: baseHint + ' · número entero' }
+        : { valid: false, error: 'Debe ser un número entero (sin decimales).', hint: baseHint };
+
+    case 'double':
+    case 'currency':
+    case 'percent':
+      return /^-?\d+(\.\d+)?$/.test(v)
+        ? { valid: true, hint: baseHint + ' · número decimal permitido' }
+        : { valid: false, error: 'Debe ser un número (decimal permitido, sin separadores de miles).', hint: baseHint };
+
+    case 'date':
+      return /^\d{4}-\d{2}-\d{2}$/.test(v)
+        ? { valid: true, hint: baseHint + ' · formato YYYY-MM-DD' }
+        : { valid: false, error: 'Formato debe ser YYYY-MM-DD (ej. 2026-07-23).', hint: baseHint };
+
+    case 'datetime':
+      return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(v)
+        ? { valid: true, hint: baseHint + ' · formato ISO 8601' }
+        : { valid: false, error: 'Formato ISO: YYYY-MM-DDTHH:mm:ss (ej. 2026-07-23T14:30:00).', hint: baseHint };
+
+    case 'time':
+      return /^\d{2}:\d{2}:\d{2}/.test(v)
+        ? { valid: true, hint: baseHint + ' · formato HH:mm:ss' }
+        : { valid: false, error: 'Formato debe ser HH:mm:ss.', hint: baseHint };
+
+    case 'picklist':
+      if (!picklistValues || !picklistValues.length) {
+        return { valid: true, hint: baseHint + ' · sin lista de valores disponible' };
+      }
+      const validoPicklist = picklistValues.some(pv => pv === v);
+      const preview = picklistValues.slice(0, 6).join(', ') + (picklistValues.length > 6 ? '…' : '');
+      return validoPicklist
+        ? { valid: true, hint: baseHint + ` · valor válido de ${picklistValues.length} opciones` }
+        : { valid: false, error: `Valor no está en la lista. Válidos: ${preview}`, hint: baseHint };
+
+    case 'multipicklist':
+      if (!picklistValues || !picklistValues.length) {
+        return { valid: true, hint: baseHint + ' · separar con ; (sin lista disponible)' };
+      }
+      const values = v.split(';').map(s => s.trim()).filter(Boolean);
+      const invalid = values.filter(x => !picklistValues.includes(x));
+      const previewMulti = picklistValues.slice(0, 4).join(', ') + (picklistValues.length > 4 ? '…' : '');
+      return invalid.length === 0
+        ? { valid: true, hint: baseHint + ' · separar múltiples con ;' }
+        : { valid: false, error: `Valores no válidos: ${invalid.join(', ')}. Opciones: ${previewMulti}`, hint: baseHint };
+
+    case 'reference':
+      // Referencia = ID de Salesforce (15 o 18 caracteres)
+      return /^[a-zA-Z0-9]{15}([a-zA-Z0-9]{3})?$/.test(v)
+        ? { valid: true, hint: baseHint + ' · ID de Salesforce (15 o 18 chars)' }
+        : { valid: false, error: 'Debe ser un ID de Salesforce (15 o 18 caracteres alfanuméricos).', hint: baseHint };
+
+    case 'id':
+      return /^[a-zA-Z0-9]{15}([a-zA-Z0-9]{3})?$/.test(v)
+        ? { valid: true, hint: baseHint }
+        : { valid: false, error: 'ID inválido.', hint: baseHint };
+
+    default:
+      // Tipos que no conocemos, dejamos pasar sin bloquear
+      return { valid: true, hint: baseHint + ' · sin validación específica' };
+  }
+}
+
+function etiquetaDeTipo(type) {
+  const labels = {
+    'string': 'Text', 'textarea': 'Text Area', 'encryptedstring': 'Text (Encrypted)',
+    'email': 'Email', 'phone': 'Phone', 'url': 'URL',
+    'boolean': 'Checkbox (True/False)',
+    'int': 'Number (integer)', 'double': 'Number (decimal)',
+    'currency': 'Currency', 'percent': 'Percent',
+    'date': 'Date', 'datetime': 'Date/Time', 'time': 'Time',
+    'picklist': 'Picklist', 'multipicklist': 'Multi-select Picklist',
+    'reference': 'Lookup / Master-Detail', 'id': 'Salesforce ID'
+  };
+  return labels[type] || (type || 'Unknown');
+}
+
+// ══════════════════════════════════════════════════════════════════
 //  MODAL CAMPOS CUSTOM
 // ══════════════════════════════════════════════════════════════════
 function abrirModalCustomFields() {
   document.getElementById('newCustomFieldInput').value = '';
-  document.getElementById('customFieldHint').textContent = 'El campo debe existir en el objeto Contact. Requiere SID activo para validación.';
-  document.getElementById('customFieldHint').style.color = 'var(--muted)';
-  renderFixedFieldsList();  // NUEVO: campos base con toggle
+  document.getElementById('customManualValue').value = '';
+  document.getElementById('customManualValidation').textContent = '';
+  document.getElementById('customTypeInfo').textContent = 'Escribe el nombre del campo para ver su tipo…';
+  document.getElementById('customTypeInfo').style.color = 'var(--muted)';
+  addCustomFormState.metadata = null;
+  addCustomFormState.mode = 'sf';
+  setCustomMode('sf');  // reset visual
+  renderFixedFieldsList();
   renderCustomFieldsList();
   document.getElementById('customFieldsModal').classList.add('open');
   setTimeout(() => document.getElementById('newCustomFieldInput').focus(), 100);
@@ -1661,26 +1875,156 @@ function renderCustomFieldsList() {
     return;
   }
   let html = '';
-  customFields.forEach((f, idx) => {
+  customFields.forEach((cf, idx) => {
+    const isManual = cf.mode === 'manual';
+    const badgeStyle = isManual
+      ? 'background:rgba(251,191,36,.15); color:var(--warn); border:1px solid rgba(251,191,36,.4);'
+      : 'background:rgba(6,182,212,.15); color:#67e8f9; border:1px solid rgba(6,182,212,.4);';
+    const badgeText = isManual ? '✎ Manual' : '☁ Desde SF';
+    const fuente = isManual
+      ? (cf.value ? `Valor: <strong style="color:var(--text); font-family:var(--mono);">"${esc(cf.value)}"</strong>` : `<em style="color:var(--muted);">valor vacío</em>`)
+      : `desde <span style="font-family:var(--mono); color:var(--muted);">Contact.${esc(cf.name)}</span>`;
+
+    const editBtn = isManual
+      ? `<button class="rep-del" style="color:var(--accent); font-size:14px;" onclick="editarValorManual(${idx})" title="Editar valor">✎</button>`
+      : '';
+
     html += `
-      <div style="display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--border);">
-        <span style="background:rgba(124,58,237,.15); color:#a78bfa; border-radius:100px; padding:2px 10px; font-size:10px; font-weight:700; font-family:var(--mono);">custom</span>
-        <span style="font-family:var(--mono); font-size:12px; color:var(--text); flex:1;">${esc(f)}</span>
-        <button class="rep-del" style="color:var(--err); font-size:16px;" onclick="quitarCustomField(${idx})" title="Quitar">✕</button>
+      <div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border);">
+        <span style="border-radius:100px; padding:2px 8px; font-size:9.5px; font-weight:700; ${badgeStyle}">${badgeText}</span>
+        <span style="font-family:var(--mono); font-size:12px; color:var(--text); flex-shrink:0;">${esc(cf.name)}</span>
+        <span style="font-size:10.5px; color:var(--muted); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${fuente}</span>
+        ${editBtn}
+        <button class="rep-del" style="color:var(--err); font-size:15px;" onclick="quitarCustomField(${idx})" title="Quitar">✕</button>
       </div>
     `;
   });
   list.innerHTML = html;
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  FORMULARIO "AÑADIR CUSTOM FIELD" (SF o Manual)
+// ══════════════════════════════════════════════════════════════════
+function setCustomMode(mode) {
+  addCustomFormState.mode = mode;
+  document.querySelectorAll('.mode-tab[data-cmode]').forEach(t => t.classList.remove('selected'));
+  document.querySelector(`.mode-tab[data-cmode="${mode}"]`).classList.add('selected');
+  const section = document.getElementById('customManualSection');
+  if (mode === 'manual') {
+    section.style.display = 'block';
+    // Trigger describe si ya hay nombre
+    onCustomFieldNameChange();
+  } else {
+    section.style.display = 'none';
+    document.getElementById('customFieldHint').textContent = 'Se traerá el valor desde Contact.<campo> en la asignación. Se valida contra Contact.';
+    document.getElementById('customFieldHint').style.color = 'var(--muted)';
+  }
+}
+
+let describeLeadTimer = null;
+async function onCustomFieldNameChange() {
+  const raw = document.getElementById('newCustomFieldInput').value.trim();
+  const mode = addCustomFormState.mode;
+
+  // Reset validación previa
+  const hint = document.getElementById('customFieldHint');
+  hint.textContent = mode === 'sf'
+    ? 'Se traerá el valor desde Contact.<campo> en la asignación. Se valida contra Contact.'
+    : 'Se estampará el valor manual en todos los registros. Se valida el tipo contra Lead.';
+  hint.style.color = 'var(--muted)';
+
+  if (mode !== 'manual') return;
+
+  // En modo Manual: hacer describe silencioso de Lead para obtener el tipo del campo
+  const typeInfo = document.getElementById('customTypeInfo');
+  const validation = document.getElementById('customManualValidation');
+  validation.textContent = '';
+
+  if (!raw) {
+    typeInfo.textContent = 'Escribe el nombre del campo para ver su tipo…';
+    typeInfo.style.color = 'var(--muted)';
+    addCustomFormState.metadata = null;
+    return;
+  }
+
+  const sid = document.getElementById('sid').value.trim();
+  if (!sid) {
+    typeInfo.textContent = '⚠ Sin SID no puedo verificar el tipo. Se guardará sin validar.';
+    typeInfo.style.color = 'var(--warn)';
+    addCustomFormState.metadata = null;
+    return;
+  }
+
+  // Debounce
+  clearTimeout(describeLeadTimer);
+  describeLeadTimer = setTimeout(async () => {
+    typeInfo.textContent = '⏳ Consultando Lead…';
+    typeInfo.style.color = 'var(--muted)';
+    try {
+      const metadata = await obtenerMetadataCampoLead(sid, raw);
+      if (!metadata) {
+        typeInfo.textContent = `⛔ "${raw}" no existe en el objeto Lead. No se podrá importar.`;
+        typeInfo.style.color = 'var(--err)';
+        addCustomFormState.metadata = null;
+        return;
+      }
+      // Guardar metadata y actualizar hint
+      addCustomFormState.metadata = metadata;
+      // Info básica del tipo
+      const typeLabel = etiquetaDeTipo(metadata.type);
+      const lengthStr = metadata.length > 0 ? ` · máx ${metadata.length} chars` : '';
+      let extraInfo = '';
+      if (metadata.type === 'picklist' && metadata.picklistValues && metadata.picklistValues.length) {
+        const preview = metadata.picklistValues.slice(0, 4).join(', ') + (metadata.picklistValues.length > 4 ? '…' : '');
+        extraInfo = ` · Valores: ${preview}`;
+      } else if (metadata.type === 'boolean') {
+        extraInfo = ` · TRUE o FALSE`;
+      } else if (metadata.type === 'date') {
+        extraInfo = ` · YYYY-MM-DD`;
+      }
+      typeInfo.innerHTML = `✓ <strong style="color:var(--ok);">${esc(metadata.name)}</strong> — ${esc(typeLabel)}${esc(lengthStr)}${esc(extraInfo)}`;
+      typeInfo.style.color = 'var(--text)';
+      // Revalidar el valor si ya hay algo escrito
+      if (document.getElementById('customManualValue').value) onCustomManualValueInput();
+    } catch (err) {
+      typeInfo.textContent = `⚠ Error consultando Lead: ${err.message}`;
+      typeInfo.style.color = 'var(--warn)';
+      addCustomFormState.metadata = null;
+    }
+  }, 350);
+}
+
+function onCustomManualValueInput() {
+  const val = document.getElementById('customManualValue').value;
+  const validation = document.getElementById('customManualValidation');
+  const metadata = addCustomFormState.metadata;
+
+  if (!metadata) {
+    validation.textContent = '';
+    return;
+  }
+
+  const result = validarValorParaTipo(val, metadata);
+  if (result.valid) {
+    if (!val) {
+      validation.innerHTML = `<span style="color:var(--muted);">ℹ Valor vacío se permite pero avisaremos antes de ejecutar.</span>`;
+    } else {
+      validation.innerHTML = `<span style="color:var(--ok);">✓ ${esc(result.hint || 'Valor válido.')}</span>`;
+    }
+  } else {
+    validation.innerHTML = `<span style="color:var(--err);">✗ ${esc(result.error || 'Valor inválido.')}</span>`;
+  }
+}
+
 async function agregarCustomField() {
   const input = document.getElementById('newCustomFieldInput');
   const hint = document.getElementById('customFieldHint');
   const raw = input.value.trim();
+  const mode = addCustomFormState.mode;
 
   if (!raw) { hint.textContent = '❌ Escribe un nombre.'; hint.style.color = 'var(--err)'; return; }
 
-  // Validación sintáctica
+  // Validación sintáctica común
   if (raw.startsWith('__')) {
     hint.textContent = '❌ No puede empezar con "__" (nombres reservados).'; hint.style.color = 'var(--err)'; return;
   }
@@ -1690,7 +2034,7 @@ async function agregarCustomField() {
   if (PT_HEADERS_BASE.includes(raw)) {
     hint.textContent = `❌ "${raw}" ya es un campo base del pre-template.`; hint.style.color = 'var(--err)'; return;
   }
-  if (customFields.includes(raw)) {
+  if (customFields.some(cf => cf.name.toLowerCase() === raw.toLowerCase())) {
     hint.textContent = `⚠ "${raw}" ya está agregado.`; hint.style.color = 'var(--warn)'; return;
   }
 
@@ -1698,49 +2042,108 @@ async function agregarCustomField() {
   if (preTemplateRows.length > 0) {
     const proceder = confirm(
       `⚠ Ya tienes un pre-template generado.\n\n` +
-      `Añadir el campo "${raw}" no lo afecta directamente, pero necesitas RE-EJECUTAR LA ASIGNACIÓN para traer los datos de este nuevo campo.\n\n` +
-      `¿Quieres añadir el campo de todas formas?`
+      `Añadir el campo "${raw}" no lo afecta directamente, pero necesitas RE-EJECUTAR LA ASIGNACIÓN para que aparezca correctamente en el pre-template.\n\n` +
+      `¿Continuar?`
     );
     if (!proceder) return;
   }
 
-  // Validación contra Salesforce (si hay SID)
   const sid = document.getElementById('sid').value.trim();
-  if (sid) {
-    hint.textContent = '⏳ Validando contra Salesforce…';
-    hint.style.color = 'var(--muted)';
+
+  // ══════════════════════════════════════════════════════════
+  //  MODO SF — Validar contra Contact
+  // ══════════════════════════════════════════════════════════
+  if (mode === 'sf') {
+    if (sid) {
+      hint.textContent = '⏳ Validando contra Contact…';
+      hint.style.color = 'var(--muted)';
+      try {
+        const contactFields = await obtenerCamposContact(sid);
+        const existe = contactFields.some(f => f.toLowerCase() === raw.toLowerCase());
+        if (!existe) {
+          hint.textContent = `❌ "${raw}" no existe en Contact. Verifica el API Name (Setup → Object Manager → Contact → Fields).`;
+          hint.style.color = 'var(--err)';
+          return;
+        }
+        const oficial = contactFields.find(f => f.toLowerCase() === raw.toLowerCase());
+        customFields.push({ name: oficial, mode: 'sf' });
+        hint.textContent = `✓ "${oficial}" añadido — se traerá desde Contact.`;
+        hint.style.color = 'var(--ok)';
+      } catch (err) {
+        hint.textContent = `⚠ No se pudo validar (${err.message}). Añadido sin validar.`;
+        hint.style.color = 'var(--warn)';
+        customFields.push({ name: raw, mode: 'sf' });
+      }
+    } else {
+      customFields.push({ name: raw, mode: 'sf' });
+      hint.textContent = `ℹ "${raw}" añadido sin validar (falta SID). Se validará al ejecutar.`;
+      hint.style.color = 'var(--warn)';
+    }
+  }
+  // ══════════════════════════════════════════════════════════
+  //  MODO MANUAL — Validar contra Lead + tipo del valor
+  // ══════════════════════════════════════════════════════════
+  else if (mode === 'manual') {
+    const valorManual = document.getElementById('customManualValue').value;
+
+    if (!sid) {
+      hint.textContent = '❌ Sin SID no se puede validar el campo contra Lead. Ingresa el SID primero.';
+      hint.style.color = 'var(--err)';
+      return;
+    }
+
     try {
-      const contactFields = await obtenerCamposContact(sid);
-      const existe = contactFields.some(f => f.toLowerCase() === raw.toLowerCase());
-      if (!existe) {
-        hint.textContent = `❌ "${raw}" no existe en el objeto Contact. Verifica el API Name en Salesforce Setup → Object Manager → Contact → Fields.`;
+      hint.textContent = '⏳ Validando contra Lead…';
+      hint.style.color = 'var(--muted)';
+      const metadata = await obtenerMetadataCampoLead(sid, raw);
+      if (!metadata) {
+        hint.textContent = `❌ "${raw}" no existe en Lead. No se puede importar si no existe.`;
         hint.style.color = 'var(--err)';
         return;
       }
-      // Reemplazar por el casing oficial de Salesforce
-      const oficial = contactFields.find(f => f.toLowerCase() === raw.toLowerCase());
-      customFields.push(oficial);
-      hint.textContent = `✓ "${oficial}" validado y añadido.`;
+
+      // Validar valor contra tipo
+      const result = validarValorParaTipo(valorManual, metadata);
+      if (!result.valid) {
+        hint.textContent = `❌ Valor inválido para tipo ${etiquetaDeTipo(metadata.type)}: ${result.error}`;
+        hint.style.color = 'var(--err)';
+        return;
+      }
+
+      // Agregar
+      customFields.push({
+        name: metadata.name,  // nombre oficial del Lead
+        mode: 'manual',
+        value: String(valorManual || '')
+      });
+
+      const displayValor = valorManual ? `"${valorManual}"` : '(vacío)';
+      hint.textContent = `✓ "${metadata.name}" añadido — se estampará ${displayValor} en todas las filas.`;
       hint.style.color = 'var(--ok)';
     } catch (err) {
-      hint.textContent = `⚠ No se pudo validar (${err.message}). Se añadirá sin validar.`;
-      hint.style.color = 'var(--warn)';
-      customFields.push(raw);
+      hint.textContent = `⚠ Error validando: ${err.message}`;
+      hint.style.color = 'var(--err)';
+      return;
     }
-  } else {
-    customFields.push(raw);
-    hint.textContent = `ℹ "${raw}" añadido sin validar (falta SID). Se validará al ejecutar la asignación.`;
-    hint.style.color = 'var(--warn)';
   }
 
   actualizarHeadersDinamicos();
   renderCustomFieldsList();
+
+  // Reset del formulario
   input.value = '';
+  document.getElementById('customManualValue').value = '';
+  document.getElementById('customManualValidation').textContent = '';
+  document.getElementById('customTypeInfo').textContent = 'Escribe el nombre del campo para ver su tipo…';
+  document.getElementById('customTypeInfo').style.color = 'var(--muted)';
+  addCustomFormState.metadata = null;
   input.focus();
 }
 
 function quitarCustomField(idx) {
-  const nombre = customFields[idx];
+  const cf = customFields[idx];
+  if (!cf) return;
+  const nombre = cf.name;
   if (preTemplateRows.length > 0) {
     if (!confirm(`Quitar "${nombre}" del pre-template. ¿Continuar?\n\nNecesitarás re-ejecutar la asignación para que el cambio surta efecto.`)) return;
   }
@@ -1748,6 +2151,40 @@ function quitarCustomField(idx) {
   actualizarHeadersDinamicos();
   renderCustomFieldsList();
   toast(`✓ Campo "${nombre}" quitado.`, 'ok');
+}
+
+// Editar valor manual sin remover el campo
+async function editarValorManual(idx) {
+  const cf = customFields[idx];
+  if (!cf || cf.mode !== 'manual') return;
+
+  const sid = document.getElementById('sid').value.trim();
+  let metadata = null;
+  if (sid) {
+    try { metadata = await obtenerMetadataCampoLead(sid, cf.name); } catch(e) {}
+  }
+
+  const tipoLabel = metadata ? etiquetaDeTipo(metadata.type) : 'desconocido';
+  const lengthInfo = metadata && metadata.length > 0 ? ` (máx ${metadata.length} chars)` : '';
+  const nuevoValor = prompt(
+    `Editar valor de "${cf.name}" (${tipoLabel}${lengthInfo}):`,
+    cf.value || ''
+  );
+
+  if (nuevoValor === null) return;  // Canceló
+
+  // Validar contra tipo si tenemos metadata
+  if (metadata) {
+    const result = validarValorParaTipo(nuevoValor, metadata);
+    if (!result.valid) {
+      alert(`Valor inválido para "${cf.name}" (${tipoLabel}):\n\n${result.error}\n\nNo se aplicó el cambio.`);
+      return;
+    }
+  }
+
+  cf.value = String(nuevoValor);
+  renderCustomFieldsList();
+  toast(`✓ Valor actualizado en "${cf.name}"`, 'ok');
 }
 
 function validarFieldMapping(realFields) {
@@ -2413,9 +2850,12 @@ async function actualizarPreviewCarga() {
   const hayHeaders = (headersReconocidos + nuevosCustomDetectados.length) >= 3;
 
   // Agregar los nuevos customs detectados al estado global ANTES de continuar
+  // Se marcan como mode:'sf' por default (los valores del archivo ya están en las filas)
   if (hayHeaders && nuevosCustomDetectados.length > 0) {
     nuevosCustomDetectados.forEach(f => {
-      if (!customFields.includes(f)) customFields.push(f);
+      if (!customFields.some(cf => cf.name.toLowerCase() === f.toLowerCase())) {
+        customFields.push({ name: f, mode: 'sf' });
+      }
     });
     actualizarHeadersDinamicos();
   }
