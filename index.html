@@ -783,7 +783,7 @@
 // ══════════════════════════════════════════════════════════════════
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════
-const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbz0-Cs5dndyw_B_D8Gslpbw4xaGaUV--lNBoFUAV1xZrccNVNrs4bqixbic5yTm6Aozkg/exec";
+const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycby6iKdivz88bHTqMeqsd_GftlDDjbHySiNpOZHUz4mAuY3Pf5g-na8iN8XyK3b0wD9VXw/exec";
 const GOOGLE_CLIENT_ID = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 const INSTANCE_URL     = "https://docplanner.my.salesforce.com";
 
@@ -800,20 +800,14 @@ const PT_HEADERS_BASE = [
   'FacilitySize__c'
 ];
 
-// Constantes con posición fija (base = 13 columnas)
-const IDX_OWNER_PT       = 5;   // OwnerId
-const IDX_BL_PT          = 6;   // BusinessLine__c
-const IDX_FIRST_FIXED_PT = 7;   // Lead_Type__c (fijos empiezan aquí)
-const IDX_LAST_FIXED_PT  = 12;  // FacilitySize__c (fin de los fijos base)
+// NOTA: Ya no dependemos de índices fijos porque los usuarios pueden ocultar campos base.
+// renderPreTemplate y todo lo demás trabaja por NOMBRE de campo, no por posición.
 
 // Variables dinámicas — se actualizan con actualizarHeadersDinamicos()
 let PT_HEADERS            = [...PT_HEADERS_BASE];
 let IMPORT_RESULT_HEADERS = [...PT_HEADERS_BASE, '__Status', '__Id', '__Action', '__Errors'];
 let DEFAULT_FIELD_MAP     = {};
 PT_HEADERS_BASE.forEach(h => DEFAULT_FIELD_MAP[h] = h);
-
-// FacilitySize__c va como columna vacía: existe en el template pero se envía vacío al import
-const ENVIAR_VACIO_AL_IMPORT = new Set(['FacilitySize__c']);
 
 // Campos OBLIGATORIOS en el objeto Lead
 const CAMPOS_OBLIGATORIOS_LEAD = new Set([
@@ -827,19 +821,20 @@ const CAMPOS_OBLIGATORIOS_LEAD = new Set([
 // Regex para validar API Name válido en Salesforce
 const VALID_FIELD_REGEX = /^[A-Za-z][A-Za-z0-9_]*$/;
 
-// Función que reconstruye los headers dinámicos según customFields
+// Función que reconstruye los headers dinámicos según customFields Y camposFijosOcultos
 function actualizarHeadersDinamicos() {
+  // Filtrar del BASE los campos que el usuario decidió ocultar
+  const camposBaseVisibles = PT_HEADERS_BASE.filter(h => !camposFijosOcultos.includes(h));
   const customNames = customFields.map(cf => cf.name);
-  PT_HEADERS = [...PT_HEADERS_BASE, ...customNames];
+  PT_HEADERS = [...camposBaseVisibles, ...customNames];
   IMPORT_RESULT_HEADERS = [...PT_HEADERS, '__Status', '__Id', '__Action', '__Errors'];
   DEFAULT_FIELD_MAP = {};
-  PT_HEADERS_BASE.forEach(h => DEFAULT_FIELD_MAP[h] = h);
-  customNames.forEach(f => DEFAULT_FIELD_MAP[f] = f);
+  PT_HEADERS.forEach(h => DEFAULT_FIELD_MAP[h] = h);
 
-  // Actualizar contador del botón: custom fields + fields desde SF
+  // Actualizar contador del botón: custom + fromSF + ocultos
   const btn = document.getElementById('customFieldsBtn');
   if (btn) {
-    const totalConfig = customFields.length + fieldsFromSF.length;
+    const totalConfig = customFields.length + fieldsFromSF.length + camposFijosOcultos.length;
     btn.textContent = totalConfig > 0
       ? `⚙ Config. campos (${totalConfig})`
       : `⚙ Config. campos`;
@@ -882,6 +877,11 @@ let leadFieldsMetadata   = null;     // { 'Suffix': {type, length, picklistValue
 // ── Estado de Campos base "desde SF" ──
 // Los campos hardcodeados del pre-template que el usuario decidió traer del Contact real
 let fieldsFromSF         = [];  // ['ContactTypeSegment__c', 'FacilitySize__c', ...]
+
+// ── Estado de Campos base OCULTOS ──
+// Los campos configurables (de CAMPOS_FIJOS_UI) que el usuario decidió NO incluir en el pre-template
+// Los ocultos no aparecen como columna, no se envían al import
+let camposFijosOcultos   = [];  // ['Country__c', 'FacilitySize__c', ...]
 
 // Los 7 campos base del pre-template que se pueden alternar entre "pre-template" y "desde SF"
 const CAMPOS_FIJOS_UI = [
@@ -947,7 +947,7 @@ function logout() {
   preTemplateRows = []; importResultRows = [];
   leadFieldsCache = null; ownerStatsCache = [];
   ultimaAsignacion = {}; loggedInEmail = ""; idTokenCache = "";
-  customFields = []; fieldsFromSF = []; contactFieldsCache = null;
+  customFields = []; fieldsFromSF = []; camposFijosOcultos = []; contactFieldsCache = null;
   resetAsigUI(); resetImportUI();
 }
 
@@ -1210,9 +1210,10 @@ function limpiarAsignacion() {
   document.getElementById('idsArea').value = '';
   updateCount(); actualizarRepsTotal();
   addRep('', '');
-  // Limpiar custom fields Y fields desde SF
+  // Limpiar toda la config: custom fields, fields desde SF, campos ocultos
   customFields = [];
   fieldsFromSF = [];
+  camposFijosOcultos = [];
   actualizarHeadersDinamicos();
   resetAsigUI();
   preTemplateRows = []; totalAsignados = 0; ownerStatsCache = [];
@@ -1260,7 +1261,7 @@ async function ejecutar() {
   else log(`Reps: ${reps.length} | IDs: ${ids.length} | Días: 0 (solo excluye actividad de hoy)`, 'info');
 
   try {
-    const data = await backendFetch({ sid, instanceUrl: INSTANCE_URL, dias, businessLine, leadType, extraFields: customFields, fieldsFromSF: fieldsFromSF, reps, ids });
+    const data = await backendFetch({ sid, instanceUrl: INSTANCE_URL, dias, businessLine, leadType, extraFields: customFields, fieldsFromSF: fieldsFromSF, camposFijosOcultos: camposFijosOcultos, reps, ids });
 
     // Sincronizar customFields con lo que efectivamente usó el backend (por si algún nombre inválido fue rechazado)
     if (data.extraFieldsUsados) {
@@ -1283,6 +1284,25 @@ async function ejecutar() {
       if (fieldsFromSF.length > 0) {
         log(`ℹ ${fieldsFromSF.length} campo(s) del pre-template se trajeron desde SF: ${fieldsFromSF.join(', ')}`, 'info');
       }
+    }
+
+    // Sincronizar camposFijosOcultos con lo que efectivamente usó el backend
+    if (data.camposFijosOcultosUsados) {
+      camposFijosOcultos = [...data.camposFijosOcultosUsados];
+      if (camposFijosOcultos.length > 0) {
+        log(`ℹ ${camposFijosOcultos.length} campo(s) base ocultos (no aparecen en el pre-template): ${camposFijosOcultos.join(', ')}`, 'info');
+      }
+    }
+
+    // Actualizar headers dinámicos con el estado sincronizado
+    actualizarHeadersDinamicos();
+
+    // Confirmar que data.headers coincide con nuestro PT_HEADERS (si no, usar la fuente autoritaria del backend)
+    if (data.headers && Array.isArray(data.headers)) {
+      PT_HEADERS = data.headers;
+      IMPORT_RESULT_HEADERS = [...PT_HEADERS, '__Status', '__Id', '__Action', '__Errors'];
+      DEFAULT_FIELD_MAP = {};
+      PT_HEADERS.forEach(h => DEFAULT_FIELD_MAP[h] = h);
     }
 
     preTemplateRows = data.rows || [];
@@ -1348,16 +1368,20 @@ function renderPreTemplate(headers, rows) {
     wrap.innerHTML = `<div class="empty"><div class="empty-ico">📋</div><p>El pre template aparecerá aquí después de ejecutar.</p></div>`;
     return;
   }
-  // Usa constantes globales IDX_OWNER_PT, IDX_BL_PT, IDX_FIRST_FIXED_PT, IDX_LAST_FIXED_PT
-  // Cualquier columna posterior a IDX_LAST_FIXED_PT es un custom field
-  const fromSFSet = new Set(fieldsFromSF);  // para búsqueda rápida
-  // Mapa: nombre de custom field → modo ('sf' | 'manual')
+  // Trabajamos por NOMBRE de campo (no por índice) porque los índices cambian según los campos ocultos
+  const fromSFSet = new Set(fieldsFromSF);
   const customModeMap = {};
   customFields.forEach(cf => { customModeMap[cf.name] = cf.mode; });
 
+  // Los 6 campos fijos hardcodeados (Lead_Type + 5 más). BusinessLine__c se maneja por separado con estilo bl-chip.
+  const CAMPOS_FIJOS_HARDCODED = new Set([
+    'Lead_Type__c', 'ContactTypeSegment__c', 'Country__c',
+    'Leadassist__Use_Round_Robin__c', 'Status', 'FacilitySize__c'
+  ]);
+
   let html = `<table class="pt"><thead><tr>`;
   PT_HEADERS.forEach(h => {
-    const esCustom = !PT_HEADERS_BASE.includes(h);
+    const esCustom = customModeMap.hasOwnProperty(h);
     const esFromSF = fromSFSet.has(h);
     let badges = '';
     if (esCustom) {
@@ -1378,29 +1402,32 @@ function renderPreTemplate(headers, rows) {
       const v = String(cell ?? '');
       const headerName = PT_HEADERS[i];
       const esFromSF = fromSFSet.has(headerName);
-      const esCustom = i > IDX_LAST_FIXED_PT;
+      const esCustom = customModeMap.hasOwnProperty(headerName);
       const modoCustom = esCustom ? customModeMap[headerName] : null;
 
-      if (i === IDX_OWNER_PT) {
+      if (headerName === 'OwnerId') {
         const esValido = v.startsWith('005') && (v.length === 15 || v.length === 18);
         if (!esValido) html += `<td title="${esc(v)}"><span class="chip" style="background:rgba(244,63,94,.15); border-color:rgba(244,63,94,.4); color:var(--err)">⚠ ${esc(v || 'VACÍO')}</span></td>`;
         else html += `<td title="${esc(v)}"><span class="chip">${esc(v)}</span></td>`;
       }
-      else if (i === IDX_BL_PT) {
+      else if (headerName === 'BusinessLine__c') {
         // BusinessLine__c: badge distinto si viene de SF
         if (esFromSF) html += `<td title="${esc(v)} (desde SF)"><span class="bl-chip" style="background:rgba(6,182,212,.15); border-color:rgba(6,182,212,.4); color:#67e8f9;">☁ ${esc(v)}</span></td>`;
         else html += `<td title="${esc(v)}"><span class="bl-chip">${esc(v)}</span></td>`;
       }
-      else if (i >= IDX_FIRST_FIXED_PT && i <= IDX_LAST_FIXED_PT) {
-        // Fijos: color/estilo diferente si viene de SF
+      else if (CAMPOS_FIJOS_HARDCODED.has(headerName)) {
+        // 6 fijos: color/estilo diferente si viene de SF
         if (esFromSF) html += `<td class="fixed" style="color:#67e8f9;" title="${esc(v)} (desde SF)">☁ ${esc(v)}</td>`;
         else html += `<td class="fixed" title="${esc(v)}">${esc(v)}</td>`;
       }
       else if (esCustom && modoCustom === 'manual') {
-        // Custom manual: color warn tenue para distinguir que es el mismo valor en toda la columna
+        // Custom manual: color warn tenue
         html += `<td style="color:#fbbf24;" title="${esc(v)} (manual · estampado idéntico en todas las filas)">${esc(v) || '<span style="color:var(--muted); font-style:italic;">(vacío)</span>'}</td>`;
       }
-      else html += `<td title="${esc(v)}">${esc(v)}</td>`;  // base 0-4 o custom SF (>12)
+      else {
+        // Base (Contact__c, LastSourceAt__c, Company, LastName, Email) o custom SF
+        html += `<td title="${esc(v)}">${esc(v)}</td>`;
+      }
     });
     html += `</tr>`;
   });
@@ -1778,23 +1805,36 @@ function cerrarModalCustomFields() {
   document.getElementById('customFieldsModal').classList.remove('open');
 }
 
-// ── Sección "Campos base" (fuente pre-template vs SF) ──
+// ── Sección "Campos base" (fuente pre-template vs SF, con opción de ocultar) ──
 function renderFixedFieldsList() {
   const container = document.getElementById('fixedFieldsList');
   document.getElementById('fieldsFromSFCount').textContent = fieldsFromSF.length;
+
+  const visibles = CAMPOS_FIJOS_UI.filter(f => !camposFijosOcultos.includes(f.name));
+  const ocultos  = CAMPOS_FIJOS_UI.filter(f =>  camposFijosOcultos.includes(f.name));
+
   let html = `<table style="width:100%; border-collapse:collapse; font-size:11.5px;">
     <thead>
       <tr style="background:var(--surface); border-bottom:1px solid var(--border);">
+        <th style="padding:8px 8px; text-align:center; width:32px;"></th>
         <th style="padding:8px 12px; text-align:left; font-weight:700; font-size:10px; color:var(--muted); letter-spacing:.5px; text-transform:uppercase;">Campo</th>
         <th style="padding:8px 12px; text-align:left; font-weight:700; font-size:10px; color:var(--muted); letter-spacing:.5px; text-transform:uppercase; width:150px;">Fuente</th>
         <th style="padding:8px 12px; text-align:left; font-weight:700; font-size:10px; color:var(--muted); letter-spacing:.5px; text-transform:uppercase;">Default (pre-template)</th>
       </tr>
     </thead>
     <tbody>`;
-  CAMPOS_FIJOS_UI.forEach(f => {
+
+  if (visibles.length === 0) {
+    html += `<tr><td colspan="4" style="padding:12px; text-align:center; color:var(--muted); font-style:italic;">Todos los campos base están ocultos. Restaura al menos uno abajo para que el pre-template tenga columnas configurables.</td></tr>`;
+  }
+
+  visibles.forEach(f => {
     const isFromSF = fieldsFromSF.includes(f.name);
     html += `
       <tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:6px 8px; text-align:center;">
+          <button class="rep-del" style="color:var(--err); font-size:14px; padding:2px 6px;" onclick="ocultarCampoFijo('${esc(f.name)}')" title="Quitar del pre-template">✕</button>
+        </td>
         <td style="padding:6px 12px; font-family:var(--mono); font-size:10.5px; color:var(--text);">${esc(f.name)}</td>
         <td style="padding:6px 12px;">
           <select onchange="onFieldSourceChange(this, '${esc(f.name)}')" style="background:var(--surface); border:1px solid var(--border); border-radius:5px; color:var(--text); font-size:10.5px; padding:4px 8px; outline:none; font-family:var(--mono); width:100%; cursor:pointer;">
@@ -1807,7 +1847,90 @@ function renderFixedFieldsList() {
     `;
   });
   html += `</tbody></table>`;
+
+  // Sección de restaurar ocultos (chips clickables)
+  if (ocultos.length > 0) {
+    html += `<div style="margin-top:10px; padding:10px 12px; background:rgba(107,114,154,.06); border:1px dashed var(--border); border-radius:6px;">
+      <div style="font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px; font-weight:700;">
+        ${ocultos.length} campo(s) oculto(s) — no aparecen en el pre-template
+      </div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">`;
+    ocultos.forEach(f => {
+      html += `<button onclick="restaurarCampoFijo('${esc(f.name)}')" style="background:var(--sf2); border:1px solid var(--border); border-radius:100px; padding:4px 12px 4px 10px; font-size:10.5px; color:var(--muted); cursor:pointer; font-family:var(--mono); display:inline-flex; align-items:center; gap:5px;" title="Restaurar al pre-template">
+        <span style="color:var(--ok); font-weight:700;">+</span> ${esc(f.name)}
+      </button>`;
+    });
+    html += `</div></div>`;
+  }
+
   container.innerHTML = html;
+}
+
+function ocultarCampoFijo(name) {
+  const CAMPOS_OBLIGATORIOS = ['Lead_Type__c', 'ContactTypeSegment__c', 'Country__c', 'Leadassist__Use_Round_Robin__c', 'Status'];
+  if (CAMPOS_OBLIGATORIOS.includes(name)) {
+    if (!confirm(
+      `⚠ Campo obligatorio en Lead\n\n` +
+      `"${name}" es un campo OBLIGATORIO del objeto Lead.\n\n` +
+      `Si lo quitas del pre-template, el import FALLARÁ para TODAS las filas con error "REQUIRED_FIELD_MISSING".\n\n` +
+      `¿Estás seguro de que quieres quitarlo?`
+    )) return;
+  }
+
+  // Si hay pre-template, filtrar la columna correspondiente
+  if (preTemplateRows.length > 0) {
+    if (!confirm(
+      `Ya tienes un pre-template generado. Al quitar "${name}":\n\n` +
+      `• La columna desaparecerá de la vista y del import\n` +
+      `• El resultado del import previo mantendrá la columna pero no se mostrará\n\n` +
+      `¿Continuar?`
+    )) return;
+    const oldIdx = PT_HEADERS.indexOf(name);
+    if (oldIdx >= 0) {
+      preTemplateRows = preTemplateRows.map(row => {
+        const newRow = [...row];
+        newRow.splice(oldIdx, 1);
+        return newRow;
+      });
+    }
+  }
+
+  if (!camposFijosOcultos.includes(name)) camposFijosOcultos.push(name);
+  // Si estaba en fieldsFromSF, quitarlo (ya no aplica)
+  const fsfIdx = fieldsFromSF.indexOf(name);
+  if (fsfIdx >= 0) fieldsFromSF.splice(fsfIdx, 1);
+
+  actualizarHeadersDinamicos();
+  renderFixedFieldsList();
+  if (preTemplateRows.length > 0) {
+    renderPreTemplate(PT_HEADERS, preTemplateRows);
+  }
+  toast(`✓ "${name}" quitado del pre-template`, 'ok');
+}
+
+function restaurarCampoFijo(name) {
+  const idx = camposFijosOcultos.indexOf(name);
+  if (idx < 0) return;
+  camposFijosOcultos.splice(idx, 1);
+
+  // Si hay pre-template, insertar columna vacía en la posición correcta
+  if (preTemplateRows.length > 0) {
+    actualizarHeadersDinamicos();  // recalcular PT_HEADERS con el nuevo campo
+    const newIdx = PT_HEADERS.indexOf(name);
+    if (newIdx >= 0) {
+      preTemplateRows = preTemplateRows.map(row => {
+        const newRow = [...row];
+        newRow.splice(newIdx, 0, '');
+        return newRow;
+      });
+    }
+    renderPreTemplate(PT_HEADERS, preTemplateRows);
+    toast(`✓ "${name}" restaurado (vacío) — re-ejecuta la asignación para poblarlo`, 'ok');
+  } else {
+    actualizarHeadersDinamicos();
+    toast(`✓ "${name}" restaurado al pre-template`, 'ok');
+  }
+  renderFixedFieldsList();
 }
 
 async function onFieldSourceChange(select, fieldName) {
@@ -2309,9 +2432,7 @@ async function ejecutarImport() {
     const newRow = [];
     for (let j = 0; j < colIndexes.length; j++) {
       const idx = colIndexes[j];
-      const colName = colNames[j];
-      if (ENVIAR_VACIO_AL_IMPORT.has(colName)) newRow.push('');
-      else newRow.push(row[idx] !== undefined && row[idx] !== null ? row[idx] : '');
+      newRow.push(row[idx] !== undefined && row[idx] !== null ? row[idx] : '');
     }
     rowsToSend.push(newRow);
   }
@@ -2320,7 +2441,6 @@ async function ejecutarImport() {
   btn.textContent = '⏳ Enviando al servidor…';
   ilog(`📤 Paso 2/2: Iniciando Bulk Import`, 'info');
   ilog(`Objeto: ${object} | Acción: ${action} | Registros: ${total}`, 'info');
-  ilog(`ℹ FacilitySize__c se envía vacío al Lead (no se migra del Contact).`, 'info');
   ilog('⏳ Puede tardar 30 seg a varios minutos…', 'warn');
   setImportStatus(`Enviando ${total} registros al servidor…`, 'run');
 
@@ -2556,12 +2676,11 @@ async function ejecutarRetry() {
   const intentoNuevo = historialRetries.length;  // 0 = original, 1 = primer retry, ...
 
   // Construir rows para el retry a partir de las failedRows (solo columnas del pre-template)
-  // Necesitamos aplicar el mismo colIndexes/ENVIAR_VACIO_AL_IMPORT que el import base
+  // Necesitamos aplicar el mismo colIndexes que el import base
   const rowsRetry = failedRows.map(row => {
     const newRow = [];
     for (let j = 0; j < cfg.colIndexes.length; j++) {
       const colName = cfg.colNames[j];
-      if (ENVIAR_VACIO_AL_IMPORT.has(colName)) { newRow.push(''); continue; }
       newRow.push(row[colName] !== undefined && row[colName] !== null ? row[colName] : '');
     }
     return newRow;
