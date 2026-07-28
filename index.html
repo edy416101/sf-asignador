@@ -290,9 +290,9 @@
     .submode-tab.selected { border-color: var(--accent); color: var(--accent); background: rgba(75,124,243,0.08); }
 
     /* File input estilizado */
-    .file-input-wrap { position: relative; }
-    .file-input-wrap input[type=file] { position: absolute; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
-    .file-input-label { background: var(--sf2); border: 1px dashed var(--border); border-radius: 8px; padding: 12px; text-align: center; cursor: pointer; transition: all .15s; font-size: 12px; color: var(--muted); }
+    .file-input-wrap { position: relative; display: block; min-height: 48px; }
+    .file-input-wrap input[type=file] { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; z-index: 2; }
+    .file-input-label { display: block; background: var(--sf2); border: 1px dashed var(--border); border-radius: 8px; padding: 12px; text-align: center; cursor: pointer; transition: all .15s; font-size: 12px; color: var(--muted); position: relative; z-index: 1; }
     .file-input-label:hover { border-color: var(--accent); color: var(--accent); }
     .file-input-label.has-file { border-style: solid; border-color: var(--ok); color: var(--ok); }
 
@@ -378,6 +378,7 @@
               <option value="Media 360">Media 360</option>
               <option value="Clinic Agenda">Clinic Agenda</option>
               <option value="First Class">First Class</option>
+              <option value="S4C/PMS">S4C/PMS</option>
             </select>
           </div>
           <div class="field">
@@ -468,12 +469,9 @@
           <div class="isec">
             <div class="slabel">Configure Import</div>
             <div class="cfg-grid">
-              <div class="field"><label>API Type</label><select id="cfg-apitype" disabled style="appearance:none; pointer-events:none;"><option value="enterprise" selected>Enterprise (default)</option></select></div>
               <div class="field"><label>Action</label><select id="cfg-action" onchange="onActionChange()"><option value="insert">Insert</option><option value="update">Update</option><option value="upsert">Upsert</option><option value="delete">Delete</option><option value="undelete">Undelete</option></select></div>
               <div class="field" id="extIdField"><label>External ID Field (Upsert)</label><input id="cfg-extid" type="text" placeholder="ej. Id, Email, Custom_Id__c"/></div>
               <div class="field"><label>Object</label><select id="cfg-object"><option value="Lead" selected>Lead</option></select></div>
-              <div class="field"><label>Batch size</label><input id="cfg-batch" type="number" value="30" min="1" max="10000"/></div>
-              <div class="field"><label>Threads (paralelo)</label><input id="cfg-threads" type="number" value="3" min="1" max="5"/></div>
             </div>
           </div>
           <div class="isec">
@@ -575,6 +573,23 @@
             <label>Link del Google Sheet</label>
             <input type="text" id="exportTargetUrl" placeholder="https://docs.google.com/spreadsheets/d/…"/>
             <span class="hint">El Sheet debe estar compartido con la cuenta que desplegó el script (con permisos de Editor).</span>
+          </div>
+          <div class="modal-field">
+            <label>Renombrar Sheet <span style="text-transform:none; color:var(--muted); font-weight:400;">(opcional)</span></label>
+            <input type="text" id="attachRenameName" placeholder="Vacío = mantener el nombre actual"/>
+            <span class="hint">Si escribes algo, se renombrará el Sheet existente. Si lo dejas vacío, conserva su nombre.</span>
+          </div>
+          <div class="modal-field">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="attachMoveToFolder" onchange="onAttachMoveToggle()" style="width:auto; margin:0; cursor:pointer;"/>
+              <span style="text-transform:none;">Mover el Sheet a una carpeta</span>
+            </label>
+            <span class="hint">Por defecto el Sheet se queda donde está. Actívalo si quieres moverlo a la carpeta COE o a otra.</span>
+          </div>
+          <div class="modal-field" id="attachFolderField" style="display:none;">
+            <label>Link o ID de Carpeta <span style="text-transform:none; color:var(--muted); font-weight:400;">(opcional)</span></label>
+            <input type="text" id="attachFolderId" placeholder="(dejar vacío = predeterminada COE)"/>
+            <span class="hint">Pega el link completo (https://drive.google.com/drive/folders/…) o solo el ID. Vacío = carpeta COE.</span>
           </div>
         </div>
 
@@ -783,7 +798,7 @@
 // ══════════════════════════════════════════════════════════════════
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════
-const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycby6iKdivz88bHTqMeqsd_GftlDDjbHySiNpOZHUz4mAuY3Pf5g-na8iN8XyK3b0wD9VXw/exec";
+const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbx2bg-bBQRUiQCeWIu-80LlOw2uP15GQ8GQ0IeNzx1bFlRnclumKb7uwt7OdKasc-ZgCw/exec";
 const GOOGLE_CLIENT_ID = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 const INSTANCE_URL     = "https://docplanner.my.salesforce.com";
 
@@ -834,7 +849,7 @@ function actualizarHeadersDinamicos() {
   // Actualizar contador del botón: custom + fromSF + ocultos
   const btn = document.getElementById('customFieldsBtn');
   if (btn) {
-    const totalConfig = customFields.length + fieldsFromSF.length + camposFijosOcultos.length;
+    const totalConfig = customFields.length + fieldsFromSF.length + Object.keys(fieldsManualValues).length + camposFijosOcultos.length;
     btn.textContent = totalConfig > 0
       ? `⚙ Config. campos (${totalConfig})`
       : `⚙ Config. campos`;
@@ -882,6 +897,13 @@ let fieldsFromSF         = [];  // ['ContactTypeSegment__c', 'FacilitySize__c', 
 // Los campos configurables (de CAMPOS_FIJOS_UI) que el usuario decidió NO incluir en el pre-template
 // Los ocultos no aparecen como columna, no se envían al import
 let camposFijosOcultos   = [];  // ['Country__c', 'FacilitySize__c', ...]
+
+// ── Estado de Campos base en modo MANUAL ──
+// Los campos configurables que el usuario decidió estampar con un valor fijo propio
+// (en vez del default hardcodeado o del valor del Contact).
+// Estructura: { 'FacilitySize__c': 'Mid', 'Country__c': 'Colombia', ... }
+// Un campo en fieldsManualValues tiene prioridad y NO puede estar también en fieldsFromSF.
+let fieldsManualValues   = {};
 
 // Los 7 campos base del pre-template que se pueden alternar entre "pre-template" y "desde SF"
 const CAMPOS_FIJOS_UI = [
@@ -947,7 +969,7 @@ function logout() {
   preTemplateRows = []; importResultRows = [];
   leadFieldsCache = null; ownerStatsCache = [];
   ultimaAsignacion = {}; loggedInEmail = ""; idTokenCache = "";
-  customFields = []; fieldsFromSF = []; camposFijosOcultos = []; contactFieldsCache = null;
+  customFields = []; fieldsFromSF = []; fieldsManualValues = {}; camposFijosOcultos = []; contactFieldsCache = null;
   resetAsigUI(); resetImportUI();
 }
 
@@ -1210,9 +1232,10 @@ function limpiarAsignacion() {
   document.getElementById('idsArea').value = '';
   updateCount(); actualizarRepsTotal();
   addRep('', '');
-  // Limpiar toda la config: custom fields, fields desde SF, campos ocultos
+  // Limpiar toda la config: custom fields, fields desde SF, manuales, campos ocultos
   customFields = [];
   fieldsFromSF = [];
+  fieldsManualValues = {};
   camposFijosOcultos = [];
   actualizarHeadersDinamicos();
   resetAsigUI();
@@ -1235,13 +1258,15 @@ async function ejecutar() {
   if (!reps.length) return toast('Agrega al menos un representante con Nº Asignaciones > 0.', 'bad');
   if (!ids.length) return toast('Pega al menos un ID de contacto.', 'bad');
 
-  // ── Advertir si hay custom fields en modo Manual con valor vacío ──
-  const manualVacios = customFields.filter(cf => cf.mode === 'manual' && !(cf.value && String(cf.value).trim()));
-  if (manualVacios.length > 0) {
-    const lista = manualVacios.map(cf => `  • ${cf.name}`).join('\n');
+  // ── Advertir si hay campos en modo Manual con valor vacío (custom o fijos) ──
+  const manualVaciosCustom = customFields.filter(cf => cf.mode === 'manual' && !(cf.value && String(cf.value).trim()));
+  const manualVaciosFijos = Object.keys(fieldsManualValues).filter(name => !(fieldsManualValues[name] && String(fieldsManualValues[name]).trim()));
+  const todosVacios = [...manualVaciosCustom.map(cf => cf.name), ...manualVaciosFijos];
+  if (todosVacios.length > 0) {
+    const lista = todosVacios.map(name => `  • ${name}`).join('\n');
     const proceder = confirm(
       `⚠ Campos manuales con valor vacío\n\n` +
-      `Los siguientes campos custom Manual NO tienen valor asignado:\n\n${lista}\n\n` +
+      `Los siguientes campos en modo Manual NO tienen valor asignado:\n\n${lista}\n\n` +
       `Se enviarán como cadena vacía a Salesforce. Si el campo es obligatorio en Lead, el import fallará para todas las filas.\n\n` +
       `¿Continuar de todas formas? (Cancelar para volver a editarlos)`
     );
@@ -1261,7 +1286,7 @@ async function ejecutar() {
   else log(`Reps: ${reps.length} | IDs: ${ids.length} | Días: 0 (solo excluye actividad de hoy)`, 'info');
 
   try {
-    const data = await backendFetch({ sid, instanceUrl: INSTANCE_URL, dias, businessLine, leadType, extraFields: customFields, fieldsFromSF: fieldsFromSF, camposFijosOcultos: camposFijosOcultos, reps, ids });
+    const data = await backendFetch({ sid, instanceUrl: INSTANCE_URL, dias, businessLine, leadType, extraFields: customFields, fieldsFromSF: fieldsFromSF, fieldsManualValues: fieldsManualValues, camposFijosOcultos: camposFijosOcultos, reps, ids });
 
     // Sincronizar customFields con lo que efectivamente usó el backend (por si algún nombre inválido fue rechazado)
     if (data.extraFieldsUsados) {
@@ -1291,6 +1316,16 @@ async function ejecutar() {
       camposFijosOcultos = [...data.camposFijosOcultosUsados];
       if (camposFijosOcultos.length > 0) {
         log(`ℹ ${camposFijosOcultos.length} campo(s) base ocultos (no aparecen en el pre-template): ${camposFijosOcultos.join(', ')}`, 'info');
+      }
+    }
+
+    // Sincronizar fieldsManualValues con lo que efectivamente usó el backend
+    if (data.fieldsManualValuesUsados) {
+      fieldsManualValues = { ...data.fieldsManualValuesUsados };
+      const manualKeys = Object.keys(fieldsManualValues);
+      if (manualKeys.length > 0) {
+        const detalle = manualKeys.map(k => `${k}="${fieldsManualValues[k]}"`).join(', ');
+        log(`ℹ ${manualKeys.length} campo(s) base con valor manual estampado: ${detalle}`, 'info');
       }
     }
 
@@ -1370,6 +1405,7 @@ function renderPreTemplate(headers, rows) {
   }
   // Trabajamos por NOMBRE de campo (no por índice) porque los índices cambian según los campos ocultos
   const fromSFSet = new Set(fieldsFromSF);
+  const manualFijosSet = new Set(Object.keys(fieldsManualValues));  // campos fijos en modo manual
   const customModeMap = {};
   customFields.forEach(cf => { customModeMap[cf.name] = cf.mode; });
 
@@ -1383,6 +1419,7 @@ function renderPreTemplate(headers, rows) {
   PT_HEADERS.forEach(h => {
     const esCustom = customModeMap.hasOwnProperty(h);
     const esFromSF = fromSFSet.has(h);
+    const esManualFijo = manualFijosSet.has(h);
     let badges = '';
     if (esCustom) {
       const modo = customModeMap[h];
@@ -1393,6 +1430,7 @@ function renderPreTemplate(headers, rows) {
       }
     }
     if (esFromSF) badges += ' <span style="background:rgba(6,182,212,.25); color:#67e8f9; border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">☁ SF</span>';
+    if (esManualFijo) badges += ' <span style="background:rgba(251,191,36,.25); color:var(--warn); border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">✎ MANUAL</span>';
     html += `<th title="${esc(h)}">${esc(h)}${badges}</th>`;
   });
   html += `</tr></thead><tbody>`;
@@ -1402,6 +1440,7 @@ function renderPreTemplate(headers, rows) {
       const v = String(cell ?? '');
       const headerName = PT_HEADERS[i];
       const esFromSF = fromSFSet.has(headerName);
+      const esManualFijo = manualFijosSet.has(headerName);
       const esCustom = customModeMap.hasOwnProperty(headerName);
       const modoCustom = esCustom ? customModeMap[headerName] : null;
 
@@ -1411,13 +1450,15 @@ function renderPreTemplate(headers, rows) {
         else html += `<td title="${esc(v)}"><span class="chip">${esc(v)}</span></td>`;
       }
       else if (headerName === 'BusinessLine__c') {
-        // BusinessLine__c: badge distinto si viene de SF
+        // BusinessLine__c: badge distinto si viene de SF o es manual
         if (esFromSF) html += `<td title="${esc(v)} (desde SF)"><span class="bl-chip" style="background:rgba(6,182,212,.15); border-color:rgba(6,182,212,.4); color:#67e8f9;">☁ ${esc(v)}</span></td>`;
+        else if (esManualFijo) html += `<td title="${esc(v)} (manual)"><span class="bl-chip" style="background:rgba(251,191,36,.15); border-color:rgba(251,191,36,.4); color:var(--warn);">✎ ${esc(v)}</span></td>`;
         else html += `<td title="${esc(v)}"><span class="bl-chip">${esc(v)}</span></td>`;
       }
       else if (CAMPOS_FIJOS_HARDCODED.has(headerName)) {
-        // 6 fijos: color/estilo diferente si viene de SF
+        // 6 fijos: color según fuente (SF cyan, manual naranja, default normal)
         if (esFromSF) html += `<td class="fixed" style="color:#67e8f9;" title="${esc(v)} (desde SF)">☁ ${esc(v)}</td>`;
+        else if (esManualFijo) html += `<td class="fixed" style="color:#fbbf24;" title="${esc(v)} (manual · estampado idéntico en todas las filas)">✎ ${esc(v) || '(vacío)'}</td>`;
         else html += `<td class="fixed" title="${esc(v)}">${esc(v)}</td>`;
       }
       else if (esCustom && modoCustom === 'manual') {
@@ -1818,7 +1859,7 @@ function renderFixedFieldsList() {
       <tr style="background:var(--surface); border-bottom:1px solid var(--border);">
         <th style="padding:8px 8px; text-align:center; width:32px;"></th>
         <th style="padding:8px 12px; text-align:left; font-weight:700; font-size:10px; color:var(--muted); letter-spacing:.5px; text-transform:uppercase;">Campo</th>
-        <th style="padding:8px 12px; text-align:left; font-weight:700; font-size:10px; color:var(--muted); letter-spacing:.5px; text-transform:uppercase; width:150px;">Fuente</th>
+        <th style="padding:8px 12px; text-align:left; font-weight:700; font-size:10px; color:var(--muted); letter-spacing:.5px; text-transform:uppercase; width:170px;">Fuente</th>
         <th style="padding:8px 12px; text-align:left; font-weight:700; font-size:10px; color:var(--muted); letter-spacing:.5px; text-transform:uppercase;">Default (pre-template)</th>
       </tr>
     </thead>
@@ -1830,6 +1871,10 @@ function renderFixedFieldsList() {
 
   visibles.forEach(f => {
     const isFromSF = fieldsFromSF.includes(f.name);
+    const isManual = fieldsManualValues.hasOwnProperty(f.name);
+    const modo = isManual ? 'manual' : (isFromSF ? 'sf' : 'pretemplate');
+    const manualVal = isManual ? fieldsManualValues[f.name] : '';
+
     html += `
       <tr style="border-bottom:1px solid var(--border);">
         <td style="padding:6px 8px; text-align:center;">
@@ -1838,13 +1883,30 @@ function renderFixedFieldsList() {
         <td style="padding:6px 12px; font-family:var(--mono); font-size:10.5px; color:var(--text);">${esc(f.name)}</td>
         <td style="padding:6px 12px;">
           <select onchange="onFieldSourceChange(this, '${esc(f.name)}')" style="background:var(--surface); border:1px solid var(--border); border-radius:5px; color:var(--text); font-size:10.5px; padding:4px 8px; outline:none; font-family:var(--mono); width:100%; cursor:pointer;">
-            <option value="pretemplate" ${!isFromSF ? 'selected' : ''}>📋 Pre-template</option>
-            <option value="sf" ${isFromSF ? 'selected' : ''}>☁ Desde SF</option>
+            <option value="pretemplate" ${modo === 'pretemplate' ? 'selected' : ''}>📋 Pre-template</option>
+            <option value="sf" ${modo === 'sf' ? 'selected' : ''}>☁ Desde SF</option>
+            <option value="manual" ${modo === 'manual' ? 'selected' : ''}>✎ Manual</option>
           </select>
         </td>
         <td style="padding:6px 12px; color:var(--muted); font-size:10.5px; font-style:italic;">${esc(f.default)}</td>
-      </tr>
-    `;
+      </tr>`;
+
+    // Fila extra con el input de valor manual (solo si modo === manual)
+    if (isManual) {
+      html += `
+      <tr style="border-bottom:1px solid var(--border); background:rgba(251,191,36,0.04);">
+        <td></td>
+        <td colspan="3" style="padding:4px 12px 10px 12px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:10px; color:var(--warn); white-space:nowrap;">✎ Valor a estampar:</span>
+            <input type="text" value="${esc(manualVal)}" placeholder="Valor idéntico para todas las filas (ej. Mid)"
+              oninput="onFixedManualValueInput('${esc(f.name)}', this.value)"
+              style="flex:1; background:var(--sf2); border:1px solid rgba(251,191,36,.4); border-radius:5px; color:var(--text); font-family:var(--mono); font-size:11px; padding:5px 9px; outline:none;"/>
+          </div>
+          <div id="fixedManualValidation-${esc(f.name)}" style="font-size:10px; margin-top:4px; min-height:12px; padding-left:2px;"></div>
+        </td>
+      </tr>`;
+    }
   });
   html += `</tbody></table>`;
 
@@ -1899,6 +1961,8 @@ function ocultarCampoFijo(name) {
   // Si estaba en fieldsFromSF, quitarlo (ya no aplica)
   const fsfIdx = fieldsFromSF.indexOf(name);
   if (fsfIdx >= 0) fieldsFromSF.splice(fsfIdx, 1);
+  // Si estaba en modo manual, quitarlo también
+  if (fieldsManualValues.hasOwnProperty(name)) delete fieldsManualValues[name];
 
   actualizarHeadersDinamicos();
   renderFixedFieldsList();
@@ -1936,17 +2000,31 @@ function restaurarCampoFijo(name) {
 async function onFieldSourceChange(select, fieldName) {
   const newValue = select.value;
 
-  if (newValue === 'pretemplate') {
-    // Quitar de fieldsFromSF
-    const idx = fieldsFromSF.indexOf(fieldName);
-    if (idx >= 0) fieldsFromSF.splice(idx, 1);
-    document.getElementById('fieldsFromSFCount').textContent = fieldsFromSF.length;
-    toast(`ℹ ${fieldName} vuelve a usar valor del pre-template`, 'ok');
+  // Limpiar de todos los estados primero
+  const fsfIdx = fieldsFromSF.indexOf(fieldName);
+  if (fsfIdx >= 0) fieldsFromSF.splice(fsfIdx, 1);
+  const teniaManual = fieldsManualValues.hasOwnProperty(fieldName);
+  if (teniaManual) delete fieldsManualValues[fieldName];
 
-    // Warning si ya hay pre-template generado
-    if (preTemplateRows.length > 0) {
-      toast(`⚠ Re-ejecuta la asignación para aplicar el cambio`, 'bad');
-    }
+  if (newValue === 'pretemplate') {
+    document.getElementById('fieldsFromSFCount').textContent = fieldsFromSF.length;
+    renderFixedFieldsList();
+    toast(`ℹ ${fieldName} vuelve a usar valor del pre-template`, 'ok');
+    if (preTemplateRows.length > 0) toast(`⚠ Re-ejecuta la asignación para aplicar el cambio`, 'bad');
+    return;
+  }
+
+  if (newValue === 'manual') {
+    // Activar modo manual con valor vacío inicial; el usuario lo escribe en el input que aparece
+    fieldsManualValues[fieldName] = '';
+    renderFixedFieldsList();
+    // Enfocar el input recién creado
+    setTimeout(() => {
+      const input = document.querySelector(`#fixedManualValidation-${CSS.escape(fieldName)}`)?.closest('td')?.querySelector('input');
+      if (input) input.focus();
+    }, 50);
+    toast(`✎ ${fieldName} en modo manual — escribe el valor a estampar`, 'ok');
+    if (preTemplateRows.length > 0) toast(`⚠ Re-ejecuta la asignación para aplicar el cambio`, 'bad');
     return;
   }
 
@@ -1954,9 +2032,9 @@ async function onFieldSourceChange(select, fieldName) {
   const sid = document.getElementById('sid').value.trim();
 
   if (!sid) {
-    // Sin SID, permitir pero avisar
     if (!fieldsFromSF.includes(fieldName)) fieldsFromSF.push(fieldName);
     document.getElementById('fieldsFromSFCount').textContent = fieldsFromSF.length;
+    renderFixedFieldsList();
     toast(`ℹ ${fieldName} traerá valor de SF (sin validar, falta SID)`, 'bad');
     return;
   }
@@ -1973,21 +2051,57 @@ async function onFieldSourceChange(select, fieldName) {
         `Se mantiene el valor hardcodeado del pre-template.`
       );
       select.value = 'pretemplate';
+      renderFixedFieldsList();
       return;
     }
-    // Éxito
     if (!fieldsFromSF.includes(fieldName)) fieldsFromSF.push(fieldName);
     document.getElementById('fieldsFromSFCount').textContent = fieldsFromSF.length;
+    renderFixedFieldsList();
     toast(`✓ ${fieldName} traerá valor real desde SF`, 'ok');
-
-    // Warning si ya hay pre-template generado
-    if (preTemplateRows.length > 0) {
-      toast(`⚠ Re-ejecuta la asignación para aplicar el cambio`, 'bad');
-    }
+    if (preTemplateRows.length > 0) toast(`⚠ Re-ejecuta la asignación para aplicar el cambio`, 'bad');
   } catch (err) {
     toast(`⚠ No se pudo validar: ${err.message}`, 'bad');
     select.value = 'pretemplate';
+    renderFixedFieldsList();
   }
+}
+
+// Validación en vivo del valor manual de un campo fijo (contra el tipo en Lead)
+let fixedManualDescribeTimer = {};
+function onFixedManualValueInput(fieldName, value) {
+  fieldsManualValues[fieldName] = value;
+  const validationEl = document.getElementById(`fixedManualValidation-${fieldName}`);
+  if (!validationEl) return;
+
+  const sid = document.getElementById('sid').value.trim();
+  if (!sid) {
+    validationEl.innerHTML = value
+      ? `<span style="color:var(--muted);">Se estampará "${esc(value)}" (sin validar tipo, falta SID)</span>`
+      : `<span style="color:var(--muted);">Valor vacío se permite; avisaremos antes de ejecutar</span>`;
+    return;
+  }
+
+  // Debounce la validación de tipo
+  clearTimeout(fixedManualDescribeTimer[fieldName]);
+  fixedManualDescribeTimer[fieldName] = setTimeout(async () => {
+    try {
+      const metadata = await obtenerMetadataCampoLead(sid, fieldName);
+      if (!metadata) {
+        validationEl.innerHTML = `<span style="color:var(--muted);">"${esc(fieldName)}" no está en Lead — se estampará tal cual</span>`;
+        return;
+      }
+      const result = validarValorParaTipo(value, metadata);
+      if (result.valid) {
+        validationEl.innerHTML = value
+          ? `<span style="color:var(--ok);">✓ ${esc(result.hint || 'Válido')}</span>`
+          : `<span style="color:var(--muted);">ℹ Valor vacío se permite; avisaremos antes de ejecutar</span>`;
+      } else {
+        validationEl.innerHTML = `<span style="color:var(--err);">✗ ${esc(result.error || 'Valor inválido')}</span>`;
+      }
+    } catch (err) {
+      validationEl.innerHTML = `<span style="color:var(--muted);">No se pudo validar tipo</span>`;
+    }
+  }, 350);
 }
 
 function renderCustomFieldsList() {
@@ -3201,6 +3315,11 @@ function abrirModalExport() {
   document.getElementById('exportFolderId').value = '';
   document.getElementById('uploadFileName').value = '';
   document.getElementById('fileUpload').value = '';
+  // Reset campos nuevos de attach-link
+  document.getElementById('attachRenameName').value = '';
+  document.getElementById('attachFolderId').value = '';
+  document.getElementById('attachMoveToFolder').checked = false;
+  document.getElementById('attachFolderField').style.display = 'none';
   document.getElementById('fileInputLabel').textContent = '📁 Haz click o arrastra un archivo aquí';
   document.getElementById('fileInputLabel').classList.remove('has-file');
   uploadedFile = null; uploadedFileBase64 = "";
@@ -3223,10 +3342,15 @@ function setMode(mode) {
   currentMode = mode;
   document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('selected'));
   document.querySelector(`.mode-tab[data-mode="${mode}"]`).classList.add('selected');
-  document.getElementById('section-new').classList.remove('visible');
-  document.getElementById('section-csv').classList.remove('visible');
-  document.getElementById('section-attach').classList.remove('visible');
-  document.getElementById(`section-${mode}`).classList.add('visible');
+  // Ocultar TODAS las secciones explícitamente (evita solapamientos)
+  ['new', 'csv', 'attach'].forEach(m => {
+    const el = document.getElementById(`section-${m}`);
+    el.classList.remove('visible');
+    el.style.display = 'none';
+  });
+  const active = document.getElementById(`section-${mode}`);
+  active.classList.add('visible');
+  active.style.display = 'flex';
 
   const btn = document.getElementById('btnExportPrimary');
   if (mode === 'new') btn.textContent = '📊 Crear Sheet';
@@ -3238,9 +3362,26 @@ function setSubmode(sub) {
   currentSubmode = sub;
   document.querySelectorAll('.submode-tab').forEach(t => t.classList.remove('selected'));
   document.querySelector(`.submode-tab[data-submode="${sub}"]`).classList.add('selected');
-  document.getElementById('submode-link').classList.remove('visible');
-  document.getElementById('submode-upload').classList.remove('visible');
-  document.getElementById(`submode-${sub}`).classList.add('visible');
+  // Ocultar ambos submodos explícitamente
+  ['link', 'upload'].forEach(s => {
+    const el = document.getElementById(`submode-${s}`);
+    el.classList.remove('visible');
+    el.style.display = 'none';
+  });
+  const active = document.getElementById(`submode-${sub}`);
+  active.classList.add('visible');
+  active.style.display = 'flex';
+
+  // Cambiar el texto del botón según el submodo de attach
+  const btn = document.getElementById('btnExportPrimary');
+  if (currentMode === 'attach') {
+    btn.textContent = (sub === 'upload') ? '📊 Crear Sheet' : '📎 Adjuntar';
+  }
+}
+
+function onAttachMoveToggle() {
+  const checked = document.getElementById('attachMoveToFolder').checked;
+  document.getElementById('attachFolderField').style.display = checked ? 'flex' : 'none';
 }
 
 function onFileSelected(input) {
@@ -3318,10 +3459,16 @@ async function ejecutarExport() {
     } else if (currentMode === 'attach' && currentSubmode === 'link') {
       const targetSheetUrl = document.getElementById('exportTargetUrl').value.trim();
       if (!targetSheetUrl) throw new Error('Debes pegar el link del Sheet destino.');
+      const moverAttached = document.getElementById('attachMoveToFolder').checked;
+      const attachFolderId = moverAttached ? document.getElementById('attachFolderId').value.trim() : '';
+      const renombrarAttached = document.getElementById('attachRenameName').value.trim();
       data = await backendFetch({
         action: 'exportSheet',
         userEmail: loggedInEmail,
-        fileName: '', targetSheetUrl, folderId: '',
+        fileName: '', targetSheetUrl,
+        folderId: attachFolderId,
+        moverAttached: moverAttached,
+        renombrarAttached: renombrarAttached,
         summary,
         preTemplateHeaders: PT_HEADERS, preTemplateRows,
         importResultHeaders: IMPORT_RESULT_HEADERS, importResultRows: importResultRowsAsArrays
@@ -3374,6 +3521,17 @@ async function ejecutarExport() {
         estadoMsgs.push(`<span style="color:var(--warn)">⚠ Ownership no transferido: ${esc(data.ownershipError)}</span>`);
       }
     } else {
+      // Modo attached: mostrar estado de renombrado y movido (si el usuario los activó)
+      if (data.renamed) {
+        estadoMsgs.push(`<span style="color:var(--ok)">✓ Sheet renombrado a: <strong>${esc(data.renamedTo)}</strong></span>`);
+      } else if (data.renameError) {
+        estadoMsgs.push(`<span style="color:var(--warn)">⚠ No se pudo renombrar: ${esc(data.renameError)}</span>`);
+      }
+      if (data.folderMoved) {
+        estadoMsgs.push(`<span style="color:var(--ok)">✓ Sheet movido a carpeta: <strong>${esc(data.folderMovedTo || 'COE')}</strong></span>`);
+      } else if (data.folderMoveError) {
+        estadoMsgs.push(`<span style="color:var(--warn)">⚠ No se pudo mover a la carpeta: ${esc(data.folderMoveError)}</span>`);
+      }
       estadoMsgs.push('<span style="color:var(--muted)">ℹ El Sheet destino mantiene su ownership original.</span>');
     }
 
