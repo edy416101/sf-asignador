@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>SF Asignador · Docplanner</title>
+  <title>Cat-alyst</title>
 
   <!-- Favicon (todos los tamaños) -->
   <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico"/>
@@ -19,7 +19,7 @@
   <meta name="msapplication-TileColor" content="#0d0f18"/>
 
   <!-- Open Graph / Preview al compartir link (Slack, email) -->
-  <meta property="og:title" content="SF Asignador · Docplanner Ops Suite"/>
+  <meta property="og:title" content="Cat-alyst · Docplanner Ops Suite"/>
   <meta property="og:description" content="Herramientas internas de RevOps para asignación de leads y automatización de operaciones en Salesforce."/>
   <meta property="og:image" content="assets/img/web-app-manifest-512x512.png"/>
   <meta property="og:type" content="website"/>
@@ -324,8 +324,8 @@
 
 <div id="loginScreen">
   <div class="login-card">
-    <div class="login-logo"><img src="assets/img/logo-hero.png" alt="Docplanner Ops Suite"/></div>
-    <h1>SF Asignador</h1>
+    <div class="login-logo"><img src="assets/img/logo-hero.png" alt="Cat-alyst"/></div>
+    <h1>Cat-alyst</h1>
     <p class="sub">Herramienta interna para asignación e importación de contactos en Salesforce</p>
     <div class="domain-chip">Solo cuentas @docplanner.com</div>
     <div id="gSigninBtn"></div>
@@ -336,7 +336,7 @@
 <div id="mainApp">
   <header>
     <div class="logo-mark"><img src="assets/img/logo-hero.png" alt="Docplanner Ops Suite"/></div>
-    <h1>SF Asignador <span>· Docplanner</span></h1>
+    <h1>Cat-alyst <span>· Docplanner</span></h1>
     <div class="user-bar">
       <div class="user-avatar" id="userAvatar">U</div>
       <span id="userEmail">—</span>
@@ -503,6 +503,7 @@
         <div class="result-header">
           <h2>Resultado del Import</h2>
           <div class="result-btns">
+            <button class="btn-icon" style="background:var(--ac2)" id="recoverJobBtn" onclick="abrirModalRecuperar()" title="Recuperar el resultado de un import que quedó procesando usando su Job ID">🔍 Recuperar por Job ID</button>
             <button class="btn-icon" style="background:var(--accent)" id="copyResultBtn" onclick="copiarResultado()" disabled>📋 Copiar</button>
             <button class="btn-icon" style="background:var(--warn)" id="retryBtn" onclick="abrirModalRetry()" disabled>🔁 Reintentar (0)</button>
             <button class="btn-icon" style="background:var(--ok)" id="dlResultBtn" onclick="abrirModalExport()" disabled>💾 Guardar</button>
@@ -794,11 +795,43 @@
   </div>
 </div>
 
+<!-- MODAL RECUPERAR POR JOB ID -->
+<div class="modal-backdrop" id="recuperarModal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h2>🔍 Recuperar resultado por Job ID</h2>
+      <button class="modal-close" onclick="cerrarModalRecuperar()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:rgba(124,58,237,0.06); border-left:3px solid var(--ac2); border-radius:6px; padding:10px 12px; font-size:11.5px; color:var(--text); line-height:1.55;">
+        <strong>¿Cuándo usar esto?</strong> Si un import grande quedó "procesando" y la herramienta no alcanzó a mostrar el resultado (Salesforce siguió trabajando después de que se agotó la espera). Pega aquí el <strong>Job ID</strong> que te dio ese import y traemos el resultado completo desde Salesforce.
+      </div>
+
+      <div class="modal-field">
+        <label>Session ID (SID)</label>
+        <div style="font-size:11px; color:var(--muted);">Se usa el SID que ya tienes en la pestaña de asignación. Asegúrate de que siga vigente.</div>
+      </div>
+
+      <div class="modal-field">
+        <label>Job ID</label>
+        <input type="text" id="recuperarJobId" placeholder="ej. 750Tt00000gk1XBIAY" style="font-family:var(--mono);"/>
+        <span class="hint">Empieza con "750". Lo encuentras en el log del import o en Setup → Bulk Data Load Jobs. Salesforce conserva los jobs ~7 días.</span>
+      </div>
+
+      <div id="recuperarStatus" style="display:none; font-size:11.5px; padding:10px 12px; border-radius:6px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal-cancel" onclick="cerrarModalRecuperar()">Cancelar</button>
+      <button class="btn-modal-primary" id="btnRecuperarConfirm" onclick="ejecutarRecuperar()" style="background: linear-gradient(135deg, var(--ac2), #9333ea);">🔍 Recuperar resultado</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════════════════════
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════
-const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbx2bg-bBQRUiQCeWIu-80LlOw2uP15GQ8GQ0IeNzx1bFlRnclumKb7uwt7OdKasc-ZgCw/exec";
+const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbwdGabBI1MBp-YIOWnB2rXF24888c8Kt8dsQ530IW4ZjcNIszYsyNUxbIvkzGMwL24OuQ/exec";
 const GOOGLE_CLIENT_ID = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 const INSTANCE_URL     = "https://docplanner.my.salesforce.com";
 
@@ -876,6 +909,7 @@ let uploadedFileBase64 = "";
 // ── Estado del Retry ──
 let ultimoImportConfig = null;  // { action, object, extId, sfHeaders, colIndexes, colNames } del import base
 let historialRetries   = [];    // [{ intento, jobId, jobState, total, exitosos, fallidos, timestamp }]
+let ultimoJobIdRecuperable = ''; // Job ID del último import que quedó procesando (para recuperar)
 
 // ── Estado de Carga manual ──
 let loadMode         = 'paste';
@@ -1643,6 +1677,7 @@ function resetImportUI() {
   // Limpiar estado y UI del retry
   ultimoImportConfig = null;
   historialRetries = [];
+  ultimoJobIdRecuperable = '';
   document.getElementById('retryHistoryPanel').classList.remove('visible');
   document.getElementById('retryHistoryPanel').innerHTML = '';
   const retryBtn = document.getElementById('retryBtn');
@@ -2569,6 +2604,14 @@ async function ejecutarImport() {
     ilog(`✓ Estado final: ${data.jobState || 'N/A'}`, data.jobState === 'JobComplete' ? 'ok' : 'warn');
     if (data.errorMessage) ilog(`⚠ Salesforce dice: ${data.errorMessage}`, 'err');
 
+    // ── Si el job no terminó en la ventana de polling: avisar y guardar el Job ID para recuperar ──
+    if (data.timedOut) {
+      ilog(`⏱ El import sigue procesando en Salesforce (excedió la espera de la herramienta).`, 'warn');
+      ilog(`   → Guarda este Job ID: ${data.jobId}`, 'warn');
+      ilog(`   → Usa "🔍 Recuperar por Job ID" en unos minutos para traer el resultado.`, 'warn');
+      ultimoJobIdRecuperable = data.jobId || '';
+    }
+
     const okRows = parseSfResultCsv(data.successCsv || '', true, action);
     const failRows = parseSfResultCsv(data.failedCsv || '', false, action);
     importResultRows = okRows.concat(failRows);
@@ -2597,11 +2640,20 @@ async function ejecutarImport() {
     renderImportResult(importResultRows);
     renderRetryHistory();
     actualizarBotonRetry();
-    setImportStatus(`Import completado: ${success} exitosos, ${failed} fallidos.`, failed === 0 && success > 0 ? 'ok' : 'err');
+
+    if (data.timedOut) {
+      setImportStatus(`Import aún procesando en Salesforce. Usa "Recuperar por Job ID": ${data.jobId}`, 'run');
+      toast(`⏱ El import sigue corriendo. Recupéralo con el Job ID en unos minutos.`, 'bad');
+      // Pre-cargar el Job ID en el modal de recuperar para que sea 1 clic
+      const recInput = document.getElementById('recuperarJobId');
+      if (recInput) recInput.value = data.jobId || '';
+    } else {
+      setImportStatus(`Import completado: ${success} exitosos, ${failed} fallidos.`, failed === 0 && success > 0 ? 'ok' : 'err');
+      toast(`✅ Import completo: ${success} OK · ${failed} errores`, failed === 0 && success > 0 ? 'ok' : 'bad');
+    }
     document.getElementById('dlResultBtn').disabled = importResultRows.length === 0;
     document.getElementById('copyResultBtn').disabled = importResultRows.length === 0;
     document.getElementById('badge-import').textContent = `${success} ✓`;
-    toast(`✅ Import completo: ${success} OK · ${failed} errores`, failed === 0 && success > 0 ? 'ok' : 'bad');
 
   } catch (err) {
     console.error(err);
@@ -2764,6 +2816,138 @@ function abrirModalRetry() {
 
 function cerrarModalRetry() {
   document.getElementById('retryModal').classList.remove('open');
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  RECUPERAR RESULTADO POR JOB ID
+//  Trae el resultado de un import que quedó procesando en Salesforce
+//  (excedió la ventana de polling de la herramienta).
+// ══════════════════════════════════════════════════════════════════
+function abrirModalRecuperar() {
+  // Pre-cargar el último Job ID recuperable si existe
+  document.getElementById('recuperarJobId').value = ultimoJobIdRecuperable || '';
+  const statusDiv = document.getElementById('recuperarStatus');
+  statusDiv.style.display = 'none';
+  statusDiv.textContent = '';
+  const btn = document.getElementById('btnRecuperarConfirm');
+  btn.disabled = false;
+  btn.textContent = '🔍 Recuperar resultado';
+  document.getElementById('recuperarModal').classList.add('open');
+  setTimeout(() => document.getElementById('recuperarJobId').focus(), 100);
+}
+
+function cerrarModalRecuperar() {
+  document.getElementById('recuperarModal').classList.remove('open');
+}
+
+async function ejecutarRecuperar() {
+  const sid = document.getElementById('sid').value.trim();
+  const jobId = document.getElementById('recuperarJobId').value.trim();
+  const statusDiv = document.getElementById('recuperarStatus');
+  const btn = document.getElementById('btnRecuperarConfirm');
+
+  if (!sid) {
+    statusDiv.style.display = 'block';
+    statusDiv.style.background = 'rgba(244,63,94,0.08)';
+    statusDiv.style.color = 'var(--err)';
+    statusDiv.innerHTML = '❌ Falta el Session ID. Ponlo en la pestaña de Asignación primero.';
+    return;
+  }
+  if (!jobId) {
+    statusDiv.style.display = 'block';
+    statusDiv.style.background = 'rgba(244,63,94,0.08)';
+    statusDiv.style.color = 'var(--err)';
+    statusDiv.innerHTML = '❌ Pega un Job ID.';
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = '⏳ Consultando Salesforce…';
+  statusDiv.style.display = 'block';
+  statusDiv.style.background = 'rgba(107,114,154,0.1)';
+  statusDiv.style.color = 'var(--muted)';
+  statusDiv.innerHTML = '⏳ Consultando el estado del Job en Salesforce…';
+
+  try {
+    const data = await backendFetch({
+      action: 'recuperarJob', sid, instanceUrl: INSTANCE_URL, jobId
+    });
+
+    // Si el job SIGUE procesando en Salesforce
+    if (data.stillProcessing) {
+      statusDiv.style.background = 'rgba(245,158,11,0.08)';
+      statusDiv.style.color = 'var(--warn)';
+      statusDiv.innerHTML = `⏱ El Job todavía está procesando en Salesforce (estado: <strong>${esc(data.jobState)}</strong>). Espera un par de minutos más e intenta de nuevo.`;
+      btn.disabled = false; btn.textContent = '🔍 Reintentar';
+      return;
+    }
+
+    // Parsear los CSV de resultado (usamos 'insert' como acción por defecto para etiquetas)
+    const accionParaLabels = (data.operation || 'insert').toLowerCase();
+    const okRows = parseSfResultCsv(data.successCsv || '', true, accionParaLabels);
+    const failRows = parseSfResultCsv(data.failedCsv || '', false, accionParaLabels);
+    const recuperadas = okRows.concat(failRows);
+    const success = okRows.length, failed = failRows.length;
+
+    if (recuperadas.length === 0) {
+      statusDiv.style.background = 'rgba(245,158,11,0.08)';
+      statusDiv.style.color = 'var(--warn)';
+      statusDiv.innerHTML = `⚠ El Job está en estado <strong>${esc(data.jobState)}</strong> pero no devolvió filas de resultado. ` +
+        `Puede que Salesforce ya haya purgado los archivos (se conservan ~7 días) o que el job no haya procesado registros.`;
+      btn.disabled = false; btn.textContent = '🔍 Recuperar resultado';
+      return;
+    }
+
+    // Cargar el resultado recuperado en la tabla principal
+    importResultRows = recuperadas;
+
+    // Registrar en el historial como recuperación
+    historialRetries = [{
+      intento: 0,
+      jobId: data.jobId || jobId,
+      jobState: data.jobState || 'JobComplete',
+      total: recuperadas.length, exitosos: success, fallidos: failed,
+      timestamp: new Date().toLocaleString('es-MX') + ' (recuperado)'
+    }];
+
+    // Reconstruir config del import para permitir retry de las filas fallidas recuperadas
+    // Usamos las columnas del pre-template actual si coinciden; si no, retry quedará deshabilitado
+    if (ultimoImportConfig) {
+      // mantener la config previa si existe
+    }
+
+    ilog(`🔍 Resultado recuperado del Job ${data.jobId || jobId}`, 'info');
+    ilog(`✓ Estado: ${data.jobState} | Exitosos: ${success} | Fallidos: ${failed}`, success > 0 ? 'ok' : 'warn');
+    if (data.errorMessage) ilog(`⚠ Salesforce dice: ${data.errorMessage}`, 'err');
+
+    updateProgress(recuperadas.length, success + failed, success, failed);
+    document.getElementById('progressWrap').classList.add('visible');
+    document.getElementById('progPct').textContent = '100%';
+    document.getElementById('progBar').style.width = '100%';
+
+    renderImportResult(importResultRows);
+    renderRetryHistory();
+    actualizarBotonRetry();
+    document.getElementById('dlResultBtn').disabled = importResultRows.length === 0;
+    document.getElementById('copyResultBtn').disabled = importResultRows.length === 0;
+    document.getElementById('badge-import').textContent = `${success} ✓`;
+    setImportStatus(`Resultado recuperado: ${success} exitosos, ${failed} fallidos.`, failed === 0 && success > 0 ? 'ok' : 'err');
+
+    statusDiv.style.background = 'rgba(34,197,94,0.08)';
+    statusDiv.style.color = 'var(--ok)';
+    statusDiv.innerHTML = `✅ Resultado recuperado: <strong>${success}</strong> exitosos, <strong>${failed}</strong> fallidos. Ya aparece en la tabla.`;
+    btn.textContent = '✓ Recuperado';
+    toast(`✅ Resultado recuperado: ${success} OK · ${failed} errores`, failed === 0 && success > 0 ? 'ok' : 'bad');
+
+    // Cerrar el modal tras un momento
+    setTimeout(() => cerrarModalRecuperar(), 1800);
+
+  } catch (err) {
+    console.error(err);
+    statusDiv.style.background = 'rgba(244,63,94,0.08)';
+    statusDiv.style.color = 'var(--err)';
+    statusDiv.innerHTML = `❌ ${esc(err.message)}`;
+    btn.disabled = false; btn.textContent = '🔍 Reintentar';
+  }
 }
 
 function descargarFallidosCSV() {
