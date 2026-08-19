@@ -15,8 +15,8 @@
   <link rel="manifest" href="site.webmanifest"/>
 
   <!-- Theme color de la barra del navegador -->
-  <meta name="theme-color" content="#0d0f18"/>
-  <meta name="msapplication-TileColor" content="#0d0f18"/>
+  <meta name="theme-color" content="#ffffff"/>
+  <meta name="msapplication-TileColor" content="#ffffff"/>
 
   <!-- Open Graph / Preview al compartir link (Slack, email) -->
   <meta property="og:title" content="Cat-alyst · Docplanner Ops Suite"/>
@@ -29,11 +29,20 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
   <style>
+    /* ══ v12 · TEMA "CLEAN TECH" — blanco + azul, estilo SaaS ══
+       Tokens re-mapeados a la escala slate/blue de Tailwind. Los NOMBRES de las
+       variables se conservan intactos para no tocar ninguna regla ni lógica. */
     :root {
-      --bg: #0d0f18; --surface: #161929; --sf2: #1e2235; --border: #272c45;
-      --accent: #4b7cf3; --ac2: #7c3aed; --ac3: #d97706;
-      --ok: #22c55e; --err: #f43f5e; --warn: #f59e0b;
-      --text: #e4e8f7; --muted: #6b729a;
+      --bg: #ffffff;            /* blanco puro (bg-white) */
+      --surface: #ffffff;       /* tarjetas */
+      --sf2: #f8fafc;           /* slate-50: secciones e inputs suaves */
+      --border: #e2e8f0;        /* slate-200: bordes finos */
+      --accent: #2563eb;        /* blue-600: CTA y elementos activos */
+      --ac2: #1d4ed8;           /* blue-700: hover del acento */
+      --ac3: #d97706;
+      --ok: #16a34a; --err: #dc2626; --warn: #d97706;
+      --text: #0f172a;          /* slate-900: gris Oxford */
+      --muted: #64748b;         /* slate-500 */
       --mono: 'JetBrains Mono', monospace; --sans: 'Inter', sans-serif;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -318,6 +327,120 @@
     ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       v12 · CAPA DE REDISEÑO "CLEAN TECH" (solo presentación)
+       Estas reglas van AL FINAL a propósito: misma especificidad que las
+       originales ⇒ gana el orden de cascada. Cero cambios de HTML/JS/lógica.
+       Paleta: blanco puro + slate-50/200 + blue-600 (inspirada en Tailwind).
+       ═══════════════════════════════════════════════════════════════════════ */
+
+    /* ── Login ── */
+    #loginScreen { background: #ffffff; background-image: radial-gradient(ellipse 60% 50% at 25% 60%, rgba(37,99,235,.06) 0%, transparent 70%), radial-gradient(ellipse 50% 40% at 75% 40%, rgba(37,99,235,.04) 0%, transparent 70%); }
+    .login-card { background: #ffffff; border: 1px solid rgba(226,232,240,.8); border-radius: 24px; box-shadow: 0 24px 64px rgba(15,23,42,.08), 0 1px 3px rgba(0,0,0,.05); }
+    .login-logo { background: #eff6ff; border: 1px solid #bfdbfe; box-shadow: 0 8px 24px rgba(37,99,235,.12); }
+    .login-logo::before { background: radial-gradient(circle at center, rgba(37,99,235,.08) 0%, transparent 60%); }
+    .domain-chip { background: #eff6ff; border-color: #bfdbfe; }
+
+    /* ── Header y tabs ── */
+    header { background: #ffffff; border-bottom: 1px solid rgba(226,232,240,.8); }
+    .logo-mark { background: #eff6ff; border: 1px solid #bfdbfe; box-shadow: none; }
+    .user-avatar { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
+    .sign-out { transition: all .2s; }
+    .tab-bar { background: #ffffff; }
+    .tab { transition: all .2s; }
+    .tab-badge { background: #f1f5f9; border-color: #e2e8f0; }
+    .tab.active .tab-badge { background: #eff6ff; border-color: #bfdbfe; }
+
+    /* ── Paneles laterales (secciones en slate-50) ── */
+    aside, .import-config, .import-config-footer { background: #fbfcfe; }
+    .bulk-panel { background: #ffffff; border-radius: 12px; }
+    .bulk-panel textarea { background: #f8fafc; }
+
+    /* ── Inputs: blanco + focus ring azul sutil ── */
+    .field input, .field select, .modal-field input, .modal-field select, .ids-box { background: #ffffff; border: 1px solid #e2e8f0; transition: all .2s; }
+    .field input:focus, .field select:focus, .modal-field input:focus, .modal-field select:focus, .ids-box:focus, .bulk-panel textarea:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.15); }
+    .field select option { background: #ffffff; color: var(--text); }
+    .sid-eye { background: #eff6ff; border-color: #bfdbfe; }
+    .sid-eye:hover { background: #dbeafe; }
+    .reps-tbl tr:hover td { background: rgba(248,250,252,.8); }
+
+    /* ── Botones: azul sólido como único acento CTA ── */
+    .btn-sm, .btn-add-rep, .btn-cancel-bulk, .btn-modal-cancel { background: #ffffff; transition: all .2s; }
+    .btn-apply { background: var(--accent); transition: all .2s; }
+    .btn-apply:hover { background: var(--ac2); opacity: 1; }
+    .btn-run, .btn-import { background: var(--accent); border-radius: 12px; box-shadow: 0 1px 3px rgba(37,99,235,.3); transition: all .2s; }
+    .btn-run::after, .btn-import::after { content: none; }
+    .btn-run:not(:disabled):hover, .btn-import:not(:disabled):hover { background: var(--ac2); opacity: 1; box-shadow: 0 4px 12px rgba(37,99,235,.25); }
+    .btn-run:disabled, .btn-import:disabled { background: #94a3b8; box-shadow: none; }
+    .btn-clear { background: #ffffff; border: 1px solid #e2e8f0; transition: all .2s; }
+    .btn-clear:hover { border-color: #fca5a5; background: #fef2f2; }
+    .btn-go-import { background: var(--accent); transition: all .2s; }
+    .btn-go-import:not(:disabled):hover { background: var(--ac2); opacity: 1; }
+    .btn-icon { transition: all .2s; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+    .btn-modal-primary { background: var(--accent); transition: all .2s; }
+    .btn-modal-primary:not(:disabled):hover { background: var(--ac2); opacity: 1; }
+
+    /* ── Tarjetas: rounded-xl, borde slate-200/80, sombra sutil ── */
+    .status-row, .import-status-row, .stat, .tbl-wrap, .res-tbl-wrap, .progress-wrap, .retry-history, .source-badge { background: #ffffff; border: 1px solid rgba(226,232,240,.8); border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+
+    /* ── Logs: consola oscura deliberada (contraste "tech" sobre UI clara) ── */
+    .log, .import-log { background: #0f172a; border: 1px solid #1e293b; border-radius: 14px; color: #94a3b8; }
+    .log .info, .import-log .info { color: #60a5fa; }
+    .log .ok, .import-log .ok { color: #4ade80; }
+    .log .err, .import-log .err { color: #f87171; }
+    .log .warn, .import-log .warn { color: #facc15; }
+
+    /* ── Tablas de datos: amplias, hover suave, badges ── */
+    table.pt th, table.res-import th { background: #f8fafc; color: #64748b; padding: 12px 16px; border-bottom: 1px solid #e2e8f0; }
+    table.pt td, table.res-import td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; transition: background .2s; }
+    table.pt tr:hover td, table.res-import tr:hover td { background: rgba(248,250,252,.8); }
+    .chip { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+    .bl-chip { background: #f5f3ff; border-color: #ddd6fe; color: #6d28d9; }
+    .res-ok { display: inline-block; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 100px; padding: 2px 10px; font-size: 10px; }
+    .res-err { display: inline-block; background: #fef2f2; border: 1px solid #fecaca; border-radius: 100px; padding: 2px 10px; font-size: 10px; }
+
+    /* ── Progreso y contadores ── */
+    .progress-bar-bg { background: #e2e8f0; }
+    .progress-bar-fill { background: linear-gradient(90deg, #3b82f6, #2563eb); }
+    .pc { background: #f8fafc; border-radius: 10px; }
+    .rh-badge { background: #f8fafc; }
+
+    /* ── Modales, selectores de modo y toast ── */
+    .modal-backdrop { background: rgba(15,23,42,.45); backdrop-filter: blur(4px); }
+    .modal { background: #ffffff; border-radius: 18px; box-shadow: 0 24px 64px rgba(15,23,42,.18); }
+    .mode-tab, .submode-tab { background: #ffffff; transition: all .2s; }
+    .mode-tab.selected { border-color: #3b82f6; background: #eff6ff; }
+    .submode-tab.selected { background: #eff6ff; }
+    .file-input-label { background: #ffffff; border-color: #cbd5e1; }
+    .file-input-label:hover { background: #eff6ff; }
+    .file-input-label.has-file { background: #f0fdf4; }
+    .export-links { background: #f0fdf4; }
+    .toast { background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 12px 32px rgba(15,23,42,.12); color: var(--text); border-radius: 14px; }
+
+    /* ── Scrollbars ── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 100px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    /* ── Selector de País (v12) — banderas en CSS puro (Windows no
+         renderiza emojis de bandera, así que se dibujan con gradientes) ── */
+    .pais-wrap { position: relative; margin-right: 4px; }
+    .pais-btn { display: flex; align-items: center; gap: 7px; background: #ffffff; border: 1px solid rgba(226,232,240,.8); border-radius: 12px; padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--text); cursor: pointer; font-family: var(--sans); box-shadow: 0 1px 3px rgba(0,0,0,.05); transition: all .2s; }
+    .pais-btn:hover { border-color: #3b82f6; color: var(--accent); }
+    .pais-caret { font-size: 9px; color: var(--muted); }
+    .flag { width: 18px; height: 13px; border-radius: 3px; display: inline-block; box-shadow: inset 0 0 0 1px rgba(15,23,42,.1); flex-shrink: 0; }
+    .flag-mx { background: linear-gradient(90deg, #006847 0 33.3%, #ffffff 33.3% 66.6%, #ce1126 66.6% 100%); }
+    .flag-es { background: linear-gradient(180deg, #aa151b 0 25%, #f1bf00 25% 75%, #aa151b 75% 100%); }
+    .flag-co { background: linear-gradient(180deg, #fcd116 0 50%, #003893 50% 75%, #ce1126 75% 100%); }
+    .pais-menu { display: none; position: absolute; right: 0; top: calc(100% + 8px); width: 215px; background: #ffffff; border: 1px solid rgba(226,232,240,.8); border-radius: 14px; padding: 6px; box-shadow: 0 12px 32px rgba(15,23,42,.12); z-index: 300; }
+    .pais-menu.open { display: block; }
+    .pais-menu-title { font-size: 9.5px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); padding: 6px 10px 4px; }
+    .pais-item { display: flex; align-items: center; gap: 9px; width: 100%; background: none; border: none; border-radius: 9px; padding: 8px 10px; font-size: 12.5px; font-family: var(--sans); color: var(--text); cursor: pointer; transition: all .2s; text-align: left; }
+    .pais-item:hover { background: #f8fafc; }
+    .pais-item.active { background: #eff6ff; color: var(--accent); font-weight: 600; }
+    .pais-item .pais-check { margin-left: auto; opacity: 0; color: var(--accent); font-weight: 700; }
+    .pais-item.active .pais-check { opacity: 1; }
   </style>
 </head>
 <body>
@@ -337,6 +460,18 @@
   <header>
     <div class="logo-mark"><img src="assets/img/logo-hero.png" alt="Docplanner Ops Suite"/></div>
     <h1>Cat-alyst <span>· Docplanner</span></h1>
+    <!-- ── v12: Selector de País — define el Country__c del pre-template ── -->
+    <div class="pais-wrap" id="paisWrap">
+      <button class="pais-btn" id="paisBtn" onclick="togglePaisMenu(event)" title="País que se estampa en Country__c del pre-template">
+        <span class="flag flag-mx" id="paisFlag"></span><span id="paisCode">MX</span><span class="pais-caret">▾</span>
+      </button>
+      <div class="pais-menu" id="paisMenu">
+        <div class="pais-menu-title">Country__c del pre-template</div>
+        <button class="pais-item active" data-pais="MX" onclick="seleccionarPais('MX')"><span class="flag flag-mx"></span><span>MX — México</span><span class="pais-check">✓</span></button>
+        <button class="pais-item" data-pais="ES" onclick="seleccionarPais('ES')"><span class="flag flag-es"></span><span>ES — España</span><span class="pais-check">✓</span></button>
+        <button class="pais-item" data-pais="CO" onclick="seleccionarPais('CO')"><span class="flag flag-co"></span><span>CO — Colombia</span><span class="pais-check">✓</span></button>
+      </div>
+    </div>
     <div class="user-bar">
       <div class="user-avatar" id="userAvatar">U</div>
       <span id="userEmail">—</span>
@@ -444,7 +579,7 @@
           <h2>Pre Template — Resultado de asignación</h2>
           <div class="res-btns">
             <button class="btn-icon btn-copy-tbl" id="copyBtn" onclick="copiarTabla()" disabled>📋 Copiar</button>
-            <button class="btn-icon" style="background:linear-gradient(135deg, var(--ac2), #9333ea)" id="customFieldsBtn" onclick="abrirModalCustomFields()">⚙ Config. campos</button>
+            <button class="btn-icon" style="background:#475569" id="customFieldsBtn" onclick="abrirModalCustomFields()">⚙ Config. campos</button>
             <button class="btn-icon btn-csv" id="dlBtn" onclick="descargarCSV()" disabled>⬇ CSV</button>
             <button class="btn-go-import" id="goImportBtn" onclick="irAImport()" disabled>📥 Pasar a Data Import →</button>
           </div>
@@ -656,8 +791,8 @@
       <!-- SECCIÓN 2: Custom fields (columnas adicionales) -->
       <div style="background:rgba(124,58,237,0.06); border-left:3px solid var(--ac2); border-radius:6px; padding:10px 12px; font-size:11.5px; color:var(--text); line-height:1.55;">
         <strong>➕ Campos custom adicionales.</strong> Agregan columnas nuevas al pre-template. Elige la <strong>fuente del valor</strong>:
-        <br>· <span style="color:#67e8f9;">☁ Desde SF</span> — trae el valor del Contact real (útil para <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Phone</code>, <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">MobilePhone</code>, etc).
-        <br>· <span style="color:#fbbf24;">✎ Manual</span> — tú escribes el valor, se estampa idéntico en todos los registros (útil para <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Suffix</code>, campaign codes, códigos de tracking, etc).
+        <br>· <span style="color:#0e7490;">☁ Desde SF</span> — trae el valor del Contact real (útil para <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Phone</code>, <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">MobilePhone</code>, etc).
+        <br>· <span style="color:#b45309;">✎ Manual</span> — tú escribes el valor, se estampa idéntico en todos los registros (útil para <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Suffix</code>, campaign codes, códigos de tracking, etc).
       </div>
 
       <div class="modal-field">
@@ -712,7 +847,7 @@
     </div>
     <div class="modal-body">
       <div style="background:rgba(75,124,243,0.06); border-left:3px solid var(--accent); border-radius:6px; padding:10px 12px; font-size:11.5px; color:var(--text); line-height:1.55;">
-        <strong>Los headers deben ser los API Field Names exactos de Salesforce.</strong> El orden es libre. Los headers reconocidos se mapean a las columnas del pre-template. Los headers que <em>no</em> matchean con las columnas base (13 campos) pero tienen sintaxis válida se agregan automáticamente como <strong style="color:#c4b5fd;">custom fields</strong> y aparecerán en el Field Mapping. Columnas con nombre inválido (espacios, puntos) o que empiezan con <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">__</code> se ignoran.
+        <strong>Los headers deben ser los API Field Names exactos de Salesforce.</strong> El orden es libre. Los headers reconocidos se mapean a las columnas del pre-template. Los headers que <em>no</em> matchean con las columnas base (13 campos) pero tienen sintaxis válida se agregan automáticamente como <strong style="color:#6d28d9;">custom fields</strong> y aparecerán en el Field Mapping. Columnas con nombre inválido (espacios, puntos) o que empiezan con <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">__</code> se ignoran.
       </div>
 
       <div class="modal-field">
@@ -822,7 +957,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn-modal-cancel" onclick="cerrarModalRecuperar()">Cancelar</button>
-      <button class="btn-modal-primary" id="btnRecuperarConfirm" onclick="ejecutarRecuperar()" style="background: linear-gradient(135deg, var(--ac2), #9333ea);">🔍 Recuperar resultado</button>
+      <button class="btn-modal-primary" id="btnRecuperarConfirm" onclick="ejecutarRecuperar()" style="background:#2563eb;">🔍 Recuperar resultado</button>
     </div>
   </div>
 </div>
@@ -888,6 +1023,77 @@ function actualizarHeadersDinamicos() {
       : `⚙ Config. campos`;
   }
 }
+
+// ══════════════════════════════════════════════════════════════════
+//  v12 · SELECTOR DE PAÍS — define Country__c del pre-template
+//  Reusa el mecanismo EXISTENTE de valores manuales (fieldsManualValues):
+//  prioridad manual > desde SF > default hardcodeado. No altera lógica base.
+// ══════════════════════════════════════════════════════════════════
+const PAISES_CATALYST = {
+  MX: { flagClass: 'flag-mx', sf: 'Mexico',   nombre: 'México'   },
+  ES: { flagClass: 'flag-es', sf: 'Spain',    nombre: 'España'   },
+  CO: { flagClass: 'flag-co', sf: 'Colombia', nombre: 'Colombia' }
+};
+let paisActivo = 'MX';  // MX = default histórico del backend (DEFAULTS_HARDCODED)
+
+function togglePaisMenu(ev) {
+  if (ev) ev.stopPropagation();
+  document.getElementById('paisMenu').classList.toggle('open');
+}
+
+function seleccionarPais(code) {
+  const p = PAISES_CATALYST[code];
+  if (!p) return;
+  paisActivo = code;
+
+  // 1) Si Country__c estaba oculto, restaurarlo (reusa la función existente)
+  if (camposFijosOcultos.includes('Country__c')) restaurarCampoFijo('Country__c');
+
+  // 2) Manual tiene prioridad: sacarlo de "desde SF" si estaba ahí (regla existente)
+  const iFSF = fieldsFromSF.indexOf('Country__c');
+  if (iFSF >= 0) fieldsFromSF.splice(iFSF, 1);
+
+  // 3) Estampar el país por el mecanismo manual existente
+  fieldsManualValues['Country__c'] = p.sf;
+  actualizarHeadersDinamicos();
+  renderFixedFieldsList();
+
+  // 4) Si ya hay un pre-template generado, ofrecer actualizar la columna en vivo
+  if (preTemplateRows.length > 0) {
+    const idx = PT_HEADERS.indexOf('Country__c');
+    if (idx >= 0 && confirm(`Ya tienes un pre-template con ${preTemplateRows.length} fila(s).\n\n¿Actualizar la columna Country__c de TODAS las filas a "${p.sf}"?`)) {
+      preTemplateRows = preTemplateRows.map(r => { const nr = [...r]; nr[idx] = p.sf; return nr; });
+      renderPreTemplate(PT_HEADERS, preTemplateRows);
+    }
+  }
+
+  renderPaisUI();
+  document.getElementById('paisMenu').classList.remove('open');
+  toast(`🌍 País: ${p.nombre} → Country__c = "${p.sf}"`, 'ok');
+}
+
+function renderPaisUI() {
+  const p = PAISES_CATALYST[paisActivo];
+  document.getElementById('paisFlag').className = 'flag ' + p.flagClass;
+  document.getElementById('paisCode').textContent = paisActivo;
+  document.querySelectorAll('.pais-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.pais === paisActivo);
+  });
+}
+
+function resetPaisSelector() {
+  paisActivo = 'MX';
+  renderPaisUI();
+}
+
+// Cerrar el menú de país al hacer click fuera
+document.addEventListener('click', (e) => {
+  const wrap = document.getElementById('paisWrap');
+  if (wrap && !wrap.contains(e.target)) {
+    const menu = document.getElementById('paisMenu');
+    if (menu) menu.classList.remove('open');
+  }
+});
 
 // ══════════════════════════════════════════════════════════════════
 //  ESTADO GLOBAL
@@ -1004,6 +1210,7 @@ function logout() {
   leadFieldsCache = null; ownerStatsCache = [];
   ultimaAsignacion = {}; loggedInEmail = ""; idTokenCache = "";
   customFields = []; fieldsFromSF = []; fieldsManualValues = {}; camposFijosOcultos = []; contactFieldsCache = null;
+  resetPaisSelector();  // v12: el selector de país vuelve al default (MX)
   resetAsigUI(); resetImportUI();
 }
 
@@ -1272,6 +1479,7 @@ function limpiarAsignacion() {
   fieldsManualValues = {};
   camposFijosOcultos = [];
   actualizarHeadersDinamicos();
+  resetPaisSelector();  // v12: el selector de país vuelve al default (MX)
   resetAsigUI();
   preTemplateRows = []; totalAsignados = 0; ownerStatsCache = [];
   toast('🗑 Asignación limpiada.', 'ok');
@@ -1460,10 +1668,10 @@ function renderPreTemplate(headers, rows) {
       if (modo === 'manual') {
         badges += ' <span style="background:rgba(251,191,36,.25); color:var(--warn); border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">✎ MANUAL</span>';
       } else {
-        badges += ' <span style="background:rgba(6,182,212,.25); color:#67e8f9; border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">☁ SF</span>';
+        badges += ' <span style="background:rgba(6,182,212,.25); color:#0e7490; border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">☁ SF</span>';
       }
     }
-    if (esFromSF) badges += ' <span style="background:rgba(6,182,212,.25); color:#67e8f9; border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">☁ SF</span>';
+    if (esFromSF) badges += ' <span style="background:rgba(6,182,212,.25); color:#0e7490; border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">☁ SF</span>';
     if (esManualFijo) badges += ' <span style="background:rgba(251,191,36,.25); color:var(--warn); border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">✎ MANUAL</span>';
     html += `<th title="${esc(h)}">${esc(h)}${badges}</th>`;
   });
@@ -1485,19 +1693,19 @@ function renderPreTemplate(headers, rows) {
       }
       else if (headerName === 'BusinessLine__c') {
         // BusinessLine__c: badge distinto si viene de SF o es manual
-        if (esFromSF) html += `<td title="${esc(v)} (desde SF)"><span class="bl-chip" style="background:rgba(6,182,212,.15); border-color:rgba(6,182,212,.4); color:#67e8f9;">☁ ${esc(v)}</span></td>`;
+        if (esFromSF) html += `<td title="${esc(v)} (desde SF)"><span class="bl-chip" style="background:rgba(6,182,212,.15); border-color:rgba(6,182,212,.4); color:#0e7490;">☁ ${esc(v)}</span></td>`;
         else if (esManualFijo) html += `<td title="${esc(v)} (manual)"><span class="bl-chip" style="background:rgba(251,191,36,.15); border-color:rgba(251,191,36,.4); color:var(--warn);">✎ ${esc(v)}</span></td>`;
         else html += `<td title="${esc(v)}"><span class="bl-chip">${esc(v)}</span></td>`;
       }
       else if (CAMPOS_FIJOS_HARDCODED.has(headerName)) {
         // 6 fijos: color según fuente (SF cyan, manual naranja, default normal)
-        if (esFromSF) html += `<td class="fixed" style="color:#67e8f9;" title="${esc(v)} (desde SF)">☁ ${esc(v)}</td>`;
-        else if (esManualFijo) html += `<td class="fixed" style="color:#fbbf24;" title="${esc(v)} (manual · estampado idéntico en todas las filas)">✎ ${esc(v) || '(vacío)'}</td>`;
+        if (esFromSF) html += `<td class="fixed" style="color:#0e7490;" title="${esc(v)} (desde SF)">☁ ${esc(v)}</td>`;
+        else if (esManualFijo) html += `<td class="fixed" style="color:#b45309;" title="${esc(v)} (manual · estampado idéntico en todas las filas)">✎ ${esc(v) || '(vacío)'}</td>`;
         else html += `<td class="fixed" title="${esc(v)}">${esc(v)}</td>`;
       }
       else if (esCustom && modoCustom === 'manual') {
         // Custom manual: color warn tenue
-        html += `<td style="color:#fbbf24;" title="${esc(v)} (manual · estampado idéntico en todas las filas)">${esc(v) || '<span style="color:var(--muted); font-style:italic;">(vacío)</span>'}</td>`;
+        html += `<td style="color:#b45309;" title="${esc(v)} (manual · estampado idéntico en todas las filas)">${esc(v) || '<span style="color:var(--muted); font-style:italic;">(vacío)</span>'}</td>`;
       }
       else {
         // Base (Contact__c, LastSourceAt__c, Company, LastName, Email) o custom SF
@@ -2151,7 +2359,7 @@ function renderCustomFieldsList() {
     const isManual = cf.mode === 'manual';
     const badgeStyle = isManual
       ? 'background:rgba(251,191,36,.15); color:var(--warn); border:1px solid rgba(251,191,36,.4);'
-      : 'background:rgba(6,182,212,.15); color:#67e8f9; border:1px solid rgba(6,182,212,.4);';
+      : 'background:rgba(6,182,212,.15); color:#0e7490; border:1px solid rgba(6,182,212,.4);';
     const badgeText = isManual ? '✎ Manual' : '☁ Desde SF';
     const fuente = isManual
       ? (cf.value ? `Valor: <strong style="color:var(--text); font-family:var(--mono);">"${esc(cf.value)}"</strong>` : `<em style="color:var(--muted);">valor vacío</em>`)
