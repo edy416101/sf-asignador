@@ -27,23 +27,26 @@
 
   <script src="https://accounts.google.com/gsi/client" async></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
   <style>
-    /* ══ v12 · TEMA "CLEAN TECH" — blanco + azul, estilo SaaS ══
-       Tokens re-mapeados a la escala slate/blue de Tailwind. Los NOMBRES de las
-       variables se conservan intactos para no tocar ninguna regla ni lógica. */
+    /* ══ v13 · TEMA "DISPATCH" — consola de operaciones ══
+       Navy profundo y saturado + azure de acción + ámbar de señal.
+       Los NOMBRES de las variables se conservan intactos: ninguna regla
+       ni línea de lógica existente necesita cambiar. */
     :root {
-      --bg: #ffffff;            /* blanco puro (bg-white) */
-      --surface: #ffffff;       /* tarjetas */
-      --sf2: #f8fafc;           /* slate-50: secciones e inputs suaves */
-      --border: #e2e8f0;        /* slate-200: bordes finos */
-      --accent: #2563eb;        /* blue-600: CTA y elementos activos */
-      --ac2: #1d4ed8;           /* blue-700: hover del acento */
-      --ac3: #d97706;
-      --ok: #16a34a; --err: #dc2626; --warn: #d97706;
-      --text: #0f172a;          /* slate-900: gris Oxford */
-      --muted: #64748b;         /* slate-500 */
+      --bg: #050B22;            /* navy profundo — fondo de página */
+      --surface: #0B1435;       /* paneles y tarjetas */
+      --sf2: #121F47;           /* elevado: inputs, hover, headers de tabla */
+      --border: #1C2C5E;        /* bordes azul visible */
+      --accent: #4D8DFF;        /* azure — acción y estados activos */
+      --ac2: #6BA1FF;           /* azure claro — hover */
+      --ac3: #FFB020;
+      --ok: #2DD4A0; --err: #FF6B7A; --warn: #FFB020;
+      --text: #E8EDF9;
+      --muted: #8A99BC;
+      --void: #02050F;          /* consola de log — la capa más profunda */
       --mono: 'JetBrains Mono', monospace; --sans: 'Inter', sans-serif;
+      --disp: 'Space Grotesk', sans-serif;  /* display: cifras y títulos */
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; overflow: hidden; }
@@ -329,118 +332,147 @@
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
     /* ═══════════════════════════════════════════════════════════════════════
-       v12 · CAPA DE REDISEÑO "CLEAN TECH" (solo presentación)
+       v13 · CAPA DE REDISEÑO "DISPATCH" (solo presentación)
        Estas reglas van AL FINAL a propósito: misma especificidad que las
        originales ⇒ gana el orden de cascada. Cero cambios de HTML/JS/lógica.
-       Paleta: blanco puro + slate-50/200 + blue-600 (inspirada en Tailwind).
+
+       Principio: la profundidad se lee por CAPAS separadas
+       (#050B22 página < #0B1435 panel < #121F47 elevado), no por brillo.
+       El ámbar aparece SOLO en estados vivos: es la señal, no decoración.
        ═══════════════════════════════════════════════════════════════════════ */
 
     /* ── Login ── */
-    #loginScreen { background: #ffffff; background-image: radial-gradient(ellipse 60% 50% at 25% 60%, rgba(37,99,235,.06) 0%, transparent 70%), radial-gradient(ellipse 50% 40% at 75% 40%, rgba(37,99,235,.04) 0%, transparent 70%); }
-    .login-card { background: #ffffff; border: 1px solid rgba(226,232,240,.8); border-radius: 24px; box-shadow: 0 24px 64px rgba(15,23,42,.08), 0 1px 3px rgba(0,0,0,.05); }
-    .login-logo { background: #eff6ff; border: 1px solid #bfdbfe; box-shadow: 0 8px 24px rgba(37,99,235,.12); }
-    .login-logo::before { background: radial-gradient(circle at center, rgba(37,99,235,.08) 0%, transparent 60%); }
-    .domain-chip { background: #eff6ff; border-color: #bfdbfe; }
+    #loginScreen { background: var(--bg); background-image: radial-gradient(ellipse 60% 50% at 25% 60%, rgba(77,141,255,.10) 0%, transparent 70%), radial-gradient(ellipse 50% 40% at 75% 40%, rgba(255,176,32,.05) 0%, transparent 70%); }
+    .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; box-shadow: 0 32px 80px rgba(0,0,0,.5); }
+    .login-card h1 { font-family: var(--disp); letter-spacing: -.4px; }
+    .login-logo { background: rgba(77,141,255,.08); border: 1px solid rgba(77,141,255,.28); box-shadow: none; }
+    .login-logo::before { background: radial-gradient(circle at center, rgba(77,141,255,.14) 0%, transparent 60%); }
+    .domain-chip { background: rgba(77,141,255,.10); border-color: rgba(77,141,255,.30); }
 
     /* ── Header y tabs ── */
-    header { background: #ffffff; border-bottom: 1px solid rgba(226,232,240,.8); }
-    .logo-mark { background: #eff6ff; border: 1px solid #bfdbfe; box-shadow: none; }
-    .user-avatar { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
+    header { background: var(--surface); border-bottom: 1px solid var(--border); }
+    header h1 { font-family: var(--disp); font-size: 14.5px; letter-spacing: -.2px; }
+    .logo-mark { background: rgba(77,141,255,.10); border: 1px solid rgba(77,141,255,.28); box-shadow: none; }
+    .user-avatar { background: var(--accent); color: #061024; }
     .sign-out { transition: all .2s; }
-    .tab-bar { background: #ffffff; }
+    .tab-bar { background: var(--surface); }
     .tab { transition: all .2s; }
-    .tab-badge { background: #f1f5f9; border-color: #e2e8f0; }
-    .tab.active .tab-badge { background: #eff6ff; border-color: #bfdbfe; }
+    .tab-badge { background: var(--sf2); border-color: var(--border); font-family: var(--mono); }
+    .tab.active .tab-badge { background: rgba(77,141,255,.14); border-color: rgba(77,141,255,.32); }
 
-    /* ── Paneles laterales (secciones en slate-50) ── */
-    aside, .import-config, .import-config-footer { background: #fbfcfe; }
-    .bulk-panel { background: #ffffff; border-radius: 12px; }
-    .bulk-panel textarea { background: #f8fafc; }
+    /* ── Paneles laterales ── */
+    aside, .import-config, .import-config-footer { background: var(--surface); }
+    .slabel { color: var(--muted); letter-spacing: 1.6px; }
+    .bulk-panel { background: var(--sf2); border-radius: 11px; }
+    .bulk-panel textarea { background: var(--bg); }
 
-    /* ── Inputs: blanco + focus ring azul sutil ── */
-    .field input, .field select, .modal-field input, .modal-field select, .ids-box { background: #ffffff; border: 1px solid #e2e8f0; transition: all .2s; }
-    .field input:focus, .field select:focus, .modal-field input:focus, .modal-field select:focus, .ids-box:focus, .bulk-panel textarea:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.15); }
-    .field select option { background: #ffffff; color: var(--text); }
-    .sid-eye { background: #eff6ff; border-color: #bfdbfe; }
-    .sid-eye:hover { background: #dbeafe; }
-    .reps-tbl tr:hover td { background: rgba(248,250,252,.8); }
+    /* ── Inputs: fondo elevado + focus ring azure ── */
+    .field input, .field select, .modal-field input, .modal-field select, .ids-box { background: var(--sf2); border: 1px solid var(--border); transition: all .2s; }
+    .field input:focus, .field select:focus, .modal-field input:focus, .modal-field select:focus, .ids-box:focus, .bulk-panel textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(77,141,255,.16); }
+    .field select option { background: #0B1435; color: var(--text); }
+    .sid-eye { background: rgba(77,141,255,.14); border-color: rgba(77,141,255,.34); }
+    .sid-eye:hover { background: rgba(77,141,255,.26); }
+    .reps-tbl tr:hover td { background: var(--sf2); }
 
-    /* ── Botones: azul sólido como único acento CTA ── */
-    .btn-sm, .btn-add-rep, .btn-cancel-bulk, .btn-modal-cancel { background: #ffffff; transition: all .2s; }
-    .btn-apply { background: var(--accent); transition: all .2s; }
+    /* ── Botones: azure sólido como único CTA ── */
+    .btn-sm, .btn-add-rep, .btn-cancel-bulk, .btn-modal-cancel { background: transparent; transition: all .2s; }
+    .btn-apply { background: var(--accent); color: #061024; transition: all .2s; }
     .btn-apply:hover { background: var(--ac2); opacity: 1; }
-    .btn-run, .btn-import { background: var(--accent); border-radius: 12px; box-shadow: 0 1px 3px rgba(37,99,235,.3); transition: all .2s; }
+    .btn-run, .btn-import { background: var(--accent); color: #061024; border-radius: 11px; box-shadow: none; transition: all .2s; }
     .btn-run::after, .btn-import::after { content: none; }
-    .btn-run:not(:disabled):hover, .btn-import:not(:disabled):hover { background: var(--ac2); opacity: 1; box-shadow: 0 4px 12px rgba(37,99,235,.25); }
-    .btn-run:disabled, .btn-import:disabled { background: #94a3b8; box-shadow: none; }
-    .btn-clear { background: #ffffff; border: 1px solid #e2e8f0; transition: all .2s; }
-    .btn-clear:hover { border-color: #fca5a5; background: #fef2f2; }
-    .btn-go-import { background: var(--accent); transition: all .2s; }
+    .btn-run:not(:disabled):hover, .btn-import:not(:disabled):hover { background: var(--ac2); opacity: 1; transform: translateY(-1px); }
+    .btn-run:disabled, .btn-import:disabled { background: var(--sf2); color: var(--muted); }
+    .btn-clear { background: transparent; border: 1px solid var(--border); transition: all .2s; }
+    .btn-clear:hover { border-color: var(--err); background: rgba(255,107,122,.08); }
+    .btn-go-import { background: var(--accent); color: #061024; transition: all .2s; }
     .btn-go-import:not(:disabled):hover { background: var(--ac2); opacity: 1; }
-    .btn-icon { transition: all .2s; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
-    .btn-modal-primary { background: var(--accent); transition: all .2s; }
+    .btn-icon { transition: all .2s; box-shadow: none; }
+    .btn-copy-tbl { background: var(--accent); color: #061024; }
+    .btn-csv { background: var(--ok); color: #04211A; }
+    .btn-modal-primary { background: var(--accent); color: #061024; transition: all .2s; }
     .btn-modal-primary:not(:disabled):hover { background: var(--ac2); opacity: 1; }
 
-    /* ── Tarjetas: rounded-xl, borde slate-200/80, sombra sutil ── */
-    .status-row, .import-status-row, .stat, .tbl-wrap, .res-tbl-wrap, .progress-wrap, .retry-history, .source-badge { background: #ffffff; border: 1px solid rgba(226,232,240,.8); border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+    /* ── Tarjetas ── */
+    .status-row, .import-status-row, .stat, .tbl-wrap, .res-tbl-wrap, .progress-wrap, .retry-history, .source-badge { background: var(--surface); border: 1px solid var(--border); border-radius: 13px; box-shadow: none; }
+    .stat .n { font-family: var(--disp); font-size: 27px; letter-spacing: -.5px; }
+    .stat .l { letter-spacing: .5px; text-transform: uppercase; font-size: 9.5px; }
 
-    /* ── Logs: consola oscura deliberada (contraste "tech" sobre UI clara) ── */
-    .log, .import-log { background: #0f172a; border: 1px solid #1e293b; border-radius: 14px; color: #94a3b8; }
-    .log .info, .import-log .info { color: #60a5fa; }
-    .log .ok, .import-log .ok { color: #4ade80; }
-    .log .err, .import-log .err { color: #f87171; }
-    .log .warn, .import-log .warn { color: #facc15; }
+    /* ── Consola de log: la capa más profunda ── */
+    .log, .import-log { background: var(--void); border: 1px solid var(--border); border-radius: 13px; color: var(--muted); }
+    .log .info, .import-log .info { color: var(--accent); }
+    .log .ok, .import-log .ok { color: var(--ok); }
+    .log .err, .import-log .err { color: var(--err); }
+    .log .warn, .import-log .warn { color: var(--warn); }
 
-    /* ── Tablas de datos: amplias, hover suave, badges ── */
-    table.pt th, table.res-import th { background: #f8fafc; color: #64748b; padding: 12px 16px; border-bottom: 1px solid #e2e8f0; }
-    table.pt td, table.res-import td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; transition: background .2s; }
-    table.pt tr:hover td, table.res-import tr:hover td { background: rgba(248,250,252,.8); }
-    .chip { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
-    .bl-chip { background: #f5f3ff; border-color: #ddd6fe; color: #6d28d9; }
-    .res-ok { display: inline-block; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 100px; padding: 2px 10px; font-size: 10px; }
-    .res-err { display: inline-block; background: #fef2f2; border: 1px solid #fecaca; border-radius: 100px; padding: 2px 10px; font-size: 10px; }
+    /* ── Tablas: amplias, hover suave ── */
+    table.pt th, table.res-import th { background: var(--sf2); color: var(--muted); padding: 10px 15px; border-bottom: 1px solid var(--border); letter-spacing: 1px; }
+    table.pt td, table.res-import td { padding: 10px 15px; border-bottom: 1px solid rgba(28,44,94,.5); transition: background .18s; font-family: var(--mono); }
+    table.pt tr:hover td, table.res-import tr:hover td { background: var(--sf2); }
+    .chip { background: rgba(77,141,255,.12); border-color: rgba(77,141,255,.30); color: var(--accent); }
+    .bl-chip { background: rgba(167,139,250,.12); border-color: rgba(167,139,250,.30); color: #C4B5FD; }
+    .res-ok { display: inline-block; background: rgba(45,212,160,.12); border: 1px solid rgba(45,212,160,.30); border-radius: 100px; padding: 2px 9px; font-size: 9.5px; }
+    .res-err { display: inline-block; background: rgba(255,107,122,.12); border: 1px solid rgba(255,107,122,.30); border-radius: 100px; padding: 2px 9px; font-size: 9.5px; }
 
     /* ── Progreso y contadores ── */
-    .progress-bar-bg { background: #e2e8f0; }
-    .progress-bar-fill { background: linear-gradient(90deg, #3b82f6, #2563eb); }
-    .pc { background: #f8fafc; border-radius: 10px; }
-    .rh-badge { background: #f8fafc; }
+    .progress-bar-bg { background: var(--sf2); }
+    .progress-bar-fill { background: var(--accent); }
+    .progress-header .ph-pct { font-family: var(--disp); }
+    .pc { background: var(--sf2); border-radius: 9px; }
+    .pc .pn { font-family: var(--disp); }
+    .rh-badge { background: var(--sf2); }
 
-    /* ── Modales, selectores de modo y toast ── */
-    .modal-backdrop { background: rgba(15,23,42,.45); backdrop-filter: blur(4px); }
-    .modal { background: #ffffff; border-radius: 18px; box-shadow: 0 24px 64px rgba(15,23,42,.18); }
-    .mode-tab, .submode-tab { background: #ffffff; transition: all .2s; }
-    .mode-tab.selected { border-color: #3b82f6; background: #eff6ff; }
-    .submode-tab.selected { background: #eff6ff; }
-    .file-input-label { background: #ffffff; border-color: #cbd5e1; }
-    .file-input-label:hover { background: #eff6ff; }
-    .file-input-label.has-file { background: #f0fdf4; }
-    .export-links { background: #f0fdf4; }
-    .toast { background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 12px 32px rgba(15,23,42,.12); color: var(--text); border-radius: 14px; }
+    /* ── Modales y toast ── */
+    .modal-backdrop { background: rgba(2,5,15,.72); backdrop-filter: blur(4px); }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 32px 80px rgba(0,0,0,.6); }
+    .modal-header h2 { font-family: var(--disp); }
+    .mode-tab, .submode-tab { background: var(--sf2); transition: all .2s; }
+    .mode-tab.selected { border-color: var(--accent); background: rgba(77,141,255,.12); }
+    .submode-tab.selected { background: rgba(77,141,255,.12); }
+    .file-input-label { background: var(--sf2); border-color: var(--border); }
+    .file-input-label:hover { background: rgba(77,141,255,.10); }
+    .file-input-label.has-file { background: rgba(45,212,160,.10); }
+    .export-links { background: rgba(45,212,160,.06); }
+    .toast { background: var(--sf2); border: 1px solid var(--border); box-shadow: 0 12px 32px rgba(0,0,0,.5); color: var(--text); border-radius: 13px; }
 
     /* ── Scrollbars ── */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 100px; }
-    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 100px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
-    /* ── Selector de País (v12) — banderas en CSS puro (Windows no
+    /* ── Selector de País — banderas en CSS puro (Windows no
          renderiza emojis de bandera, así que se dibujan con gradientes) ── */
     .pais-wrap { position: relative; margin-right: 4px; }
-    .pais-btn { display: flex; align-items: center; gap: 7px; background: #ffffff; border: 1px solid rgba(226,232,240,.8); border-radius: 12px; padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--text); cursor: pointer; font-family: var(--sans); box-shadow: 0 1px 3px rgba(0,0,0,.05); transition: all .2s; }
-    .pais-btn:hover { border-color: #3b82f6; color: var(--accent); }
+    .pais-btn { display: flex; align-items: center; gap: 7px; background: var(--sf2); border: 1px solid var(--border); border-radius: 10px; padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--text); cursor: pointer; font-family: var(--sans); box-shadow: none; transition: all .2s; }
+    .pais-btn:hover { border-color: var(--accent); color: var(--accent); }
     .pais-caret { font-size: 9px; color: var(--muted); }
-    .flag { width: 18px; height: 13px; border-radius: 3px; display: inline-block; box-shadow: inset 0 0 0 1px rgba(15,23,42,.1); flex-shrink: 0; }
+    .flag { width: 18px; height: 13px; border-radius: 3px; display: inline-block; box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); flex-shrink: 0; }
     .flag-mx { background: linear-gradient(90deg, #006847 0 33.3%, #ffffff 33.3% 66.6%, #ce1126 66.6% 100%); }
     .flag-es { background: linear-gradient(180deg, #aa151b 0 25%, #f1bf00 25% 75%, #aa151b 75% 100%); }
     .flag-co { background: linear-gradient(180deg, #fcd116 0 50%, #003893 50% 75%, #ce1126 75% 100%); }
-    .pais-menu { display: none; position: absolute; right: 0; top: calc(100% + 8px); width: 215px; background: #ffffff; border: 1px solid rgba(226,232,240,.8); border-radius: 14px; padding: 6px; box-shadow: 0 12px 32px rgba(15,23,42,.12); z-index: 300; }
+    .pais-menu { display: none; position: absolute; right: 0; top: calc(100% + 8px); width: 215px; background: var(--sf2); border: 1px solid var(--border); border-radius: 13px; padding: 6px; box-shadow: 0 12px 32px rgba(0,0,0,.5); z-index: 300; }
     .pais-menu.open { display: block; }
     .pais-menu-title { font-size: 9.5px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); padding: 6px 10px 4px; }
-    .pais-item { display: flex; align-items: center; gap: 9px; width: 100%; background: none; border: none; border-radius: 9px; padding: 8px 10px; font-size: 12.5px; font-family: var(--sans); color: var(--text); cursor: pointer; transition: all .2s; text-align: left; }
-    .pais-item:hover { background: #f8fafc; }
-    .pais-item.active { background: #eff6ff; color: var(--accent); font-weight: 600; }
+    .pais-item { display: flex; align-items: center; gap: 9px; width: 100%; background: none; border: none; border-radius: 8px; padding: 8px 10px; font-size: 12.5px; font-family: var(--sans); color: var(--text); cursor: pointer; transition: all .2s; text-align: left; }
+    .pais-item:hover { background: var(--border); }
+    .pais-item.active { background: rgba(77,141,255,.14); color: var(--accent); font-weight: 600; }
     .pais-item .pais-check { margin-left: auto; opacity: 0; color: var(--accent); font-weight: 700; }
     .pais-item.active .pais-check { opacity: 1; }
+
+    /* ── FIRMA v13 · Barra de reparto — muestra cómo se partió el pool
+         entre los reps. Se alimenta de ownerStats, que el backend YA devuelve. ── */
+    .alloc { background: var(--surface); border: 1px solid var(--border); border-radius: 13px; padding: 15px 17px; display: none; flex-direction: column; gap: 10px; }
+    .alloc.visible { display: flex; }
+    .alloc-head { display: flex; align-items: baseline; justify-content: space-between; }
+    .alloc-title { font-size: 9.5px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; color: var(--muted); }
+    .alloc-total { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+    .alloc-bar { display: flex; height: 32px; border-radius: 7px; overflow: hidden; gap: 2px; }
+    .alloc-seg { display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px; font-weight: 500; color: #061024; transition: filter .18s; min-width: 3px; }
+    .alloc-seg:hover { filter: brightness(1.18); }
+    .alloc-seg.rest { background: var(--sf2); color: var(--muted); }
+    .alloc-legend { display: flex; flex-wrap: wrap; gap: 13px; font-size: 10.5px; color: var(--muted); }
+    .alloc-lg { display: flex; align-items: center; gap: 6px; }
+    .alloc-sw { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+    .alloc-lg.nf { color: var(--err); }
   </style>
 </head>
 <body>
@@ -574,12 +606,20 @@
           <div class="stat"><div class="n" id="sReps">0</div><div class="l">Representantes activos</div></div>
           <div class="stat"><div class="n" id="sCandidatos">0</div><div class="l">Contactos que pasaron el query</div></div>
         </div>
+        <div class="alloc" id="allocPanel">
+          <div class="alloc-head">
+            <span class="alloc-title">Reparto de la asignación</span>
+            <span class="alloc-total" id="allocTotal"></span>
+          </div>
+          <div class="alloc-bar" id="allocBar"></div>
+          <div class="alloc-legend" id="allocLegend"></div>
+        </div>
         <div class="log" id="logBox"><span class="info">// El log de ejecución aparecerá aquí…</span></div>
         <div class="res-header">
           <h2>Pre Template — Resultado de asignación</h2>
           <div class="res-btns">
             <button class="btn-icon btn-copy-tbl" id="copyBtn" onclick="copiarTabla()" disabled>📋 Copiar</button>
-            <button class="btn-icon" style="background:#475569" id="customFieldsBtn" onclick="abrirModalCustomFields()">⚙ Config. campos</button>
+            <button class="btn-icon" style="background:var(--sf2); color:var(--text); border:1px solid var(--border)" id="customFieldsBtn" onclick="abrirModalCustomFields()">⚙ Config. campos</button>
             <button class="btn-icon btn-csv" id="dlBtn" onclick="descargarCSV()" disabled>⬇ CSV</button>
             <button class="btn-go-import" id="goImportBtn" onclick="irAImport()" disabled>📥 Pasar a Data Import →</button>
           </div>
@@ -791,8 +831,8 @@
       <!-- SECCIÓN 2: Custom fields (columnas adicionales) -->
       <div style="background:rgba(124,58,237,0.06); border-left:3px solid var(--ac2); border-radius:6px; padding:10px 12px; font-size:11.5px; color:var(--text); line-height:1.55;">
         <strong>➕ Campos custom adicionales.</strong> Agregan columnas nuevas al pre-template. Elige la <strong>fuente del valor</strong>:
-        <br>· <span style="color:#0e7490;">☁ Desde SF</span> — trae el valor del Contact real (útil para <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Phone</code>, <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">MobilePhone</code>, etc).
-        <br>· <span style="color:#b45309;">✎ Manual</span> — tú escribes el valor, se estampa idéntico en todos los registros (útil para <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Suffix</code>, campaign codes, códigos de tracking, etc).
+        <br>· <span style="color:#67E8F9;">☁ Desde SF</span> — trae el valor del Contact real (útil para <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Phone</code>, <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">MobilePhone</code>, etc).
+        <br>· <span style="color:#FFB020;">✎ Manual</span> — tú escribes el valor, se estampa idéntico en todos los registros (útil para <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Suffix</code>, campaign codes, códigos de tracking, etc).
       </div>
 
       <div class="modal-field">
@@ -847,7 +887,7 @@
     </div>
     <div class="modal-body">
       <div style="background:rgba(75,124,243,0.06); border-left:3px solid var(--accent); border-radius:6px; padding:10px 12px; font-size:11.5px; color:var(--text); line-height:1.55;">
-        <strong>Los headers deben ser los API Field Names exactos de Salesforce.</strong> El orden es libre. Los headers reconocidos se mapean a las columnas del pre-template. Los headers que <em>no</em> matchean con las columnas base (13 campos) pero tienen sintaxis válida se agregan automáticamente como <strong style="color:#6d28d9;">custom fields</strong> y aparecerán en el Field Mapping. Columnas con nombre inválido (espacios, puntos) o que empiezan con <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">__</code> se ignoran.
+        <strong>Los headers deben ser los API Field Names exactos de Salesforce.</strong> El orden es libre. Los headers reconocidos se mapean a las columnas del pre-template. Los headers que <em>no</em> matchean con las columnas base (13 campos) pero tienen sintaxis válida se agregan automáticamente como <strong style="color:#C4B5FD;">custom fields</strong> y aparecerán en el Field Mapping. Columnas con nombre inválido (espacios, puntos) o que empiezan con <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">__</code> se ignoran.
       </div>
 
       <div class="modal-field">
@@ -957,7 +997,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn-modal-cancel" onclick="cerrarModalRecuperar()">Cancelar</button>
-      <button class="btn-modal-primary" id="btnRecuperarConfirm" onclick="ejecutarRecuperar()" style="background:#2563eb;">🔍 Recuperar resultado</button>
+      <button class="btn-modal-primary" id="btnRecuperarConfirm" onclick="ejecutarRecuperar()">🔍 Recuperar resultado</button>
     </div>
   </div>
 </div>
@@ -1482,6 +1522,7 @@ function limpiarAsignacion() {
   resetPaisSelector();  // v12: el selector de país vuelve al default (MX)
   resetAsigUI();
   preTemplateRows = []; totalAsignados = 0; ownerStatsCache = [];
+  renderAllocBar();  // v13: sin datos ⇒ la barra se oculta sola
   toast('🗑 Asignación limpiada.', 'ok');
 }
 
@@ -1619,6 +1660,7 @@ async function ejecutar() {
     totalAsignados = data.assigned;
 
     renderPreTemplate(PT_HEADERS, preTemplateRows);
+    renderAllocBar();  // v13: dibuja el reparto con ownerStats ya recibido
     setStatus(`¡Listo! ${data.assigned} contacto(s) asignado(s).`, 'ok');
 
     const hasData = preTemplateRows.length > 0;
@@ -1637,6 +1679,46 @@ async function ejecutar() {
   }
 
   btn.disabled = false; btn.textContent = '⚡ Ejecutar Asignación';
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  v13 · BARRA DE REPARTO (elemento firma)
+//  Solo PRESENTACIÓN: lee ownerStatsCache y los totales que el backend
+//  ya devuelve. No calcula ni altera ninguna asignación.
+// ══════════════════════════════════════════════════════════════════
+const ALLOC_TONOS = ['#4D8DFF','#6BA1FF','#89B5FF','#A3C6FF','#BDD7FF','#3D7BE8','#5C8FF0'];
+
+function renderAllocBar() {
+  const panel = document.getElementById('allocPanel');
+  if (!panel) return;
+  const stats = (ownerStatsCache || []).filter(o => o && !o.notFound && o.count > 0);
+  const noEncontrados = (ownerStatsCache || []).filter(o => o && o.notFound);
+
+  if (!stats.length) { panel.classList.remove('visible'); return; }
+
+  const asignados = stats.reduce((s, o) => s + o.count, 0);
+  const pool      = ultimaAsignacion.contactosQueryPass || 0;
+  const sobrante  = Math.max(0, pool - asignados);
+
+  let barra = '', leyenda = '';
+  stats.forEach((o, i) => {
+    const tono = ALLOC_TONOS[i % ALLOC_TONOS.length];
+    barra += `<div class="alloc-seg" style="flex:${o.count}; background:${tono}" title="${esc(o.email)} — ${o.count} lead(s)">${o.count}</div>`;
+    leyenda += `<span class="alloc-lg"><span class="alloc-sw" style="background:${tono}"></span>${esc(o.email)}</span>`;
+  });
+  if (sobrante > 0) {
+    barra   += `<div class="alloc-seg rest" style="flex:${sobrante}" title="Pasaron el query pero no se repartieron (cuota insuficiente)">${sobrante} libres</div>`;
+    leyenda += `<span class="alloc-lg"><span class="alloc-sw" style="background:var(--sf2)"></span>sobrante del pool</span>`;
+  }
+  noEncontrados.forEach(o => {
+    leyenda += `<span class="alloc-lg nf"><span class="alloc-sw" style="background:var(--err)"></span>${esc(o.email)} — sin Owner</span>`;
+  });
+
+  document.getElementById('allocBar').innerHTML = barra;
+  document.getElementById('allocLegend').innerHTML = leyenda;
+  document.getElementById('allocTotal').textContent =
+    `${asignados} asignados · ${stats.length} rep(s)` + (sobrante > 0 ? ` · ${sobrante} sin repartir` : '');
+  panel.classList.add('visible');
 }
 
 function renderPreTemplate(headers, rows) {
@@ -1668,10 +1750,10 @@ function renderPreTemplate(headers, rows) {
       if (modo === 'manual') {
         badges += ' <span style="background:rgba(251,191,36,.25); color:var(--warn); border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">✎ MANUAL</span>';
       } else {
-        badges += ' <span style="background:rgba(6,182,212,.25); color:#0e7490; border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">☁ SF</span>';
+        badges += ' <span style="background:rgba(6,182,212,.25); color:#67E8F9; border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">☁ SF</span>';
       }
     }
-    if (esFromSF) badges += ' <span style="background:rgba(6,182,212,.25); color:#0e7490; border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">☁ SF</span>';
+    if (esFromSF) badges += ' <span style="background:rgba(6,182,212,.25); color:#67E8F9; border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">☁ SF</span>';
     if (esManualFijo) badges += ' <span style="background:rgba(251,191,36,.25); color:var(--warn); border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">✎ MANUAL</span>';
     html += `<th title="${esc(h)}">${esc(h)}${badges}</th>`;
   });
@@ -1693,19 +1775,19 @@ function renderPreTemplate(headers, rows) {
       }
       else if (headerName === 'BusinessLine__c') {
         // BusinessLine__c: badge distinto si viene de SF o es manual
-        if (esFromSF) html += `<td title="${esc(v)} (desde SF)"><span class="bl-chip" style="background:rgba(6,182,212,.15); border-color:rgba(6,182,212,.4); color:#0e7490;">☁ ${esc(v)}</span></td>`;
+        if (esFromSF) html += `<td title="${esc(v)} (desde SF)"><span class="bl-chip" style="background:rgba(6,182,212,.15); border-color:rgba(6,182,212,.4); color:#67E8F9;">☁ ${esc(v)}</span></td>`;
         else if (esManualFijo) html += `<td title="${esc(v)} (manual)"><span class="bl-chip" style="background:rgba(251,191,36,.15); border-color:rgba(251,191,36,.4); color:var(--warn);">✎ ${esc(v)}</span></td>`;
         else html += `<td title="${esc(v)}"><span class="bl-chip">${esc(v)}</span></td>`;
       }
       else if (CAMPOS_FIJOS_HARDCODED.has(headerName)) {
         // 6 fijos: color según fuente (SF cyan, manual naranja, default normal)
-        if (esFromSF) html += `<td class="fixed" style="color:#0e7490;" title="${esc(v)} (desde SF)">☁ ${esc(v)}</td>`;
-        else if (esManualFijo) html += `<td class="fixed" style="color:#b45309;" title="${esc(v)} (manual · estampado idéntico en todas las filas)">✎ ${esc(v) || '(vacío)'}</td>`;
+        if (esFromSF) html += `<td class="fixed" style="color:#67E8F9;" title="${esc(v)} (desde SF)">☁ ${esc(v)}</td>`;
+        else if (esManualFijo) html += `<td class="fixed" style="color:#FFB020;" title="${esc(v)} (manual · estampado idéntico en todas las filas)">✎ ${esc(v) || '(vacío)'}</td>`;
         else html += `<td class="fixed" title="${esc(v)}">${esc(v)}</td>`;
       }
       else if (esCustom && modoCustom === 'manual') {
         // Custom manual: color warn tenue
-        html += `<td style="color:#b45309;" title="${esc(v)} (manual · estampado idéntico en todas las filas)">${esc(v) || '<span style="color:var(--muted); font-style:italic;">(vacío)</span>'}</td>`;
+        html += `<td style="color:#FFB020;" title="${esc(v)} (manual · estampado idéntico en todas las filas)">${esc(v) || '<span style="color:var(--muted); font-style:italic;">(vacío)</span>'}</td>`;
       }
       else {
         // Base (Contact__c, LastSourceAt__c, Company, LastName, Email) o custom SF
@@ -2359,7 +2441,7 @@ function renderCustomFieldsList() {
     const isManual = cf.mode === 'manual';
     const badgeStyle = isManual
       ? 'background:rgba(251,191,36,.15); color:var(--warn); border:1px solid rgba(251,191,36,.4);'
-      : 'background:rgba(6,182,212,.15); color:#0e7490; border:1px solid rgba(6,182,212,.4);';
+      : 'background:rgba(6,182,212,.15); color:#67E8F9; border:1px solid rgba(6,182,212,.4);';
     const badgeText = isManual ? '✎ Manual' : '☁ Desde SF';
     const fuente = isManual
       ? (cf.value ? `Valor: <strong style="color:var(--text); font-family:var(--mono);">"${esc(cf.value)}"</strong>` : `<em style="color:var(--muted);">valor vacío</em>`)
