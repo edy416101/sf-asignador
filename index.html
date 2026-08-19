@@ -15,8 +15,8 @@
   <link rel="manifest" href="site.webmanifest"/>
 
   <!-- Theme color de la barra del navegador -->
-  <meta name="theme-color" content="#ffffff"/>
-  <meta name="msapplication-TileColor" content="#ffffff"/>
+  <meta name="theme-color" content="#0d0f18"/>
+  <meta name="msapplication-TileColor" content="#0d0f18"/>
 
   <!-- Open Graph / Preview al compartir link (Slack, email) -->
   <meta property="og:title" content="Cat-alyst · Docplanner Ops Suite"/>
@@ -29,22 +29,17 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
   <style>
-    /* ══ v13 · TEMA "DISPATCH" — consola de operaciones ══
-       Navy profundo y saturado + azure de acción + ámbar de señal.
-       Los NOMBRES de las variables se conservan intactos: ninguna regla
-       ni línea de lógica existente necesita cambiar. */
+    /* ══ v13 · PALETA OFICIAL "DOCPLANNER OPS SUITE" ══
+       Valores idénticos a la extensión Cat-alyst SID Grabber
+       (cat-alyst-extension/popup.html) para que toda la suite se lea
+       como un mismo producto. No inventar colores nuevos aquí:
+       si cambia la marca, cambia primero la extensión y se replica. */
     :root {
-      --bg: #050B22;            /* navy profundo — fondo de página */
-      --surface: #0B1435;       /* paneles y tarjetas */
-      --sf2: #121F47;           /* elevado: inputs, hover, headers de tabla */
-      --border: #1C2C5E;        /* bordes azul visible */
-      --accent: #4D8DFF;        /* azure — acción y estados activos */
-      --ac2: #6BA1FF;           /* azure claro — hover */
-      --ac3: #FFB020;
-      --ok: #2DD4A0; --err: #FF6B7A; --warn: #FFB020;
-      --text: #E8EDF9;
-      --muted: #8A99BC;
-      --void: #02050F;          /* consola de log — la capa más profunda */
+      --bg: #0d0f18; --surface: #161929; --sf2: #1e2235; --border: #272c45;
+      --accent: #4b7cf3; --ac2: #7c3aed; --ac3: #d97706;
+      --ok: #22c55e; --err: #f43f5e; --warn: #f59e0b;
+      --text: #e4e8f7; --muted: #6b729a;
+      --void: #090b12;                      /* consola de log: bajo el fondo */
       --mono: 'JetBrains Mono', monospace; --sans: 'Inter', sans-serif;
       --disp: 'Space Grotesk', sans-serif;  /* display: cifras y títulos */
     }
@@ -332,141 +327,73 @@
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
     /* ═══════════════════════════════════════════════════════════════════════
-       v13 · CAPA DE REDISEÑO "DISPATCH" (solo presentación)
-       Estas reglas van AL FINAL a propósito: misma especificidad que las
-       originales ⇒ gana el orden de cascada. Cero cambios de HTML/JS/lógica.
-
-       Principio: la profundidad se lee por CAPAS separadas
-       (#050B22 página < #0B1435 panel < #121F47 elevado), no por brillo.
-       El ámbar aparece SOLO en estados vivos: es la señal, no decoración.
+       v13 · CAPA DE REFINAMIENTO (solo presentación)
+       El tema base ya usa la paleta oficial de la suite, así que aquí NO se
+       repinta nada: solo se AÑADEN mejoras de densidad, tipografía y foco.
+       Los degradados azul→morado y los glows son la firma de la marca
+       (idénticos a la extensión), no decoración: marcan la acción principal.
        ═══════════════════════════════════════════════════════════════════════ */
 
-    /* ── Login ── */
-    #loginScreen { background: var(--bg); background-image: radial-gradient(ellipse 60% 50% at 25% 60%, rgba(77,141,255,.10) 0%, transparent 70%), radial-gradient(ellipse 50% 40% at 75% 40%, rgba(255,176,32,.05) 0%, transparent 70%); }
-    .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; box-shadow: 0 32px 80px rgba(0,0,0,.5); }
-    .login-card h1 { font-family: var(--disp); letter-spacing: -.4px; }
-    .login-logo { background: rgba(77,141,255,.08); border: 1px solid rgba(77,141,255,.28); box-shadow: none; }
-    .login-logo::before { background: radial-gradient(circle at center, rgba(77,141,255,.14) 0%, transparent 60%); }
-    .domain-chip { background: rgba(77,141,255,.10); border-color: rgba(77,141,255,.30); }
+    /* ── Firma de marca: el wordmark en degradado, igual que la extensión ── */
+    header h1 { font-family: var(--disp); letter-spacing: .4px; }
+    header h1 .brandmark { background: linear-gradient(90deg, var(--accent), var(--ac2)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700; }
+    .login-card h1 { font-family: var(--disp); letter-spacing: .6px; }
 
-    /* ── Header y tabs ── */
-    header { background: var(--surface); border-bottom: 1px solid var(--border); }
-    header h1 { font-family: var(--disp); font-size: 14.5px; letter-spacing: -.2px; }
-    .logo-mark { background: rgba(77,141,255,.10); border: 1px solid rgba(77,141,255,.28); box-shadow: none; }
-    .user-avatar { background: var(--accent); color: #061024; }
-    .sign-out { transition: all .2s; }
-    .tab-bar { background: var(--surface); }
-    .tab { transition: all .2s; }
-    .tab-badge { background: var(--sf2); border-color: var(--border); font-family: var(--mono); }
-    .tab.active .tab-badge { background: rgba(77,141,255,.14); border-color: rgba(77,141,255,.32); }
-
-    /* ── Paneles laterales ── */
-    aside, .import-config, .import-config-footer { background: var(--surface); }
-    .slabel { color: var(--muted); letter-spacing: 1.6px; }
-    .bulk-panel { background: var(--sf2); border-radius: 11px; }
-    .bulk-panel textarea { background: var(--bg); }
-
-    /* ── Inputs: fondo elevado + focus ring azure ── */
-    .field input, .field select, .modal-field input, .modal-field select, .ids-box { background: var(--sf2); border: 1px solid var(--border); transition: all .2s; }
-    .field input:focus, .field select:focus, .modal-field input:focus, .modal-field select:focus, .ids-box:focus, .bulk-panel textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(77,141,255,.16); }
-    .field select option { background: #0B1435; color: var(--text); }
-    .sid-eye { background: rgba(77,141,255,.14); border-color: rgba(77,141,255,.34); }
-    .sid-eye:hover { background: rgba(77,141,255,.26); }
-    .reps-tbl tr:hover td { background: var(--sf2); }
-
-    /* ── Botones: azure sólido como único CTA ── */
-    .btn-sm, .btn-add-rep, .btn-cancel-bulk, .btn-modal-cancel { background: transparent; transition: all .2s; }
-    .btn-apply { background: var(--accent); color: #061024; transition: all .2s; }
-    .btn-apply:hover { background: var(--ac2); opacity: 1; }
-    .btn-run, .btn-import { background: var(--accent); color: #061024; border-radius: 11px; box-shadow: none; transition: all .2s; }
-    .btn-run::after, .btn-import::after { content: none; }
-    .btn-run:not(:disabled):hover, .btn-import:not(:disabled):hover { background: var(--ac2); opacity: 1; transform: translateY(-1px); }
-    .btn-run:disabled, .btn-import:disabled { background: var(--sf2); color: var(--muted); }
-    .btn-clear { background: transparent; border: 1px solid var(--border); transition: all .2s; }
-    .btn-clear:hover { border-color: var(--err); background: rgba(255,107,122,.08); }
-    .btn-go-import { background: var(--accent); color: #061024; transition: all .2s; }
-    .btn-go-import:not(:disabled):hover { background: var(--ac2); opacity: 1; }
-    .btn-icon { transition: all .2s; box-shadow: none; }
-    .btn-copy-tbl { background: var(--accent); color: #061024; }
-    .btn-csv { background: var(--ok); color: #04211A; }
-    .btn-modal-primary { background: var(--accent); color: #061024; transition: all .2s; }
-    .btn-modal-primary:not(:disabled):hover { background: var(--ac2); opacity: 1; }
-
-    /* ── Tarjetas ── */
-    .status-row, .import-status-row, .stat, .tbl-wrap, .res-tbl-wrap, .progress-wrap, .retry-history, .source-badge { background: var(--surface); border: 1px solid var(--border); border-radius: 13px; box-shadow: none; }
-    .stat .n { font-family: var(--disp); font-size: 27px; letter-spacing: -.5px; }
-    .stat .l { letter-spacing: .5px; text-transform: uppercase; font-size: 9.5px; }
-
-    /* ── Consola de log: la capa más profunda ── */
-    .log, .import-log { background: var(--void); border: 1px solid var(--border); border-radius: 13px; color: var(--muted); }
-    .log .info, .import-log .info { color: var(--accent); }
-    .log .ok, .import-log .ok { color: var(--ok); }
-    .log .err, .import-log .err { color: var(--err); }
-    .log .warn, .import-log .warn { color: var(--warn); }
-
-    /* ── Tablas: amplias, hover suave ── */
-    table.pt th, table.res-import th { background: var(--sf2); color: var(--muted); padding: 10px 15px; border-bottom: 1px solid var(--border); letter-spacing: 1px; }
-    table.pt td, table.res-import td { padding: 10px 15px; border-bottom: 1px solid rgba(28,44,94,.5); transition: background .18s; font-family: var(--mono); }
-    table.pt tr:hover td, table.res-import tr:hover td { background: var(--sf2); }
-    .chip { background: rgba(77,141,255,.12); border-color: rgba(77,141,255,.30); color: var(--accent); }
-    .bl-chip { background: rgba(167,139,250,.12); border-color: rgba(167,139,250,.30); color: #C4B5FD; }
-    .res-ok { display: inline-block; background: rgba(45,212,160,.12); border: 1px solid rgba(45,212,160,.30); border-radius: 100px; padding: 2px 9px; font-size: 9.5px; }
-    .res-err { display: inline-block; background: rgba(255,107,122,.12); border: 1px solid rgba(255,107,122,.30); border-radius: 100px; padding: 2px 9px; font-size: 9.5px; }
-
-    /* ── Progreso y contadores ── */
-    .progress-bar-bg { background: var(--sf2); }
-    .progress-bar-fill { background: var(--accent); }
-    .progress-header .ph-pct { font-family: var(--disp); }
-    .pc { background: var(--sf2); border-radius: 9px; }
-    .pc .pn { font-family: var(--disp); }
-    .rh-badge { background: var(--sf2); }
-
-    /* ── Modales y toast ── */
-    .modal-backdrop { background: rgba(2,5,15,.72); backdrop-filter: blur(4px); }
-    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 32px 80px rgba(0,0,0,.6); }
+    /* ── Cifras y datos en la display face ── */
+    .stat .n, .pc .pn, .progress-header .ph-pct { font-family: var(--disp); letter-spacing: -.4px; }
+    .stat .l { text-transform: uppercase; letter-spacing: .6px; font-size: 9.5px; }
     .modal-header h2 { font-family: var(--disp); }
-    .mode-tab, .submode-tab { background: var(--sf2); transition: all .2s; }
-    .mode-tab.selected { border-color: var(--accent); background: rgba(77,141,255,.12); }
-    .submode-tab.selected { background: rgba(77,141,255,.12); }
-    .file-input-label { background: var(--sf2); border-color: var(--border); }
-    .file-input-label:hover { background: rgba(77,141,255,.10); }
-    .file-input-label.has-file { background: rgba(45,212,160,.10); }
-    .export-links { background: rgba(45,212,160,.06); }
-    .toast { background: var(--sf2); border: 1px solid var(--border); box-shadow: 0 12px 32px rgba(0,0,0,.5); color: var(--text); border-radius: 13px; }
 
-    /* ── Scrollbars ── */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 100px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+    /* ── CTA: degradado + glow de la extensión (rgba(75,124,243,.35)) ── */
+    .btn-run, .btn-import { box-shadow: 0 4px 14px rgba(75,124,243,.35); transition: transform .15s, box-shadow .15s, opacity .15s; }
+    .btn-run:not(:disabled):hover, .btn-import:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(75,124,243,.5); }
+    .btn-run:not(:disabled):active, .btn-import:not(:disabled):active { transform: translateY(0); box-shadow: 0 2px 8px rgba(75,124,243,.4); }
+    .btn-run:disabled, .btn-import:disabled { box-shadow: none; }
+
+    /* ── Foco visible en inputs (accesibilidad + precisión) ── */
+    .field input:focus, .field select:focus, .modal-field input:focus,
+    .modal-field select:focus, .ids-box:focus, .bulk-panel textarea:focus {
+      border-color: var(--accent); box-shadow: 0 0 0 3px rgba(75,124,243,.18);
+    }
+    .field input, .field select, .modal-field input, .modal-field select, .ids-box { transition: border-color .2s, box-shadow .2s; }
+    .btn-sm, .btn-add-rep, .btn-clear, .btn-icon, .mode-tab, .submode-tab, .tab, .pais-btn, .sign-out { transition: all .2s; }
+
+    /* ── Consola de log: una capa más profunda que el fondo ── */
+    .log, .import-log { background: var(--void); }
+
+    /* ── Tablas: más aire y hover suave; los IDs se leen como IDs ── */
+    table.pt th, table.res-import th { padding: 10px 15px; letter-spacing: .9px; }
+    table.pt td, table.res-import td { padding: 10px 15px; font-family: var(--mono); transition: background .18s; }
 
     /* ── Selector de País — banderas en CSS puro (Windows no
          renderiza emojis de bandera, así que se dibujan con gradientes) ── */
     .pais-wrap { position: relative; margin-right: 4px; }
-    .pais-btn { display: flex; align-items: center; gap: 7px; background: var(--sf2); border: 1px solid var(--border); border-radius: 10px; padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--text); cursor: pointer; font-family: var(--sans); box-shadow: none; transition: all .2s; }
+    .pais-btn { display: flex; align-items: center; gap: 7px; background: var(--sf2); border: 1px solid var(--border); border-radius: 8px; padding: 5px 11px; font-size: 12px; font-weight: 600; color: var(--text); cursor: pointer; font-family: var(--sans); }
     .pais-btn:hover { border-color: var(--accent); color: var(--accent); }
     .pais-caret { font-size: 9px; color: var(--muted); }
-    .flag { width: 18px; height: 13px; border-radius: 3px; display: inline-block; box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); flex-shrink: 0; }
+    .flag { width: 18px; height: 13px; border-radius: 3px; display: inline-block; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); flex-shrink: 0; }
     .flag-mx { background: linear-gradient(90deg, #006847 0 33.3%, #ffffff 33.3% 66.6%, #ce1126 66.6% 100%); }
     .flag-es { background: linear-gradient(180deg, #aa151b 0 25%, #f1bf00 25% 75%, #aa151b 75% 100%); }
     .flag-co { background: linear-gradient(180deg, #fcd116 0 50%, #003893 50% 75%, #ce1126 75% 100%); }
-    .pais-menu { display: none; position: absolute; right: 0; top: calc(100% + 8px); width: 215px; background: var(--sf2); border: 1px solid var(--border); border-radius: 13px; padding: 6px; box-shadow: 0 12px 32px rgba(0,0,0,.5); z-index: 300; }
+    .pais-menu { display: none; position: absolute; right: 0; top: calc(100% + 8px); width: 215px; background: var(--sf2); border: 1px solid var(--border); border-radius: 11px; padding: 6px; box-shadow: 0 16px 40px rgba(0,0,0,.55); z-index: 300; }
     .pais-menu.open { display: block; }
     .pais-menu-title { font-size: 9.5px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); padding: 6px 10px 4px; }
-    .pais-item { display: flex; align-items: center; gap: 9px; width: 100%; background: none; border: none; border-radius: 8px; padding: 8px 10px; font-size: 12.5px; font-family: var(--sans); color: var(--text); cursor: pointer; transition: all .2s; text-align: left; }
+    .pais-item { display: flex; align-items: center; gap: 9px; width: 100%; background: none; border: none; border-radius: 7px; padding: 8px 10px; font-size: 12.5px; font-family: var(--sans); color: var(--text); cursor: pointer; transition: all .2s; text-align: left; }
     .pais-item:hover { background: var(--border); }
-    .pais-item.active { background: rgba(77,141,255,.14); color: var(--accent); font-weight: 600; }
+    .pais-item.active { background: rgba(75,124,243,.14); color: var(--accent); font-weight: 600; }
     .pais-item .pais-check { margin-left: auto; opacity: 0; color: var(--accent); font-weight: 700; }
     .pais-item.active .pais-check { opacity: 1; }
 
-    /* ── FIRMA v13 · Barra de reparto — muestra cómo se partió el pool
-         entre los reps. Se alimenta de ownerStats, que el backend YA devuelve. ── */
-    .alloc { background: var(--surface); border: 1px solid var(--border); border-radius: 13px; padding: 15px 17px; display: none; flex-direction: column; gap: 10px; }
+    /* ── FIRMA v13 · Barra de reparto — cómo se partió el pool entre reps.
+         Los segmentos recorren el degradado azul→morado de la marca.
+         Se alimenta de ownerStats, que el backend YA devuelve. ── */
+    .alloc { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 17px; display: none; flex-direction: column; gap: 10px; }
     .alloc.visible { display: flex; }
     .alloc-head { display: flex; align-items: baseline; justify-content: space-between; }
-    .alloc-title { font-size: 9.5px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; color: var(--muted); }
+    .alloc-title { font-size: 9.5px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); }
     .alloc-total { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
     .alloc-bar { display: flex; height: 32px; border-radius: 7px; overflow: hidden; gap: 2px; }
-    .alloc-seg { display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px; font-weight: 500; color: #061024; transition: filter .18s; min-width: 3px; }
+    .alloc-seg { display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px; font-weight: 500; color: #fff; transition: filter .18s; min-width: 3px; }
     .alloc-seg:hover { filter: brightness(1.18); }
     .alloc-seg.rest { background: var(--sf2); color: var(--muted); }
     .alloc-legend { display: flex; flex-wrap: wrap; gap: 13px; font-size: 10.5px; color: var(--muted); }
@@ -491,7 +418,7 @@
 <div id="mainApp">
   <header>
     <div class="logo-mark"><img src="assets/img/logo-hero.png" alt="Docplanner Ops Suite"/></div>
-    <h1>Cat-alyst <span>· Docplanner</span></h1>
+    <h1><span class="brandmark">CAT-ALYST</span> <span>· Docplanner Ops Suite</span></h1>
     <!-- ── v12: Selector de País — define el Country__c del pre-template ── -->
     <div class="pais-wrap" id="paisWrap">
       <button class="pais-btn" id="paisBtn" onclick="togglePaisMenu(event)" title="País que se estampa en Country__c del pre-template">
@@ -1686,7 +1613,8 @@ async function ejecutar() {
 //  Solo PRESENTACIÓN: lee ownerStatsCache y los totales que el backend
 //  ya devuelve. No calcula ni altera ninguna asignación.
 // ══════════════════════════════════════════════════════════════════
-const ALLOC_TONOS = ['#4D8DFF','#6BA1FF','#89B5FF','#A3C6FF','#BDD7FF','#3D7BE8','#5C8FF0'];
+// Recorre el degradado de marca: accent #4b7cf3 → ac2 #7c3aed (el mismo del CTA)
+const ALLOC_TONOS = ['#4B7CF3','#556FF2','#5F62F1','#6855F0','#7247EE','#7C3AED'];
 
 function renderAllocBar() {
   const panel = document.getElementById('allocPanel');
