@@ -1,5 +1,5 @@
 ﻿// ══════════════════════════════════════════════════════════════════════════
-//  SF ASIGNADOR · BACKEND — Google Apps Script  v14.0
+//  SF ASIGNADOR · BACKEND — Google Apps Script  v15.0
 //
 //  Operaciones:
 //    · default              → procesarAsignacion
@@ -63,6 +63,24 @@ var ALLOWED_EMAILS = [
   "camila.fernandez@docplanner.com",
   "andres.fraile@docplanner.com"
 ];
+
+// ── ADMIN v15: administradores de la herramienta ──
+// HARDCODEADOS a propósito (no editables desde el panel): si fueran editables,
+// un error podría dejar a todos sin acceso al panel para arreglarlo.
+// Todos los usuarios pueden VER el panel; solo estos emails pueden EDITAR.
+var ADMIN_EMAILS = [
+  "edgar.martinez@docplanner.com",
+  "guilherme.foppa@docplanner.com"
+];
+
+// ── ADMIN v15: whitelist dinámica ──
+// La lista de usuarios vive en la pestaña "Usuarios" del Sheet de auditoría y
+// se administra SOLO desde el panel de la tool (nunca editando el Sheet a mano;
+// la pestaña se crea y siembra sola la primera vez). ALLOWED_EMAILS (arriba)
+// queda como FALLBACK: si el Sheet no responde, nadie pierde acceso.
+var USUARIOS_SHEET_NAME  = "Usuarios";
+var WHITELIST_CACHE_KEY  = "whitelist_v15";
+var WHITELIST_CACHE_SEG  = 300;  // 5 min: un alta/baja tarda máx esto en propagarse
 
 // ── SEGURIDAD: Rate limiting ──
 // Máximo N operaciones costosas por email por hora.
@@ -150,6 +168,14 @@ function doPost(e) {
     } else if (operation === "jobStatus") {
       // v14: consulta corta que el frontend repite. Sin auditoría (sería ruido).
       resultado = consultarEstadoJob(payload);
+    } else if (operation === "adminData") {
+      // v15: panel admin. TODOS los usuarios de la whitelist pueden VER;
+      // solo ADMIN_EMAILS puede editar (las acciones de abajo lo verifican).
+      resultado = obtenerDatosAdmin(userEmail);
+    } else if (operation === "adminAddUser") {
+      resultado = adminAgregarUsuario(userEmail, payload);
+    } else if (operation === "adminRemoveUser") {
+      resultado = adminEliminarUsuario(userEmail, payload);
     } else if (operation === "describe") {
       resultado = describirObjeto(payload);
     } else if (operation === "recuperarJob") {
@@ -190,7 +216,7 @@ function doPost(e) {
 
 function doGet(e) {
   return ContentService
-    .createTextOutput(JSON.stringify({ status: "OK", version: "14.0" }))
+    .createTextOutput(JSON.stringify({ status: "OK", version: "15.0" }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -247,8 +273,11 @@ function validarIdToken(idToken) {
     }
 
     // Verificar whitelist de emails (última capa antes de permitir acceso)
+    // v15: la lista viene de la pestaña "Usuarios" del Sheet (editable desde el
+    // panel admin de la tool). Si el Sheet falla, obtenerWhitelist() cae de
+    // vuelta a ALLOWED_EMAILS — un problema de Sheet nunca bloquea a todos.
     var emailLower = String(info.email).toLowerCase().trim();
-    if (ALLOWED_EMAILS.indexOf(emailLower) === -1) {
+    if (obtenerWhitelist().indexOf(emailLower) === -1) {
       return {
         valid: false,
         error: "Tu email no está autorizado para usar esta herramienta. Contacta a RevOps si necesitas acceso.",
@@ -1740,4 +1769,247 @@ function testCarpetaCOE() {
     Logger.log("     → Ejecuta esta función para forzar re-autorización.");
     Logger.log("     → Acepta todos los permisos que Google pida.");
   }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  v15.0 · MÓDULO ADMIN
+//
+//  · La whitelist vive en la pestaña "Usuarios" del Sheet de auditoría.
+//    La pestaña SE CREA Y SE SIEMBRA SOLA la primera vez (con ALLOWED_EMAILS):
+//    el Sheet es solo almacenamiento, nunca se edita a mano.
+//  · Todos los usuarios ven el panel (adminData); solo ADMIN_EMAILS edita.
+//  · La verificación de admin es AQUÍ, en el backend, contra el email del
+//    id_token verificado por Google. Ocultar botones en el frontend es
+//    cosmético: cualquiera puede forzarlos desde la consola del navegador.
+// ══════════════════════════════════════════════════════════════════════════
+
+function esAdmin(email) {
+  return ADMIN_EMAILS.indexOf(String(email || "").toLowerCase().trim()) !== -1;
+}
+
+// Devuelve la pestaña "Usuarios", creándola y sembrándola si no existe.
+function obtenerHojaUsuarios() {
+  var ss = SpreadsheetApp.openById(AUDIT_SHEET_ID);
+  var sh = ss.getSheetByName(USUARIOS_SHEET_NAME);
+  if (!sh) {
+    sh = ss.insertSheet(USUARIOS_SHEET_NAME);
+    sh.appendRow(["Email", "Agregado por", "Fecha"]);
+    sh.getRange(1, 1, 1, 3).setFontWeight("bold").setBackground("#1e2235").setFontColor("#ffffff");
+    sh.setFrozenRows(1);
+    sh.setColumnWidth(1, 280); sh.setColumnWidth(2, 240); sh.setColumnWidth(3, 160);
+    for (var i = 0; i < ALLOWED_EMAILS.length; i++) {
+      sh.appendRow([ALLOWED_EMAILS[i], "sistema (migración v15)", new Date()]);
+    }
+    Logger.log("[USUARIOS] Pestaña creada y sembrada con " + ALLOWED_EMAILS.length + " usuarios.");
+  }
+  return sh;
+}
+
+// Whitelist dinámica con caché de 5 min y fallback a la lista hardcodeada.
+function obtenerWhitelist() {
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get(WHITELIST_CACHE_KEY);
+  if (cached) {
+    try { return JSON.parse(cached); } catch (e) {}
+  }
+  try {
+    if (!AUDIT_SHEET_ID) throw new Error("sin AUDIT_SHEET_ID");
+    var sh = obtenerHojaUsuarios();
+    var last = sh.getLastRow();
+    var emails = [];
+    if (last >= 2) {
+      var vals = sh.getRange(2, 1, last - 1, 1).getValues();
+      for (var i = 0; i < vals.length; i++) {
+        var e = String(vals[i][0] || "").toLowerCase().trim();
+        if (e.indexOf("@") > 0 && emails.indexOf(e) === -1) emails.push(e);
+      }
+    }
+    // Los admins SIEMPRE están dentro, aunque alguien los borrara del Sheet
+    for (var a = 0; a < ADMIN_EMAILS.length; a++) {
+      if (emails.indexOf(ADMIN_EMAILS[a]) === -1) emails.push(ADMIN_EMAILS[a]);
+    }
+    if (emails.length > 0) {
+      cache.put(WHITELIST_CACHE_KEY, JSON.stringify(emails), WHITELIST_CACHE_SEG);
+      return emails;
+    }
+  } catch (err) {
+    Logger.log("[WHITELIST FALLBACK] " + err.message + " — usando lista hardcodeada.");
+  }
+  return ALLOWED_EMAILS;
+}
+
+// ── Alta de usuario (solo admins) ──
+function adminAgregarUsuario(userEmail, payload) {
+  if (!esAdmin(userEmail)) throw new Error("Solo los administradores pueden modificar usuarios.");
+  var nuevo = String(payload.email || "").toLowerCase().trim();
+  if (!/^[a-z0-9._%+-]+@docplanner\.com$/.test(nuevo)) {
+    throw new Error("Solo se aceptan correos @docplanner.com válidos.");
+  }
+  if (obtenerWhitelist().indexOf(nuevo) !== -1) {
+    throw new Error(nuevo + " ya tiene acceso.");
+  }
+  var sh = obtenerHojaUsuarios();
+  sh.appendRow([nuevo, userEmail, new Date()]);
+  CacheService.getScriptCache().remove(WHITELIST_CACHE_KEY);
+  registrarAuditoria(userEmail, "admin", "add_user", "email=" + nuevo);
+  return { ok: true, email: nuevo };
+}
+
+// ── Baja de usuario (solo admins; con barandales anti-autobloqueo) ──
+function adminEliminarUsuario(userEmail, payload) {
+  if (!esAdmin(userEmail)) throw new Error("Solo los administradores pueden modificar usuarios.");
+  var objetivo = String(payload.email || "").toLowerCase().trim();
+  if (!objetivo) throw new Error("No se recibió el email a eliminar.");
+  if (esAdmin(objetivo)) throw new Error("No se puede eliminar a un administrador.");
+  var sh = obtenerHojaUsuarios();
+  var last = sh.getLastRow();
+  var fila = -1;
+  if (last >= 2) {
+    var vals = sh.getRange(2, 1, last - 1, 1).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      if (String(vals[i][0] || "").toLowerCase().trim() === objetivo) { fila = i + 2; break; }
+    }
+  }
+  if (fila === -1) throw new Error(objetivo + " no está en la lista.");
+  sh.deleteRow(fila);
+  CacheService.getScriptCache().remove(WHITELIST_CACHE_KEY);
+  registrarAuditoria(userEmail, "admin", "remove_user", "email=" + objetivo);
+  return { ok: true, email: objetivo };
+}
+
+// ── El agregador del panel: lee TODA la auditoría y computa todo de un golpe ──
+function obtenerDatosAdmin(userEmail) {
+  if (!AUDIT_SHEET_ID) throw new Error("La auditoría no está configurada (AUDIT_SHEET_ID vacío): el panel no tiene datos que mostrar.");
+
+  var ss = SpreadsheetApp.openById(AUDIT_SHEET_ID);
+  var audit = ss.getSheets()[0];
+  var last = audit.getLastRow();
+  var rows = (last >= 2) ? audit.getRange(2, 1, last - 1, 5).getValues() : [];
+
+  var ahora = Date.now();
+  var DIA = 86400000;
+  var jobIniciado = {};   // jobId → {ts, email, det}
+  var jobCerrado  = {};   // jobId → true
+  var negados = [];
+  var porUsuario = {};    // email → {imports, ultimaActividad}
+  var semanas = [];       // 8 cubetas: 0 = esta semana
+  for (var s = 0; s < 8; s++) semanas.push({ imports: 0, procesados: 0, fallidos: 0 });
+  var totProcesados = 0, totFallidos = 0, totImports = 0;
+  var logRows = [];
+
+  for (var i = 0; i < rows.length; i++) {
+    var ts = rows[i][0] instanceof Date ? rows[i][0].getTime() : Date.parse(rows[i][0]);
+    if (isNaN(ts)) ts = 0;
+    var email  = String(rows[i][1] || "").toLowerCase().trim();
+    var op     = String(rows[i][2] || "");
+    var estado = String(rows[i][3] || "");
+    var det    = String(rows[i][4] || "");
+
+    // Última actividad + conteo de imports por usuario (solo emails reales)
+    if (email.indexOf("@") > 0 && email.indexOf("test-") !== 0) {
+      if (!porUsuario[email]) porUsuario[email] = { imports: 0, ultimaActividad: 0 };
+      if (ts > porUsuario[email].ultimaActividad) porUsuario[email].ultimaActividad = ts;
+      if (op === "import" && estado === "success") porUsuario[email].imports++;
+    }
+
+    // Ciclo de vida de los jobs (para detectar huérfanos)
+    var jm = det.match(/jobId=(750[a-zA-Z0-9]+)/);
+    if (jm) {
+      if (op === "import" && estado === "iniciado") jobIniciado[jm[1]] = { ts: ts, email: email, det: det };
+      else if (estado === "success" || estado === "error") jobCerrado[jm[1]] = true;
+    }
+
+    // Métricas de imports exitosos
+    if (op === "import" && estado === "success") {
+      totImports++;
+      var pm = det.match(/processed=(\d+)/), fm = det.match(/failed=(\d+)/);
+      var proc = pm ? parseInt(pm[1], 10) : 0, fall = fm ? parseInt(fm[1], 10) : 0;
+      totProcesados += proc; totFallidos += fall;
+      var sem = Math.floor((ahora - ts) / (7 * DIA));
+      if (sem >= 0 && sem < 8) { semanas[sem].imports++; semanas[sem].procesados += proc; semanas[sem].fallidos += fall; }
+    }
+
+    // Accesos denegados / rate limit
+    if (estado === "no_autorizado" || estado === "auth_rechazado" || estado === "rate_limited") {
+      negados.push({ ts: ts, email: email || "(desconocido)", estado: estado, det: det.slice(0, 140) });
+    }
+
+    logRows.push({ ts: ts, email: email, op: op, estado: estado, det: det.slice(0, 200) });
+  }
+
+  // Huérfanos: "iniciado" sin cierre, de los últimos 7 días (SF purga después)
+  var huerfanos = [];
+  for (var jobId in jobIniciado) {
+    if (!jobCerrado[jobId] && (ahora - jobIniciado[jobId].ts) <= 7 * DIA) {
+      huerfanos.push({
+        jobId: jobId,
+        email: jobIniciado[jobId].email,
+        ts: jobIniciado[jobId].ts,
+        edadMin: Math.round((ahora - jobIniciado[jobId].ts) / 60000),
+        det: jobIniciado[jobId].det.slice(0, 140)
+      });
+    }
+  }
+  huerfanos.sort(function(a, b) { return b.ts - a.ts; });
+
+  // Usuarios: pestaña + stats + rol
+  var usuarios = [];
+  var fuenteWhitelist = "";
+  try {
+    var sh = obtenerHojaUsuarios();
+    var lastU = sh.getLastRow();
+    if (lastU >= 2) {
+      var vals = sh.getRange(2, 1, lastU - 1, 3).getValues();
+      for (var u = 0; u < vals.length; u++) {
+        var em = String(vals[u][0] || "").toLowerCase().trim();
+        if (em.indexOf("@") <= 0) continue;
+        var st = porUsuario[em] || { imports: 0, ultimaActividad: 0 };
+        usuarios.push({
+          email: em,
+          esAdmin: esAdmin(em),
+          agregadoPor: String(vals[u][1] || ""),
+          fecha: vals[u][2] instanceof Date ? vals[u][2].getTime() : 0,
+          imports: st.imports,
+          ultimaActividad: st.ultimaActividad
+        });
+      }
+    }
+    fuenteWhitelist = "Pestaña Usuarios (" + usuarios.length + ")";
+  } catch (e) {
+    fuenteWhitelist = "FALLBACK: lista en código (" + ALLOWED_EMAILS.length + ") — " + e.message;
+  }
+
+  // Health check: escritura real al Sheet (celda auxiliar, se limpia sola) + carpeta COE
+  var health = { version: "15.0", sheetLectura: true, sheetEscritura: false, carpetaCOE: "", whitelistFuente: fuenteWhitelist };
+  try {
+    var celda = audit.getRange(1, 8);  // H1: fuera de las 5 columnas del log
+    celda.setValue("health_ok");
+    celda.clearContent();
+    health.sheetEscritura = true;
+  } catch (e) { health.sheetEscritura = false; }
+  try {
+    health.carpetaCOE = DriveApp.getFolderById(DEFAULT_DRIVE_FOLDER_ID).getName();
+  } catch (e) { health.carpetaCOE = ""; }
+
+  // Log: últimas 300 filas, la más nueva primero
+  logRows.sort(function(a, b) { return b.ts - a.ts; });
+  negados.sort(function(a, b) { return b.ts - a.ts; });
+
+  return {
+    esAdmin: esAdmin(userEmail),
+    admins: ADMIN_EMAILS,
+    usuarios: usuarios,
+    log: logRows.slice(0, 300),
+    totalFilasLog: logRows.length,
+    huerfanos: huerfanos,
+    negados: negados.slice(0, 50),
+    metricas: {
+      totImports: totImports,
+      totProcesados: totProcesados,
+      totFallidos: totFallidos,
+      pctExito: totProcesados > 0 ? Math.round(((totProcesados - totFallidos) / totProcesados) * 1000) / 10 : 0,
+      semanas: semanas
+    },
+    health: health
+  };
 }

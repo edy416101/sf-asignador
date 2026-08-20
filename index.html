@@ -419,6 +419,51 @@
     .jobpend-btn:hover { filter: brightness(1.12); }
     .jobpend-x { background: none; border: none; color: var(--muted); font-size: 13px; cursor: pointer; padding: 2px 6px; }
     .jobpend-x:hover { color: var(--err); }
+
+    /* ── v15 · Panel de administración ── */
+    .admin-btn { background: var(--sf2); border: 1px solid var(--border); color: var(--text); border-radius: 7px; font-size: 11px; font-weight: 600; padding: 4px 11px; cursor: pointer; font-family: var(--sans); transition: all .2s; }
+    .admin-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .adm-modal { max-width: 1020px; width: 96%; }
+    .adm-chip { font-size: 9px; font-weight: 700; letter-spacing: .8px; border-radius: 100px; padding: 3px 10px; vertical-align: middle; margin-left: 8px; }
+    .adm-chip.admin { background: rgba(75,124,243,.14); border: 1px solid rgba(75,124,243,.4); color: var(--accent); }
+    .adm-chip.lector { background: var(--sf2); border: 1px solid var(--border); color: var(--muted); }
+    .adm-sec { display: flex; flex-direction: column; gap: 9px; }
+    .adm-hint { font-size: 10px; color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 400; }
+    .adm-health { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+    .adm-hcard { background: var(--sf2); border: 1px solid var(--border); border-radius: 9px; padding: 10px 13px; }
+    .adm-hcard .hl { font-size: 9px; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+    .adm-hcard .hv { font-size: 12px; font-weight: 600; margin-top: 4px; }
+    .adm-hcard .hv.ok { color: var(--ok); } .adm-hcard .hv.bad { color: var(--err); }
+    .adm-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+    .adm-stat { background: var(--sf2); border: 1px solid var(--border); border-radius: 9px; padding: 12px 14px; }
+    .adm-stat .n { font-family: var(--disp); font-size: 24px; font-weight: 600; color: var(--accent); letter-spacing: -.4px; line-height: 1.1; }
+    .adm-stat .l { font-size: 9.5px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: .5px; }
+    .adm-tblwrap { background: var(--sf2); border: 1px solid var(--border); border-radius: 9px; overflow: auto; max-height: 260px; }
+    .adm-tbl { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .adm-tbl th { position: sticky; top: 0; background: var(--surface); color: var(--muted); font-size: 9px; letter-spacing: .8px; text-transform: uppercase; font-weight: 700; text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); z-index: 1; }
+    .adm-tbl td { padding: 7px 12px; border-bottom: 1px solid rgba(39,44,69,.5); font-family: var(--mono); font-size: 10.5px; }
+    .adm-tbl tr:last-child td { border-bottom: none; }
+    .adm-tbl tr:hover td { background: var(--surface); }
+    .adm-empty { padding: 16px; text-align: center; color: var(--muted); font-size: 11.5px; font-style: italic; }
+    .adm-pill { display: inline-block; border-radius: 100px; padding: 1px 8px; font-size: 9px; font-weight: 600; font-family: var(--mono); }
+    .adm-pill.ok { background: rgba(34,197,94,.12); color: var(--ok); border: 1px solid rgba(34,197,94,.3); }
+    .adm-pill.err { background: rgba(244,63,94,.12); color: var(--err); border: 1px solid rgba(244,63,94,.3); }
+    .adm-pill.warn { background: rgba(245,158,11,.12); color: var(--warn); border: 1px solid rgba(245,158,11,.3); }
+    .adm-pill.info { background: rgba(75,124,243,.12); color: var(--accent); border: 1px solid rgba(75,124,243,.3); }
+    .adm-huerfano { background: rgba(245,158,11,.07); border: 1px solid rgba(245,158,11,.3); border-radius: 9px; padding: 11px 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+    .adm-huerfano .hj { font-family: var(--mono); font-size: 11.5px; color: var(--warn); font-weight: 600; }
+    .adm-huerfano .hm { font-size: 10.5px; color: var(--muted); }
+    .adm-huerfano button { margin-left: auto; background: var(--warn); color: #1a1205; border: none; border-radius: 7px; font-size: 11px; font-weight: 600; padding: 6px 13px; cursor: pointer; font-family: var(--sans); transition: all .2s; }
+    .adm-huerfano button:hover { filter: brightness(1.12); }
+    .adm-addform { display: flex; gap: 8px; }
+    .adm-addform input { flex: 1; background: var(--sf2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--mono); font-size: 12px; padding: 8px 12px; outline: none; }
+    .adm-addform input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(75,124,243,.18); }
+    .adm-del { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; font-size: 10px; padding: 2px 9px; cursor: pointer; font-family: var(--sans); transition: all .2s; }
+    .adm-del:hover { border-color: var(--err); color: var(--err); }
+    .adm-filtros { display: flex; gap: 8px; flex-wrap: wrap; }
+    .adm-filtros input, .adm-filtros select { background: var(--sf2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--sans); font-size: 11.5px; padding: 7px 11px; outline: none; }
+    .adm-filtros input { flex: 1; min-width: 180px; }
+    .adm-filtros input:focus, .adm-filtros select:focus { border-color: var(--accent); }
   </style>
 </head>
 <body>
@@ -453,6 +498,7 @@
     <div class="user-bar">
       <div class="user-avatar" id="userAvatar">U</div>
       <span id="userEmail">—</span>
+      <button class="admin-btn" id="adminBtn" onclick="abrirPanelAdmin()" title="Panel de administración: bitácora, usuarios, métricas y salud del sistema">🛡 Admin</button>
       <button class="sign-out" onclick="logout()">Salir</button>
     </div>
   </header>
@@ -755,6 +801,68 @@
       <div class="el-title" id="exportLinksTitle">✅ Listo</div>
       <div class="el-link" id="exportLinkContent"></div>
       <div class="el-ownership" id="exportOwnership"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ v15 · PANEL DE ADMINISTRACIÓN ══
+     Todos los usuarios pueden VERLO; solo los admins (verificados en el
+     BACKEND contra el id_token) pueden editar usuarios. -->
+<div class="modal-backdrop" id="adminModal">
+  <div class="modal adm-modal">
+    <div class="modal-header">
+      <h2>🛡 Panel de administración <span class="adm-chip" id="admRolChip"></span></h2>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn-sm" onclick="cargarPanelAdmin()">↻ Actualizar</button>
+        <button class="modal-close" onclick="cerrarPanelAdmin()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div id="admLoading" style="text-align:center; padding:40px; color:var(--muted);">⏳ Cargando datos del panel…</div>
+      <div id="admContent" style="display:none; flex-direction:column; gap:18px;">
+
+        <div class="adm-sec">
+          <div class="slabel">Estado del sistema</div>
+          <div class="adm-health" id="admHealth"></div>
+        </div>
+
+        <div class="adm-sec">
+          <div class="slabel">Métricas de adopción</div>
+          <div class="adm-stats" id="admStats"></div>
+          <div class="adm-tblwrap" id="admSemanas" style="margin-top:10px;"></div>
+        </div>
+
+        <div class="adm-sec">
+          <div class="slabel">🚨 Imports huérfanos <span class="adm-hint">— iniciados sin resultado registrado (últimos 7 días)</span></div>
+          <div id="admHuerfanos"></div>
+        </div>
+
+        <div class="adm-sec">
+          <div class="slabel">⛔ Accesos denegados <span class="adm-hint">— intentos rechazados por dominio, whitelist o rate limit</span></div>
+          <div class="adm-tblwrap" id="admNegados"></div>
+        </div>
+
+        <div class="adm-sec">
+          <div class="slabel">Usuarios con acceso</div>
+          <div class="adm-addform" id="admAddForm" style="display:none;">
+            <input type="text" id="admNuevoEmail" placeholder="nuevo.usuario@docplanner.com"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();adminAgregarUI();}"/>
+            <button class="btn-modal-primary" style="padding:8px 16px; font-size:12px;" onclick="adminAgregarUI()">+ Dar acceso</button>
+          </div>
+          <div class="adm-tblwrap" id="admUsuarios"></div>
+        </div>
+
+        <div class="adm-sec">
+          <div class="slabel">Bitácora <span class="adm-hint" id="admLogInfo"></span></div>
+          <div class="adm-filtros">
+            <input type="text" id="admFiltroTexto" placeholder="🔎 Filtrar por email o detalle…" oninput="renderLogAdmin()"/>
+            <select id="admFiltroOp" onchange="renderLogAdmin()"><option value="">Operación: todas</option></select>
+            <select id="admFiltroEstado" onchange="renderLogAdmin()"><option value="">Estado: todos</option></select>
+          </div>
+          <div class="adm-tblwrap" id="admLog" style="max-height:320px;"></div>
+        </div>
+
+      </div>
     </div>
   </div>
 </div>
@@ -3058,6 +3166,174 @@ function descartarJobPendiente() {
   limpiarJobPendiente();
   const banner = document.getElementById('jobPendienteBanner');
   if (banner) banner.classList.remove('visible');
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  v15 · PANEL DE ADMINISTRACIÓN
+//  Todos los usuarios lo VEN; solo los admins EDITAN. La verificación
+//  real de admin vive en el backend (aquí solo se ocultan botones).
+// ══════════════════════════════════════════════════════════════════
+let adminCache = null;
+
+function abrirPanelAdmin() {
+  document.getElementById('adminModal').classList.add('open');
+  cargarPanelAdmin();
+}
+
+function cerrarPanelAdmin() {
+  document.getElementById('adminModal').classList.remove('open');
+}
+
+async function cargarPanelAdmin() {
+  const loading = document.getElementById('admLoading');
+  const content = document.getElementById('admContent');
+  loading.style.display = 'block'; content.style.display = 'none';
+  try {
+    adminCache = await backendFetch({ action: 'adminData' });
+    renderPanelAdmin(adminCache);
+    loading.style.display = 'none'; content.style.display = 'flex';
+  } catch (err) {
+    loading.textContent = '✗ ' + err.message;
+    toast('❌ ' + err.message, 'bad');
+  }
+}
+
+function admFecha(ts) {
+  if (!ts) return '—';
+  return new Date(ts).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+function renderPanelAdmin(d) {
+  // ── Rol ──
+  const chip = document.getElementById('admRolChip');
+  chip.textContent = d.esAdmin ? 'ADMIN' : 'SOLO LECTURA';
+  chip.className = 'adm-chip ' + (d.esAdmin ? 'admin' : 'lector');
+  document.getElementById('admAddForm').style.display = d.esAdmin ? 'flex' : 'none';
+
+  // ── Health ──
+  const h = d.health || {};
+  document.getElementById('admHealth').innerHTML =
+    `<div class="adm-hcard"><div class="hl">Backend</div><div class="hv ok">v${esc(h.version || '?')}</div></div>` +
+    `<div class="adm-hcard"><div class="hl">Sheet de auditoría</div><div class="hv ${h.sheetEscritura ? 'ok' : 'bad'}">${h.sheetEscritura ? '✓ Lectura y escritura' : '✗ No se puede escribir'}</div></div>` +
+    `<div class="adm-hcard"><div class="hl">Carpeta COE</div><div class="hv ${h.carpetaCOE ? 'ok' : 'bad'}">${h.carpetaCOE ? '✓ ' + esc(h.carpetaCOE) : '✗ Sin acceso'}</div></div>` +
+    `<div class="adm-hcard"><div class="hl">Fuente de usuarios</div><div class="hv ${String(h.whitelistFuente || '').indexOf('FALLBACK') === 0 ? 'bad' : 'ok'}">${esc(h.whitelistFuente || '—')}</div></div>`;
+
+  // ── Métricas ──
+  const m = d.metricas || {};
+  const activos30 = (d.usuarios || []).filter(u => u.ultimaActividad && (Date.now() - u.ultimaActividad) < 30 * 86400000).length;
+  document.getElementById('admStats').innerHTML =
+    `<div class="adm-stat"><div class="n">${m.totImports || 0}</div><div class="l">Imports exitosos</div></div>` +
+    `<div class="adm-stat"><div class="n">${(m.totProcesados || 0).toLocaleString('es-MX')}</div><div class="l">Registros procesados</div></div>` +
+    `<div class="adm-stat"><div class="n">${m.pctExito || 0}%</div><div class="l">Tasa de éxito</div></div>` +
+    `<div class="adm-stat"><div class="n">${activos30}</div><div class="l">Usuarios activos (30d)</div></div>`;
+
+  const sem = m.semanas || [];
+  let semHtml = '<table class="adm-tbl"><thead><tr><th>Semana</th><th>Imports</th><th>Registros</th><th>Fallidos</th></tr></thead><tbody>';
+  for (let i = 0; i < sem.length; i++) {
+    const et = i === 0 ? 'Esta semana' : `Hace ${i} sem`;
+    semHtml += `<tr><td>${et}</td><td>${sem[i].imports}</td><td>${sem[i].procesados.toLocaleString('es-MX')}</td><td>${sem[i].fallidos > 0 ? `<span class="adm-pill err">${sem[i].fallidos}</span>` : '0'}</td></tr>`;
+  }
+  document.getElementById('admSemanas').innerHTML = semHtml + '</tbody></table>';
+
+  // ── Huérfanos ──
+  const hu = d.huerfanos || [];
+  document.getElementById('admHuerfanos').innerHTML = hu.length === 0
+    ? '<div class="adm-empty">✓ Sin imports huérfanos. Todo lo iniciado tiene su resultado registrado.</div>'
+    : hu.map(o =>
+        `<div class="adm-huerfano">` +
+        `<span class="hj">${esc(o.jobId)}</span>` +
+        `<span class="hm">${esc(o.email)} · ${admFecha(o.ts)} · hace ${o.edadMin < 60 ? o.edadMin + ' min' : Math.round(o.edadMin / 60) + ' h'}${o.edadMin < 15 ? ' · <strong>podría seguir en curso</strong>' : ''}</span>` +
+        `<button onclick="recuperarHuerfano('${esc(o.jobId)}')">🔍 Recuperar</button>` +
+        `</div>`
+      ).join('');
+
+  // ── Negados ──
+  const ng = d.negados || [];
+  document.getElementById('admNegados').innerHTML = ng.length === 0
+    ? '<div class="adm-empty">✓ Sin intentos de acceso denegados.</div>'
+    : '<table class="adm-tbl"><thead><tr><th>Fecha</th><th>Email</th><th>Motivo</th><th>Detalle</th></tr></thead><tbody>' +
+      ng.map(n => `<tr><td>${admFecha(n.ts)}</td><td>${esc(n.email)}</td><td><span class="adm-pill ${n.estado === 'rate_limited' ? 'warn' : 'err'}">${esc(n.estado)}</span></td><td>${esc(n.det)}</td></tr>`).join('') +
+      '</tbody></table>';
+
+  // ── Usuarios ──
+  const us = d.usuarios || [];
+  document.getElementById('admUsuarios').innerHTML =
+    '<table class="adm-tbl"><thead><tr><th>Email</th><th>Rol</th><th>Última actividad</th><th>Imports</th><th>Agregado por</th>' + (d.esAdmin ? '<th></th>' : '') + '</tr></thead><tbody>' +
+    us.map(u => {
+      const inactivo = !u.ultimaActividad || (Date.now() - u.ultimaActividad) > 30 * 86400000;
+      return `<tr><td>${esc(u.email)}</td>` +
+        `<td>${u.esAdmin ? '<span class="adm-pill info">ADMIN</span>' : '<span class="adm-pill ok">Usuario</span>'}</td>` +
+        `<td>${u.ultimaActividad ? admFecha(u.ultimaActividad) : '—'}${inactivo ? ' <span class="adm-pill warn">inactivo 30d+</span>' : ''}</td>` +
+        `<td>${u.imports}</td><td>${esc(u.agregadoPor || '—')}</td>` +
+        (d.esAdmin ? `<td>${u.esAdmin ? '' : `<button class="adm-del" onclick="adminEliminarUI('${esc(u.email)}')">✕ Quitar</button>`}</td>` : '') +
+        `</tr>`;
+    }).join('') + '</tbody></table>';
+
+  // ── Filtros del log (opciones dinámicas) ──
+  const ops = [...new Set((d.log || []).map(r => r.op))].sort();
+  const ests = [...new Set((d.log || []).map(r => r.estado))].sort();
+  document.getElementById('admFiltroOp').innerHTML = '<option value="">Operación: todas</option>' + ops.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+  document.getElementById('admFiltroEstado').innerHTML = '<option value="">Estado: todos</option>' + ests.map(e => `<option value="${esc(e)}">${esc(e)}</option>`).join('');
+  renderLogAdmin();
+}
+
+function renderLogAdmin() {
+  if (!adminCache) return;
+  const txt = (document.getElementById('admFiltroTexto').value || '').toLowerCase();
+  const fOp = document.getElementById('admFiltroOp').value;
+  const fEst = document.getElementById('admFiltroEstado').value;
+
+  const filas = (adminCache.log || []).filter(r =>
+    (!fOp || r.op === fOp) &&
+    (!fEst || r.estado === fEst) &&
+    (!txt || r.email.toLowerCase().includes(txt) || (r.det || '').toLowerCase().includes(txt))
+  );
+
+  document.getElementById('admLogInfo').textContent =
+    `— ${filas.length} de ${adminCache.log.length} filas mostradas (bitácora total: ${adminCache.totalFilasLog})`;
+
+  const pillEstado = e =>
+    e === 'success' || e === 'add_user' ? 'ok' :
+    e === 'iniciado' ? 'info' :
+    e === 'rate_limited' || e === 'remove_user' ? 'warn' : 'err';
+
+  document.getElementById('admLog').innerHTML = filas.length === 0
+    ? '<div class="adm-empty">Sin filas que coincidan con el filtro.</div>'
+    : '<table class="adm-tbl"><thead><tr><th>Fecha</th><th>Email</th><th>Operación</th><th>Estado</th><th>Detalles</th></tr></thead><tbody>' +
+      filas.map(r => `<tr><td style="white-space:nowrap">${admFecha(r.ts)}</td><td>${esc(r.email)}</td><td>${esc(r.op)}</td><td><span class="adm-pill ${pillEstado(r.estado)}">${esc(r.estado)}</span></td><td title="${esc(r.det)}">${esc(r.det)}</td></tr>`).join('') +
+      '</tbody></table>';
+}
+
+// ── Acciones de admin (el backend re-verifica el rol en cada una) ──
+async function adminAgregarUI() {
+  const input = document.getElementById('admNuevoEmail');
+  const email = (input.value || '').trim().toLowerCase();
+  if (!email) return toast('Escribe un correo.', 'bad');
+  if (!email.endsWith('@docplanner.com')) return toast('Solo correos @docplanner.com.', 'bad');
+  if (!confirm(`¿Dar acceso a la herramienta a:\n\n${email}?`)) return;
+  try {
+    await backendFetch({ action: 'adminAddUser', email });
+    toast(`✅ ${email} agregado. (Puede tardar ~5 min en propagarse)`, 'ok');
+    input.value = '';
+    cargarPanelAdmin();
+  } catch (err) { toast('❌ ' + err.message, 'bad'); }
+}
+
+async function adminEliminarUI(email) {
+  if (!confirm(`¿QUITAR el acceso de:\n\n${email}?\n\nDejará de poder entrar a la herramienta (puede tardar ~5 min en propagarse).`)) return;
+  try {
+    await backendFetch({ action: 'adminRemoveUser', email });
+    toast(`✅ Acceso de ${email} eliminado.`, 'ok');
+    cargarPanelAdmin();
+  } catch (err) { toast('❌ ' + err.message, 'bad'); }
+}
+
+// ── Rescate de un import huérfano: reutiliza el flujo existente de recuperar ──
+function recuperarHuerfano(jobId) {
+  cerrarPanelAdmin();
+  switchTab('import');
+  ultimoJobIdRecuperable = jobId;
+  abrirModalRecuperar();
 }
 function parseSfResultCsv(csvText, isOk, operation) {
   if (!csvText || !csvText.trim()) return [];
