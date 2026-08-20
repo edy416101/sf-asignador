@@ -400,6 +400,25 @@
     .alloc-lg { display: flex; align-items: center; gap: 6px; }
     .alloc-sw { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
     .alloc-lg.nf { color: var(--err); }
+
+    /* ── v14 · Job ID en vivo — visible desde que Salesforce lo asigna ── */
+    .joblive { display: none; align-items: center; gap: 10px; background: var(--sf2); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 0 10px 10px 0; padding: 10px 15px; flex-wrap: wrap; }
+    .joblive.visible { display: flex; }
+    .joblive-label { font-size: 9.5px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); }
+    .joblive-val { font-family: var(--mono); font-size: 12px; color: var(--accent); font-weight: 500; }
+    .joblive-copy { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; font-size: 10.5px; padding: 3px 9px; cursor: pointer; font-family: var(--sans); transition: all .2s; }
+    .joblive-copy:hover { border-color: var(--accent); color: var(--accent); }
+    .joblive-hint { font-size: 10px; color: var(--muted); font-style: italic; margin-left: auto; }
+
+    /* ── v14 · Aviso de import pendiente al volver a entrar ── */
+    .jobpend { display: none; align-items: center; gap: 11px; background: rgba(217,119,6,.10); border-bottom: 1px solid rgba(217,119,6,.30); padding: 10px 28px; font-size: 12.5px; flex-shrink: 0; }
+    .jobpend.visible { display: flex; }
+    .jobpend-ico { font-size: 14px; }
+    .jobpend-txt { color: var(--text); }
+    .jobpend-btn { background: var(--ac3); color: #1a1205; border: none; border-radius: 7px; font-size: 11.5px; font-weight: 600; padding: 5px 13px; cursor: pointer; font-family: var(--sans); margin-left: auto; transition: all .2s; }
+    .jobpend-btn:hover { filter: brightness(1.12); }
+    .jobpend-x { background: none; border: none; color: var(--muted); font-size: 13px; cursor: pointer; padding: 2px 6px; }
+    .jobpend-x:hover { color: var(--err); }
   </style>
 </head>
 <body>
@@ -437,6 +456,13 @@
       <button class="sign-out" onclick="logout()">Salir</button>
     </div>
   </header>
+
+  <div class="jobpend" id="jobPendienteBanner">
+    <span class="jobpend-ico">📌</span>
+    <span class="jobpend-txt" id="jobPendienteTexto"></span>
+    <button class="jobpend-btn" onclick="recuperarJobPendiente()">Recuperar resultado</button>
+    <button class="jobpend-x" onclick="descartarJobPendiente()" title="Descartar">✕</button>
+  </div>
 
   <div class="tab-bar">
     <button class="tab active" onclick="switchTab('asig')" id="tab-asig">⚡ Asignación <span class="tab-badge" id="badge-asig">—</span></button>
@@ -600,6 +626,12 @@
             <div class="pc success"><div class="pn" id="pcSuccess">0</div><div class="pl">Exitosos</div></div>
             <div class="pc failed"><div class="pn" id="pcFailed">0</div><div class="pl">Fallidos</div></div>
           </div>
+        </div>
+        <div class="joblive" id="jobIdLive">
+          <span class="joblive-label">Job ID</span>
+          <span class="joblive-val" id="jobIdLiveValue">—</span>
+          <button class="joblive-copy" onclick="copiarJobId()" title="Copiar el Job ID">📋 Copiar</button>
+          <span class="joblive-hint">Guardado — puedes recuperar este import aunque cierres el navegador</span>
         </div>
         <div class="import-log" id="importLog"><span class="info">// El log del import aparecerá aquí…</span></div>
         <div class="result-header">
@@ -1166,6 +1198,7 @@ function onSignIn(response) {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('mainApp').style.display = 'flex';
     toast(`✅ Bienvenido, ${payload.given_name || payload.email.split('@')[0]}`, 'ok');
+    revisarJobPendiente();  // v14: avisa si quedó un import sin recuperar
   } catch { toast('❌ Error al iniciar sesión.', 'bad'); }
 }
 
@@ -1896,6 +1929,8 @@ function resetImportUI() {
   ultimoImportConfig = null;
   historialRetries = [];
   ultimoJobIdRecuperable = '';
+  const jl = document.getElementById('jobIdLive');
+  if (jl) jl.classList.remove('visible');  // v14: ocultar el Job ID en vivo
   document.getElementById('retryHistoryPanel').classList.remove('visible');
   document.getElementById('retryHistoryPanel').innerHTML = '';
   const retryBtn = document.getElementById('retryBtn');
@@ -2812,22 +2847,41 @@ async function ejecutarImport() {
   setImportStatus(`Enviando ${total} registros al servidor…`, 'run');
 
   try {
-    const data = await backendFetch({
-      action: 'import', sid, instanceUrl: INSTANCE_URL,
+    // ══════════════════════════════════════════════════════════════════
+    //  v14 · FLUJO ASÍNCRONO: arrancar → sondear → recuperar
+    //  Antes era UNA petición que esperaba hasta 6 min y moría con volumen
+    //  alto. Ahora ninguna llamada pasa de ~20s, sin importar el tamaño.
+    // ══════════════════════════════════════════════════════════════════
+
+    // ── PASO A: arrancar el job (~20s) — devuelve el jobId de inmediato ──
+    const inicio = await backendFetch({
+      action: 'importStart', sid, instanceUrl: INSTANCE_URL,
       object, operation: action, externalId: extId,
       headers: sfHeaders, rows: rowsToSend
     });
 
-    ilog(`✓ Job ID: ${data.jobId || 'N/A'}`, 'ok');
+    const jobId = inicio.jobId;
+    ultimoJobIdRecuperable = jobId;
+    guardarJobPendiente({ jobId, object, operation: action, total, extId, sfHeaders, colIndexes, colNames });
+    mostrarJobIdEnVivo(jobId);
+
+    ilog(`✓ Job creado: ${jobId}`, 'ok');
+    ilog(`  (guardado — si se cierra el navegador, podrás recuperarlo)`, 'info');
+    setImportStatus(`Salesforce está procesando ${total} registros…`, 'run');
+    btn.textContent = '⏳ Procesando en Salesforce…';
+
+    // ── PASO B: sondear el estado (~1s cada vez) ──
+    const data = await sondearJob(jobId, sid, total, action);
+
     ilog(`✓ Estado final: ${data.jobState || 'N/A'}`, data.jobState === 'JobComplete' ? 'ok' : 'warn');
     if (data.errorMessage) ilog(`⚠ Salesforce dice: ${data.errorMessage}`, 'err');
 
-    // ── Si el job no terminó en la ventana de polling: avisar y guardar el Job ID para recuperar ──
-    if (data.timedOut) {
-      ilog(`⏱ El import sigue procesando en Salesforce (excedió la espera de la herramienta).`, 'warn');
-      ilog(`   → Guarda este Job ID: ${data.jobId}`, 'warn');
-      ilog(`   → Usa "🔍 Recuperar por Job ID" en unos minutos para traer el resultado.`, 'warn');
-      ultimoJobIdRecuperable = data.jobId || '';
+    if (data.stillProcessing) {
+      ilog(`⏱ Sigue procesando tras la espera máxima. Nada se perdió:`, 'warn');
+      ilog(`   → Job ID guardado: ${jobId}`, 'warn');
+      ilog(`   → Usa "🔍 Recuperar por Job ID" en unos minutos.`, 'warn');
+    } else {
+      limpiarJobPendiente();
     }
 
     const okRows = parseSfResultCsv(data.successCsv || '', true, action);
@@ -2859,7 +2913,7 @@ async function ejecutarImport() {
     renderRetryHistory();
     actualizarBotonRetry();
 
-    if (data.timedOut) {
+    if (data.stillProcessing) {
       setImportStatus(`Import aún procesando en Salesforce. Usa "Recuperar por Job ID": ${data.jobId}`, 'run');
       toast(`⏱ El import sigue corriendo. Recupéralo con el Job ID en unos minutos.`, 'bad');
       // Pre-cargar el Job ID en el modal de recuperar para que sea 1 clic
@@ -2883,6 +2937,128 @@ async function ejecutarImport() {
   btn.disabled = false; btn.textContent = '📥 Ejecutar Import a Salesforce';
 }
 
+
+// ══════════════════════════════════════════════════════════════════
+//  v14 · IMPORT ASÍNCRONO — sondeo, persistencia y recuperación
+//
+//  El backend ya no espera (eso reventaba el límite de 6 min de Apps
+//  Script). La espera vive aquí, partida en consultas de ~1 segundo.
+// ══════════════════════════════════════════════════════════════════
+const POLL_INTERVALO_MS = 10000;    // cada cuánto preguntamos
+const POLL_MAX_MINUTOS  = 30;       // techo: después ofrecemos recuperar luego
+const JOB_STORAGE_KEY   = 'catalyst_job_pendiente';
+
+// ── Sondeo: pregunta el estado hasta que termine ──
+async function sondearJob(jobId, sid, total, action) {
+  const maxIntentos = Math.floor((POLL_MAX_MINUTOS * 60000) / POLL_INTERVALO_MS);
+  let ultimoLogueado = -1;
+
+  for (let intento = 0; intento < maxIntentos; intento++) {
+    await new Promise(r => setTimeout(r, POLL_INTERVALO_MS));
+
+    let est;
+    try {
+      est = await backendFetch({ action: 'jobStatus', sid, instanceUrl: INSTANCE_URL, jobId });
+    } catch (e) {
+      // Un fallo de red puntual no debe tumbar el import: se reintenta.
+      ilog(`⚠ No se pudo consultar el estado (reintentando): ${e.message}`, 'warn');
+      continue;
+    }
+
+    // Progreso REAL de Salesforce (antes la barra era una estimación)
+    const proc = est.processed || 0;
+    updateProgress(total, proc, Math.max(0, proc - (est.failed || 0)), est.failed || 0);
+
+    if (proc !== ultimoLogueado) {
+      ilog(`⏳ Procesados: ${proc} de ${total}` + (est.failed ? ` · ${est.failed} fallidos` : ''), 'info');
+      setImportStatus(`Procesando… ${proc} de ${total}`, 'run');
+      ultimoLogueado = proc;
+    }
+
+    if (est.terminado) {
+      ilog(`✓ Salesforce terminó (${est.jobState}). Descargando resultados…`, 'ok');
+      // Una sola llamada pesada, al final: trae los CSV de resultado
+      const full = await backendFetch({ action: 'recuperarJob', sid, instanceUrl: INSTANCE_URL, jobId });
+      full.stillProcessing = false;
+      return full;
+    }
+  }
+
+  // Se agotó el techo de espera: el job SIGUE vivo en Salesforce.
+  return { jobId, jobState: 'InProgress', stillProcessing: true, successCsv: '', failedCsv: '', processed: 0, failed: 0, errorMessage: '' };
+}
+
+// ── Persistencia: sobrevive a cerrar el navegador ──
+function guardarJobPendiente(info) {
+  try {
+    localStorage.setItem(JOB_STORAGE_KEY, JSON.stringify({
+      ...info,
+      fecha: new Date().toISOString(),
+      fechaLegible: new Date().toLocaleString('es-MX')
+    }));
+  } catch (e) { /* modo incógnito o storage lleno: no es crítico */ }
+}
+
+function limpiarJobPendiente() {
+  try { localStorage.removeItem(JOB_STORAGE_KEY); } catch (e) {}
+}
+
+function leerJobPendiente() {
+  try {
+    const raw = localStorage.getItem(JOB_STORAGE_KEY);
+    if (!raw) return null;
+    const info = JSON.parse(raw);
+    // Salesforce conserva los jobs ~7 días: más viejo que eso, ya no sirve
+    if (Date.now() - new Date(info.fecha).getTime() > 7 * 24 * 3600 * 1000) {
+      limpiarJobPendiente();
+      return null;
+    }
+    return info;
+  } catch (e) { return null; }
+}
+
+// ── Muestra el Job ID en vivo, con botón de copiar ──
+function mostrarJobIdEnVivo(jobId) {
+  const cont = document.getElementById('jobIdLive');
+  if (!cont) return;
+  document.getElementById('jobIdLiveValue').textContent = jobId;
+  cont.classList.add('visible');
+}
+
+function copiarJobId() {
+  const v = document.getElementById('jobIdLiveValue').textContent;
+  navigator.clipboard.writeText(v)
+    .then(() => toast('📋 Job ID copiado', 'ok'))
+    .catch(() => toast('No se pudo copiar', 'bad'));
+}
+
+// ── Aviso al volver a entrar: "tenías un import pendiente" ──
+function revisarJobPendiente() {
+  const info = leerJobPendiente();
+  const banner = document.getElementById('jobPendienteBanner');
+  if (!info || !banner) return;
+  document.getElementById('jobPendienteTexto').innerHTML =
+    `Import pendiente del <strong>${esc(info.fechaLegible)}</strong> — ` +
+    `${esc(String(info.object || 'Lead'))}, ${info.total || '?'} registros`;
+  banner.classList.add('visible');
+  banner.dataset.jobid = info.jobId;
+}
+
+function recuperarJobPendiente() {
+  const banner = document.getElementById('jobPendienteBanner');
+  const jobId = banner ? banner.dataset.jobid : '';
+  if (!jobId) return;
+  descartarJobPendiente();
+  switchTab('import');
+  ultimoJobIdRecuperable = jobId;
+  abrirModalRecuperar();
+}
+
+function descartarJobPendiente() {
+  limpiarJobPendiente();
+  const banner = document.getElementById('jobPendienteBanner');
+  if (banner) banner.classList.remove('visible');
+}
 function parseSfResultCsv(csvText, isOk, operation) {
   if (!csvText || !csvText.trim()) return [];
   const lines = csvText.split('\n').filter(l => l.trim());
@@ -3215,13 +3391,24 @@ async function ejecutarRetry() {
   ilog(`🔁 Retry #${intentoNuevo}: enviando ${rowsRetry.length} filas fallidas al import…`, 'warn');
 
   try {
-    const data = await backendFetch({
-      action: 'import', sid, instanceUrl: INSTANCE_URL,
+    // v14: el retry usa el mismo flujo asíncrono que el import principal,
+    // así un reintento grande tampoco puede morir por el límite de 6 min.
+    const inicioRetry = await backendFetch({
+      action: 'importStart', sid, instanceUrl: INSTANCE_URL,
       object: cfg.object, operation: cfg.action, externalId: cfg.extId,
       headers: cfg.sfHeaders, rows: rowsRetry
     });
 
-    ilog(`✓ Retry #${intentoNuevo} — Job ID: ${data.jobId || 'N/A'}`, 'ok');
+    const jobIdRetry = inicioRetry.jobId;
+    ultimoJobIdRecuperable = jobIdRetry;
+    guardarJobPendiente({ jobId: jobIdRetry, object: cfg.object, operation: cfg.action, total: rowsRetry.length });
+    mostrarJobIdEnVivo(jobIdRetry);
+    ilog(`✓ Retry #${intentoNuevo} — Job creado: ${jobIdRetry}`, 'ok');
+
+    const data = await sondearJob(jobIdRetry, sid, rowsRetry.length, cfg.action);
+    if (!data.stillProcessing) limpiarJobPendiente();
+
+    ilog(`✓ Retry #${intentoNuevo} — Job ID: ${data.jobId || jobIdRetry}`, 'ok');
     ilog(`✓ Estado final: ${data.jobState || 'N/A'}`, data.jobState === 'JobComplete' ? 'ok' : 'warn');
     if (data.errorMessage) ilog(`⚠ Salesforce dice: ${data.errorMessage}`, 'err');
 
