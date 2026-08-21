@@ -426,6 +426,34 @@
        Layout de dashboard: cabecera fija, sub-navegación por secciones y
        tarjetas. Las gráficas son SVG inline — sin librerías externas, así
        la herramienta sigue funcionando sin depender de ningún CDN. */
+    /* ── Botón Admin (en el header, no en la barra de pestañas) ──
+       Comparte id y clase "tab" con el sistema de pestañas para que
+       switchTab lo gestione, pero se pinta como botón: degradado de marca
+       tenue en reposo y sólido cuando estás dentro del panel.
+       Estas reglas van después de .tab para ganar por orden de cascada. */
+    .admin-btn {
+      padding: 5px 13px; font-size: 11.5px; font-weight: 600; border-radius: 8px;
+      margin-bottom: 0; border-bottom: none; gap: 5px;
+      background: linear-gradient(135deg, rgba(75,124,243,.16), rgba(124,58,237,.18));
+      border: 1px solid rgba(124,58,237,.42);
+      color: #c9b6fa;
+      box-shadow: 0 0 11px rgba(124,58,237,.16);
+      transition: all .22s;
+    }
+    .admin-btn:hover {
+      background: linear-gradient(135deg, rgba(75,124,243,.3), rgba(124,58,237,.32));
+      border-color: rgba(124,58,237,.7);
+      color: #e6dcff;
+      box-shadow: 0 0 16px rgba(124,58,237,.3);
+      transform: translateY(-1px);
+    }
+    .admin-btn.active {
+      background: linear-gradient(135deg, var(--accent), var(--ac2));
+      border-color: transparent; border-bottom-color: transparent;
+      color: #fff;
+      box-shadow: 0 3px 14px rgba(124,58,237,.45);
+    }
+
     .adm-page { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
     .adm-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 28px 12px; flex-wrap: wrap; }
     .adm-title { display: flex; align-items: center; gap: 10px; }
@@ -602,6 +630,9 @@
     <div class="user-bar">
       <div class="user-avatar" id="userAvatar">U</div>
       <span id="userEmail">—</span>
+      <!-- v16: conserva id="tab-admin" y la clase "tab" para que switchTab lo
+           siga encontrando y gestionando su estado activo. Solo se re-estiliza. -->
+      <button class="tab admin-btn" id="tab-admin" onclick="irAAdmin()" title="Panel de administración: bitácora, usuarios, métricas y salud del sistema">🛡 Admin</button>
       <button class="sign-out" onclick="logout()">Salir</button>
     </div>
   </header>
@@ -616,7 +647,6 @@
   <div class="tab-bar">
     <button class="tab active" onclick="switchTab('asig')" id="tab-asig">⚡ Asignación <span class="tab-badge" id="badge-asig">—</span></button>
     <button class="tab" onclick="switchTab('import')" id="tab-import">📥 Data Import <span class="tab-badge" id="badge-import">—</span></button>
-    <button class="tab" onclick="irAAdmin()" id="tab-admin">🛡 Admin</button>
   </div>
 
   <div class="tab-content active" id="tc-asig">
