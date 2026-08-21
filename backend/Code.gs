@@ -180,8 +180,14 @@ function doPost(e) {
       resultado = describirObjeto(payload);
     } else if (operation === "recuperarJob") {
       resultado = recuperarResultadoJob(payload);
-      // Auditar la recuperación de un job
-      registrarAuditoria(userEmail, operation, "success",
+      // v16.2 · El flujo asíncrono usa esta misma operación para traer los
+      // resultados cuando el job termina. Eso NO es una recuperación manual:
+      // es el cierre normal del import. Si se auditara como "recuperarJob",
+      // (a) el log mentiría y (b) las métricas del panel — que cuentan
+      // op="import" + estado="success" — no verían NINGÚN import.
+      // El frontend marca cierreAutomatico para distinguir ambos casos.
+      var opAudit = (payload.cierreAutomatico === true) ? "import" : "recuperarJob";
+      registrarAuditoria(userEmail, opAudit, "success",
         "jobId=" + (resultado.jobId || "N/A") + "; state=" + (resultado.jobState || "N/A") +
         "; processed=" + (resultado.processed || 0) + "; failed=" + (resultado.failed || 0));
     } else if (operation === "exportSheet") {

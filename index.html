@@ -392,14 +392,23 @@
     .alloc-head { display: flex; align-items: baseline; justify-content: space-between; }
     .alloc-title { font-size: 9.5px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); }
     .alloc-total { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
-    .alloc-bar { display: flex; height: 32px; border-radius: 7px; overflow: hidden; gap: 2px; }
-    .alloc-seg { display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px; font-weight: 500; color: #fff; transition: filter .18s; min-width: 3px; }
-    .alloc-seg:hover { filter: brightness(1.18); }
-    .alloc-seg.rest { background: var(--sf2); color: var(--muted); }
-    .alloc-legend { display: flex; flex-wrap: wrap; gap: 13px; font-size: 10.5px; color: var(--muted); }
-    .alloc-lg { display: flex; align-items: center; gap: 6px; }
-    .alloc-sw { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
-    .alloc-lg.nf { color: var(--err); }
+    /* v16.2 · Una fila por rep: nombre + su barra + cifras. Sin leyenda de
+       colores que obligue a emparejar mentalmente, y ordenado de mayor a
+       menor para que la jerarquía se lea sola. */
+    .alloc-list { display: flex; flex-direction: column; gap: 7px; max-height: 210px; overflow-y: auto; }
+    .alloc-row { display: grid; grid-template-columns: 152px 1fr 42px 42px; align-items: center; gap: 11px; font-size: 11px; }
+    .alloc-name { color: var(--text); font-family: var(--mono); font-size: 10.5px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .alloc-track { background: var(--sf2); border-radius: 100px; height: 10px; overflow: hidden; }
+    .alloc-fill { height: 100%; border-radius: 100px; background: var(--accent); min-width: 2px; transition: width .3s ease; }
+    .alloc-n { font-family: var(--mono); font-size: 11.5px; color: var(--text); font-weight: 500; text-align: right; }
+    .alloc-pct { font-family: var(--mono); font-size: 10px; color: var(--muted); text-align: right; }
+    .alloc-row.resto { opacity: .72; }
+    .alloc-row.resto .alloc-name { color: var(--muted); font-style: italic; }
+    .alloc-row.resto .alloc-fill { background: var(--muted); }
+    .alloc-row.sinowner .alloc-name, .alloc-row.sinowner .alloc-pct { color: var(--err); }
+    .alloc-row.sinowner .alloc-track { background: rgba(244,63,94,.12); }
+    @media (max-width: 780px) { .alloc-row { grid-template-columns: 100px 1fr 38px 38px; } }
 
     /* ── v14 · Job ID en vivo — visible desde que Salesforce lo asigna ── */
     .joblive { display: none; align-items: center; gap: 10px; background: var(--sf2); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 0 10px 10px 0; padding: 10px 15px; flex-wrap: wrap; }
@@ -746,8 +755,7 @@
             <span class="alloc-title">Reparto de la asignación</span>
             <span class="alloc-total" id="allocTotal"></span>
           </div>
-          <div class="alloc-bar" id="allocBar"></div>
-          <div class="alloc-legend" id="allocLegend"></div>
+          <div class="alloc-list" id="allocList"></div>
         </div>
         <div class="log" id="logBox"><span class="info">// El log de ejecución aparecerá aquí…</span></div>
         <div class="res-header">
@@ -1956,8 +1964,6 @@ async function ejecutar() {
 //  Solo PRESENTACIÓN: lee ownerStatsCache y los totales que el backend
 //  ya devuelve. No calcula ni altera ninguna asignación.
 // ══════════════════════════════════════════════════════════════════
-// Recorre el degradado de marca: accent #4b7cf3 → ac2 #7c3aed (el mismo del CTA)
-const ALLOC_TONOS = ['#4B7CF3','#556FF2','#5F62F1','#6855F0','#7247EE','#7C3AED'];
 
 function renderAllocBar() {
   const panel = document.getElementById('allocPanel');
@@ -1971,22 +1977,45 @@ function renderAllocBar() {
   const pool      = ultimaAsignacion.contactosQueryPass || 0;
   const sobrante  = Math.max(0, pool - asignados);
 
-  let barra = '', leyenda = '';
-  stats.forEach((o, i) => {
-    const tono = ALLOC_TONOS[i % ALLOC_TONOS.length];
-    barra += `<div class="alloc-seg" style="flex:${o.count}; background:${tono}" title="${esc(o.email)} — ${o.count} lead(s)">${o.count}</div>`;
-    leyenda += `<span class="alloc-lg"><span class="alloc-sw" style="background:${tono}"></span>${esc(o.email)}</span>`;
-  });
+  // v16.2 · Una fila por rep, con el NOMBRE junto a su propia barra.
+  // Antes era una sola barra segmentada + leyenda aparte: con varios reps
+  // los tonos se parecían y había que adivinar cuál era cuál.
+  // Ordenado de mayor a menor para que la lectura tenga jerarquía.
+  const ordenados = [...stats].sort((a, b) => b.count - a.count);
+  const tope = ordenados[0].count;
+
+  let html = ordenados.map(o => {
+    const pct = asignados ? Math.round((o.count / asignados) * 100) : 0;
+    const ancho = Math.max(2, Math.round((o.count / tope) * 100));
+    const nombre = String(o.email || '').split('@')[0];
+    return `<div class="alloc-row" title="${esc(o.email)} — ${o.count} lead(s) · ${pct}% del reparto">
+      <span class="alloc-name">${esc(nombre)}</span>
+      <div class="alloc-track"><div class="alloc-fill" style="width:${ancho}%"></div></div>
+      <span class="alloc-n">${o.count}</span>
+      <span class="alloc-pct">${pct}%</span>
+    </div>`;
+  }).join('');
+
   if (sobrante > 0) {
-    barra   += `<div class="alloc-seg rest" style="flex:${sobrante}" title="Pasaron el query pero no se repartieron (cuota insuficiente)">${sobrante} libres</div>`;
-    leyenda += `<span class="alloc-lg"><span class="alloc-sw" style="background:var(--sf2)"></span>sobrante del pool</span>`;
+    const anchoS = Math.max(2, Math.round((sobrante / tope) * 100));
+    html += `<div class="alloc-row resto" title="Pasaron el query pero no se repartieron: no alcanzaron las cuotas">
+      <span class="alloc-name">sin repartir</span>
+      <div class="alloc-track"><div class="alloc-fill" style="width:${Math.min(anchoS,100)}%"></div></div>
+      <span class="alloc-n">${sobrante}</span>
+      <span class="alloc-pct">—</span>
+    </div>`;
   }
+
   noEncontrados.forEach(o => {
-    leyenda += `<span class="alloc-lg nf"><span class="alloc-sw" style="background:var(--err)"></span>${esc(o.email)} — sin Owner</span>`;
+    html += `<div class="alloc-row sinowner" title="No se encontró este usuario en Salesforce: no recibió leads">
+      <span class="alloc-name">${esc(String(o.email || '').split('@')[0])}</span>
+      <div class="alloc-track"><div class="alloc-fill" style="width:0%"></div></div>
+      <span class="alloc-n">—</span>
+      <span class="alloc-pct">sin Owner</span>
+    </div>`;
   });
 
-  document.getElementById('allocBar').innerHTML = barra;
-  document.getElementById('allocLegend').innerHTML = leyenda;
+  document.getElementById('allocList').innerHTML = html;
   document.getElementById('allocTotal').textContent =
     `${asignados} asignados · ${stats.length} rep(s)` + (sobrante > 0 ? ` · ${sobrante} sin repartir` : '');
   panel.classList.add('visible');
@@ -3288,7 +3317,10 @@ async function sondearJob(jobId, sid, total, action) {
     if (est.terminado) {
       ilog(`✓ Salesforce terminó (${est.jobState}). Descargando resultados…`, 'ok');
       // Una sola llamada pesada, al final: trae los CSV de resultado
-      const full = await backendFetch({ action: 'recuperarJob', sid, instanceUrl: INSTANCE_URL, jobId });
+      // cierreAutomatico: esto es el cierre normal del import, no una
+      // recuperación manual. El backend lo audita como "import" para que
+      // las métricas del panel lo cuenten.
+      const full = await backendFetch({ action: 'recuperarJob', sid, instanceUrl: INSTANCE_URL, jobId, cierreAutomatico: true });
       full.stillProcessing = false;
       return full;
     }
