@@ -421,49 +421,153 @@
     .jobpend-x:hover { color: var(--err); }
 
     /* ── v15 · Panel de administración ── */
-    .admin-btn { background: var(--sf2); border: 1px solid var(--border); color: var(--text); border-radius: 7px; font-size: 11px; font-weight: 600; padding: 4px 11px; cursor: pointer; font-family: var(--sans); transition: all .2s; }
-    .admin-btn:hover { border-color: var(--accent); color: var(--accent); }
-    .adm-modal { max-width: 1020px; width: 96%; }
-    .adm-chip { font-size: 9px; font-weight: 700; letter-spacing: .8px; border-radius: 100px; padding: 3px 10px; vertical-align: middle; margin-left: 8px; }
+
+    /* ══ v16 · PANEL ADMIN COMO PESTAÑA (antes era modal) ══
+       Layout de dashboard: cabecera fija, sub-navegación por secciones y
+       tarjetas. Las gráficas son SVG inline — sin librerías externas, así
+       la herramienta sigue funcionando sin depender de ningún CDN. */
+    .adm-page { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .adm-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 28px 12px; flex-wrap: wrap; }
+    .adm-title { display: flex; align-items: center; gap: 10px; }
+    .adm-title h2 { font-family: var(--disp); font-size: 17px; font-weight: 600; letter-spacing: -.2px; }
+    .adm-top-right { display: flex; align-items: center; gap: 10px; }
+    .adm-updated { font-size: 10.5px; color: var(--muted); font-family: var(--mono); }
+    .adm-chip { font-size: 9px; font-weight: 700; letter-spacing: .8px; border-radius: 100px; padding: 3px 10px; }
     .adm-chip.admin { background: rgba(75,124,243,.14); border: 1px solid rgba(75,124,243,.4); color: var(--accent); }
     .adm-chip.lector { background: var(--sf2); border: 1px solid var(--border); color: var(--muted); }
-    .adm-sec { display: flex; flex-direction: column; gap: 9px; }
-    .adm-hint { font-size: 10px; color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 400; }
-    .adm-health { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
-    .adm-hcard { background: var(--sf2); border: 1px solid var(--border); border-radius: 9px; padding: 10px 13px; }
-    .adm-hcard .hl { font-size: 9px; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); font-weight: 700; }
-    .adm-hcard .hv { font-size: 12px; font-weight: 600; margin-top: 4px; }
-    .adm-hcard .hv.ok { color: var(--ok); } .adm-hcard .hv.bad { color: var(--err); }
-    .adm-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
-    .adm-stat { background: var(--sf2); border: 1px solid var(--border); border-radius: 9px; padding: 12px 14px; }
-    .adm-stat .n { font-family: var(--disp); font-size: 24px; font-weight: 600; color: var(--accent); letter-spacing: -.4px; line-height: 1.1; }
-    .adm-stat .l { font-size: 9.5px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: .5px; }
-    .adm-tblwrap { background: var(--sf2); border: 1px solid var(--border); border-radius: 9px; overflow: auto; max-height: 260px; }
+
+    .adm-nav { display: flex; gap: 6px; padding: 0 28px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .adm-navbtn { background: var(--sf2); border: 1px solid var(--border); color: var(--muted); border-radius: 9px;
+      font-size: 12px; font-weight: 500; padding: 8px 15px; cursor: pointer; font-family: var(--sans);
+      transition: all .2s; display: flex; align-items: center; gap: 7px; }
+    .adm-navbtn:hover { border-color: var(--accent); color: var(--text); }
+    .adm-navbtn.active { background: rgba(75,124,243,.13); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+    .adm-navcount { background: var(--surface); border-radius: 100px; padding: 1px 7px; font-size: 9.5px; font-family: var(--mono); }
+
+    .adm-loading { padding: 60px 20px; text-align: center; color: var(--muted); font-size: 13px; }
+    .adm-body { display: none; flex: 1; overflow-y: auto; padding: 18px 28px 28px; }
+    .adm-body.visible { display: block; }
+    .adm-pane { display: none; flex-direction: column; gap: 14px; }
+    .adm-pane.active { display: flex; }
+
+    .adm-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 15px 18px; }
+    .adm-card.alerta { border-color: rgba(245,158,11,.35); }
+    .adm-cardhead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 13px; flex-wrap: wrap; }
+    .adm-cardtitle { font-size: 12.5px; font-weight: 600; color: var(--text); }
+    .adm-cardsub { font-size: 10px; color: var(--muted); }
+    .adm-grid2 { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; }
+    @media (max-width: 900px) { .adm-grid2 { grid-template-columns: 1fr; } }
+
+    .adm-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 11px; }
+    .adm-stat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 17px; }
+    .adm-stat .n { font-family: var(--disp); font-size: 27px; font-weight: 600; color: var(--accent); letter-spacing: -.6px; line-height: 1.1; }
+    .adm-stat .l { font-size: 9.5px; color: var(--muted); margin-top: 5px; text-transform: uppercase; letter-spacing: .6px; }
+    .adm-stat .d { font-size: 10px; color: var(--muted); margin-top: 3px; }
+
+    /* ── Gráficas SVG ── */
+    .adm-bars { display: flex; align-items: flex-end; gap: 9px; height: 132px; padding-top: 6px; }
+    .adm-bar { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
+    .adm-bar-col { width: 100%; max-width: 42px; border-radius: 5px 5px 0 0; background: var(--accent);
+      min-height: 3px; transition: filter .18s; position: relative; }
+    .adm-bar:hover .adm-bar-col { filter: brightness(1.25); }
+    .adm-bar-col.vacio { background: var(--sf2); }
+    .adm-bar-val { font-family: var(--mono); font-size: 10px; color: var(--text); font-weight: 500; }
+    .adm-bar-lbl { font-size: 9px; color: var(--muted); white-space: nowrap; }
+
+    .adm-donut { display: flex; align-items: center; gap: 16px; justify-content: center; padding: 6px 0; }
+    .adm-donut-legend { display: flex; flex-direction: column; gap: 7px; font-size: 10.5px; }
+    .adm-dl { display: flex; align-items: center; gap: 7px; color: var(--muted); }
+    .adm-dl b { color: var(--text); font-family: var(--mono); font-weight: 500; }
+    .adm-dl-sw { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+
+    .adm-hbars { display: flex; flex-direction: column; gap: 9px; }
+    .adm-hbar { display: grid; grid-template-columns: 190px 1fr 44px; align-items: center; gap: 11px; font-size: 11px; }
+    .adm-hbar-email { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 10.5px; }
+    .adm-hbar-track { background: var(--sf2); border-radius: 100px; height: 9px; overflow: hidden; }
+    .adm-hbar-fill { height: 100%; border-radius: 100px; background: var(--accent); min-width: 2px; }
+    .adm-hbar-val { font-family: var(--mono); font-size: 10.5px; color: var(--muted); text-align: right; }
+    @media (max-width: 700px) { .adm-hbar { grid-template-columns: 120px 1fr 40px; } }
+
+    /* ── Tablas y listas ── */
+    .adm-tblwrap { background: var(--sf2); border: 1px solid var(--border); border-radius: 9px; overflow: auto; max-height: 280px; }
+    .adm-tblwrap.alto { max-height: calc(100vh - 340px); min-height: 220px; }
     .adm-tbl { width: 100%; border-collapse: collapse; font-size: 11px; }
-    .adm-tbl th { position: sticky; top: 0; background: var(--surface); color: var(--muted); font-size: 9px; letter-spacing: .8px; text-transform: uppercase; font-weight: 700; text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); z-index: 1; }
-    .adm-tbl td { padding: 7px 12px; border-bottom: 1px solid rgba(39,44,69,.5); font-family: var(--mono); font-size: 10.5px; }
+    .adm-tbl th { position: sticky; top: 0; background: var(--surface); color: var(--muted); font-size: 9px; letter-spacing: .8px; text-transform: uppercase; font-weight: 700; text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--border); z-index: 1; }
+    .adm-tbl td { padding: 8px 13px; border-bottom: 1px solid rgba(39,44,69,.5); font-family: var(--mono); font-size: 10.5px; }
     .adm-tbl tr:last-child td { border-bottom: none; }
     .adm-tbl tr:hover td { background: var(--surface); }
-    .adm-empty { padding: 16px; text-align: center; color: var(--muted); font-size: 11.5px; font-style: italic; }
+    .adm-empty { padding: 22px; text-align: center; color: var(--muted); font-size: 11.5px; font-style: italic; }
     .adm-pill { display: inline-block; border-radius: 100px; padding: 1px 8px; font-size: 9px; font-weight: 600; font-family: var(--mono); }
     .adm-pill.ok { background: rgba(34,197,94,.12); color: var(--ok); border: 1px solid rgba(34,197,94,.3); }
     .adm-pill.err { background: rgba(244,63,94,.12); color: var(--err); border: 1px solid rgba(244,63,94,.3); }
     .adm-pill.warn { background: rgba(245,158,11,.12); color: var(--warn); border: 1px solid rgba(245,158,11,.3); }
     .adm-pill.info { background: rgba(75,124,243,.12); color: var(--accent); border: 1px solid rgba(75,124,243,.3); }
-    .adm-huerfano { background: rgba(245,158,11,.07); border: 1px solid rgba(245,158,11,.3); border-radius: 9px; padding: 11px 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+
+    .adm-huerfano { background: rgba(245,158,11,.07); border: 1px solid rgba(245,158,11,.3); border-radius: 9px; padding: 12px 15px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+    .adm-huerfano:last-child { margin-bottom: 0; }
     .adm-huerfano .hj { font-family: var(--mono); font-size: 11.5px; color: var(--warn); font-weight: 600; }
     .adm-huerfano .hm { font-size: 10.5px; color: var(--muted); }
-    .adm-huerfano button { margin-left: auto; background: var(--warn); color: #1a1205; border: none; border-radius: 7px; font-size: 11px; font-weight: 600; padding: 6px 13px; cursor: pointer; font-family: var(--sans); transition: all .2s; }
+    .adm-huerfano button { margin-left: auto; background: var(--warn); color: #1a1205; border: none; border-radius: 7px; font-size: 11px; font-weight: 600; padding: 6px 14px; cursor: pointer; font-family: var(--sans); transition: all .2s; }
     .adm-huerfano button:hover { filter: brightness(1.12); }
-    .adm-addform { display: flex; gap: 8px; }
-    .adm-addform input { flex: 1; background: var(--sf2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--mono); font-size: 12px; padding: 8px 12px; outline: none; }
+
+    .adm-health { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+    .adm-hcard { background: var(--sf2); border: 1px solid var(--border); border-radius: 10px; padding: 13px 15px; }
+    .adm-hcard .hl { font-size: 9px; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+    .adm-hcard .hv { font-size: 12px; font-weight: 600; margin-top: 5px; }
+    .adm-hcard .hv.ok { color: var(--ok); } .adm-hcard .hv.bad { color: var(--err); }
+
+    .adm-addform { display: flex; gap: 8px; margin-bottom: 12px; }
+    .adm-addform input { flex: 1; background: var(--sf2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--mono); font-size: 12px; padding: 9px 13px; outline: none; }
     .adm-addform input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(75,124,243,.18); }
-    .adm-del { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; font-size: 10px; padding: 2px 9px; cursor: pointer; font-family: var(--sans); transition: all .2s; }
+    .adm-lectorbanner { background: var(--sf2); border: 1px solid var(--border); border-left: 3px solid var(--muted); border-radius: 0 8px 8px 0; padding: 10px 14px; font-size: 11.5px; color: var(--muted); margin-bottom: 12px; }
+    .adm-del { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; font-size: 10px; padding: 3px 10px; cursor: pointer; font-family: var(--sans); transition: all .2s; }
     .adm-del:hover { border-color: var(--err); color: var(--err); }
-    .adm-filtros { display: flex; gap: 8px; flex-wrap: wrap; }
-    .adm-filtros input, .adm-filtros select { background: var(--sf2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--sans); font-size: 11.5px; padding: 7px 11px; outline: none; }
-    .adm-filtros input { flex: 1; min-width: 180px; }
+    .adm-filtros { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 11px; }
+    .adm-filtros input, .adm-filtros select { background: var(--sf2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--sans); font-size: 11.5px; padding: 8px 12px; outline: none; }
+    .adm-filtros input { flex: 1; min-width: 200px; }
     .adm-filtros input:focus, .adm-filtros select:focus { border-color: var(--accent); }
+
+    /* ══ v16 · LISTA DE REPRESENTANTES ══
+       Problema: con varios reps las filas se perdían — inputs invisibles, sin
+       separación y sin forma de ver quién lleva cuánto.
+       Solución: filas-tarjeta numeradas por contador CSS, con el reparto
+       pintado como degradado sobre la propia fila (cero elementos extra,
+       para no romper los índices de input que lee getReps). */
+    .reps-wrap { max-height: 296px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); padding: 5px; }
+    .reps-tbl { width: 100%; border-collapse: separate; border-spacing: 0 5px; counter-reset: repnum; }
+    .reps-tbl thead th { position: sticky; top: -5px; background: var(--bg); z-index: 2; padding: 4px 9px 6px; font-size: 9px; letter-spacing: .9px; text-transform: uppercase; color: var(--muted); font-weight: 700; border-bottom: 1px solid var(--border); }
+    .reps-tbl thead th.rep-c-num { text-align: center; width: 62px; }
+    .reps-tbl thead th.rep-c-act { text-align: right; width: 84px; }
+
+    .reps-tbl tbody tr { counter-increment: repnum; background-color: var(--sf2);
+      background-image: linear-gradient(90deg, rgba(75,124,243,.16) var(--share, 0%), transparent var(--share, 0%));
+      transition: background-color .18s, box-shadow .18s; }
+    .reps-tbl tbody tr:hover { background-color: var(--border); }
+    .reps-tbl tbody td { padding: 0; border: none; vertical-align: middle; background: transparent; }
+    .reps-tbl tbody td:first-child { border-radius: 8px 0 0 8px; }
+    .reps-tbl tbody td:last-child  { border-radius: 0 8px 8px 0; }
+
+    /* Celda del email: numerito + input legible que trunca en vez de desbordar */
+    .rep-c-mail { position: relative; padding-left: 30px !important; }
+    .rep-c-mail::before { content: counter(repnum); position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+      width: 17px; height: 17px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border);
+      color: var(--muted); font-size: 9px; font-weight: 700; font-family: var(--mono);
+      display: flex; align-items: center; justify-content: center; }
+    .reps-tbl tbody input { background: transparent; border: 1px solid transparent; border-radius: 6px; color: var(--text);
+      font-size: 11.5px; font-family: var(--sans); padding: 7px 8px; outline: none; width: 100%;
+      text-overflow: ellipsis; transition: all .18s; }
+    .reps-tbl tbody input:hover { border-color: var(--border); }
+    .reps-tbl tbody input:focus { border-color: var(--accent); background: var(--bg); box-shadow: 0 0 0 3px rgba(75,124,243,.16); }
+    .reps-tbl tbody input:disabled { opacity: .45; cursor: not-allowed; }
+
+    .rep-c-num { width: 62px; }
+    .rep-c-num input { text-align: center; font-family: var(--mono); font-weight: 500; }
+
+    .rep-c-act { width: 84px; text-align: right; padding-right: 7px !important; white-space: nowrap; }
+    .rep-share { display: inline-block; min-width: 30px; font-family: var(--mono); font-size: 10px; color: var(--muted); }
+    .rep-share.activo { color: var(--accent); font-weight: 500; }
+    .rep-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 11px; padding: 3px 5px; border-radius: 5px; transition: all .18s; }
+    .rep-del:hover { color: var(--err); background: rgba(244,63,94,.12); }
   </style>
 </head>
 <body>
@@ -498,7 +602,6 @@
     <div class="user-bar">
       <div class="user-avatar" id="userAvatar">U</div>
       <span id="userEmail">—</span>
-      <button class="admin-btn" id="adminBtn" onclick="abrirPanelAdmin()" title="Panel de administración: bitácora, usuarios, métricas y salud del sistema">🛡 Admin</button>
       <button class="sign-out" onclick="logout()">Salir</button>
     </div>
   </header>
@@ -513,6 +616,7 @@
   <div class="tab-bar">
     <button class="tab active" onclick="switchTab('asig')" id="tab-asig">⚡ Asignación <span class="tab-badge" id="badge-asig">—</span></button>
     <button class="tab" onclick="switchTab('import')" id="tab-import">📥 Data Import <span class="tab-badge" id="badge-import">—</span></button>
+    <button class="tab" onclick="irAAdmin()" id="tab-admin">🛡 Admin</button>
   </div>
 
   <div class="tab-content active" id="tc-asig">
@@ -573,10 +677,12 @@
               <button class="btn-cancel-bulk" onclick="toggleBulk()">Cancelar</button>
             </div>
           </div>
-          <table class="reps-tbl">
-            <thead><tr><th>Email</th><th style="width:76px; text-align:center">Nº Asignaciones</th><th style="width:22px"></th></tr></thead>
-            <tbody id="repsBody"></tbody>
-          </table>
+          <div class="reps-wrap">
+            <table class="reps-tbl">
+              <thead><tr><th>Representante</th><th class="rep-c-num">Leads</th><th class="rep-c-act">Reparto</th></tr></thead>
+              <tbody id="repsBody"></tbody>
+            </table>
+          </div>
           <button class="btn-add-rep" onclick="addRep()">+ Agregar representante</button>
           <div class="reps-total">Total: <strong id="repsTotal">0</strong> asignaciones</div>
         </div>
@@ -694,6 +800,106 @@
       </div>
     </div>
   </div>
+  <!-- ══ v16 · PANEL DE ADMINISTRACIÓN (pestaña propia, ya no modal) ══
+       Todos los usuarios pueden VERLO; solo los admins (verificados en el
+       BACKEND contra el id_token) pueden editar usuarios. -->
+  <div class="tab-content" id="tc-admin">
+    <div class="adm-page">
+
+      <div class="adm-top">
+        <div class="adm-title">
+          <h2>Panel de administración</h2>
+          <span class="adm-chip" id="admRolChip"></span>
+        </div>
+        <div class="adm-top-right">
+          <span class="adm-updated" id="admUpdated"></span>
+          <button class="btn-sm" onclick="cargarPanelAdmin()">↻ Actualizar</button>
+        </div>
+      </div>
+
+      <div class="adm-nav">
+        <button class="adm-navbtn active" data-sec="resumen"  onclick="admSeccion('resumen')">📊 Resumen</button>
+        <button class="adm-navbtn"        data-sec="bitacora" onclick="admSeccion('bitacora')">📋 Bitácora</button>
+        <button class="adm-navbtn"        data-sec="usuarios" onclick="admSeccion('usuarios')">👥 Usuarios <span class="adm-navcount" id="admNavUsuarios"></span></button>
+        <button class="adm-navbtn"        data-sec="salud"    onclick="admSeccion('salud')">💚 Salud</button>
+      </div>
+
+      <div id="admLoading" class="adm-loading">⏳ Cargando datos del panel…</div>
+
+      <div id="admContent" class="adm-body">
+
+        <!-- ── RESUMEN ── -->
+        <section class="adm-pane active" id="admPane-resumen">
+          <div class="adm-stats" id="admStats"></div>
+
+          <div class="adm-grid2">
+            <div class="adm-card">
+              <div class="adm-cardhead"><span class="adm-cardtitle">Actividad por semana</span><span class="adm-cardsub">últimas 8</span></div>
+              <div id="admChartSemanas"></div>
+            </div>
+            <div class="adm-card">
+              <div class="adm-cardhead"><span class="adm-cardtitle">Tasa de éxito</span><span class="adm-cardsub">histórico</span></div>
+              <div id="admChartExito"></div>
+            </div>
+          </div>
+
+          <div class="adm-card">
+            <div class="adm-cardhead"><span class="adm-cardtitle">Uso por persona</span><span class="adm-cardsub">imports completados</span></div>
+            <div id="admChartUsuarios"></div>
+          </div>
+
+          <div class="adm-card alerta" id="admCardHuerfanos">
+            <div class="adm-cardhead"><span class="adm-cardtitle">🚨 Imports huérfanos</span><span class="adm-cardsub">iniciados sin resultado · últimos 7 días</span></div>
+            <div id="admHuerfanos"></div>
+          </div>
+
+          <div class="adm-card">
+            <div class="adm-cardhead"><span class="adm-cardtitle">⛔ Accesos denegados</span><span class="adm-cardsub">dominio, whitelist o rate limit</span></div>
+            <div class="adm-tblwrap" id="admNegados"></div>
+          </div>
+        </section>
+
+        <!-- ── BITÁCORA ── -->
+        <section class="adm-pane" id="admPane-bitacora">
+          <div class="adm-card">
+            <div class="adm-cardhead"><span class="adm-cardtitle">Bitácora</span><span class="adm-cardsub" id="admLogInfo"></span></div>
+            <div class="adm-filtros">
+              <input type="text" id="admFiltroTexto" placeholder="🔎 Filtrar por email o detalle…" oninput="renderLogAdmin()"/>
+              <select id="admFiltroOp" onchange="renderLogAdmin()"><option value="">Operación: todas</option></select>
+              <select id="admFiltroEstado" onchange="renderLogAdmin()"><option value="">Estado: todos</option></select>
+            </div>
+            <div class="adm-tblwrap alto" id="admLog"></div>
+          </div>
+        </section>
+
+        <!-- ── USUARIOS ── -->
+        <section class="adm-pane" id="admPane-usuarios">
+          <div class="adm-card">
+            <div class="adm-cardhead"><span class="adm-cardtitle">Usuarios con acceso</span><span class="adm-cardsub" id="admUsrSub"></span></div>
+            <div class="adm-addform" id="admAddForm" style="display:none;">
+              <input type="text" id="admNuevoEmail" placeholder="nuevo.usuario@docplanner.com"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();adminAgregarUI();}"/>
+              <button class="btn-modal-primary" style="padding:9px 18px; font-size:12px;" onclick="adminAgregarUI()">+ Dar acceso</button>
+            </div>
+            <div class="adm-lectorbanner" id="admLectorBanner" style="display:none;">
+              👁 Estás viendo el panel en modo <strong>solo lectura</strong>. Para dar o quitar accesos, contacta a un administrador.
+            </div>
+            <div class="adm-tblwrap alto" id="admUsuarios"></div>
+          </div>
+        </section>
+
+        <!-- ── SALUD ── -->
+        <section class="adm-pane" id="admPane-salud">
+          <div class="adm-card">
+            <div class="adm-cardhead"><span class="adm-cardtitle">Estado del sistema</span><span class="adm-cardsub">verificado en vivo contra Salesforce y Drive</span></div>
+            <div class="adm-health" id="admHealth"></div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- MODAL GUARDAR -->
@@ -805,67 +1011,6 @@
   </div>
 </div>
 
-<!-- ══ v15 · PANEL DE ADMINISTRACIÓN ══
-     Todos los usuarios pueden VERLO; solo los admins (verificados en el
-     BACKEND contra el id_token) pueden editar usuarios. -->
-<div class="modal-backdrop" id="adminModal">
-  <div class="modal adm-modal">
-    <div class="modal-header">
-      <h2>🛡 Panel de administración <span class="adm-chip" id="admRolChip"></span></h2>
-      <div style="display:flex; gap:8px; align-items:center;">
-        <button class="btn-sm" onclick="cargarPanelAdmin()">↻ Actualizar</button>
-        <button class="modal-close" onclick="cerrarPanelAdmin()">✕</button>
-      </div>
-    </div>
-    <div class="modal-body">
-      <div id="admLoading" style="text-align:center; padding:40px; color:var(--muted);">⏳ Cargando datos del panel…</div>
-      <div id="admContent" style="display:none; flex-direction:column; gap:18px;">
-
-        <div class="adm-sec">
-          <div class="slabel">Estado del sistema</div>
-          <div class="adm-health" id="admHealth"></div>
-        </div>
-
-        <div class="adm-sec">
-          <div class="slabel">Métricas de adopción</div>
-          <div class="adm-stats" id="admStats"></div>
-          <div class="adm-tblwrap" id="admSemanas" style="margin-top:10px;"></div>
-        </div>
-
-        <div class="adm-sec">
-          <div class="slabel">🚨 Imports huérfanos <span class="adm-hint">— iniciados sin resultado registrado (últimos 7 días)</span></div>
-          <div id="admHuerfanos"></div>
-        </div>
-
-        <div class="adm-sec">
-          <div class="slabel">⛔ Accesos denegados <span class="adm-hint">— intentos rechazados por dominio, whitelist o rate limit</span></div>
-          <div class="adm-tblwrap" id="admNegados"></div>
-        </div>
-
-        <div class="adm-sec">
-          <div class="slabel">Usuarios con acceso</div>
-          <div class="adm-addform" id="admAddForm" style="display:none;">
-            <input type="text" id="admNuevoEmail" placeholder="nuevo.usuario@docplanner.com"
-                   onkeydown="if(event.key==='Enter'){event.preventDefault();adminAgregarUI();}"/>
-            <button class="btn-modal-primary" style="padding:8px 16px; font-size:12px;" onclick="adminAgregarUI()">+ Dar acceso</button>
-          </div>
-          <div class="adm-tblwrap" id="admUsuarios"></div>
-        </div>
-
-        <div class="adm-sec">
-          <div class="slabel">Bitácora <span class="adm-hint" id="admLogInfo"></span></div>
-          <div class="adm-filtros">
-            <input type="text" id="admFiltroTexto" placeholder="🔎 Filtrar por email o detalle…" oninput="renderLogAdmin()"/>
-            <select id="admFiltroOp" onchange="renderLogAdmin()"><option value="">Operación: todas</option></select>
-            <select id="admFiltroEstado" onchange="renderLogAdmin()"><option value="">Estado: todos</option></select>
-          </div>
-          <div class="adm-tblwrap" id="admLog" style="max-height:320px;"></div>
-        </div>
-
-      </div>
-    </div>
-  </div>
-</div>
 
 <div class="toast" id="toast"></div>
 
@@ -1390,10 +1535,15 @@ function addRep(email = '', n = '') {
   const tbody = document.getElementById('repsBody');
   const tr = document.createElement('tr');
   const hasEmail = String(email).trim() !== '';
+  // v16 · Solo cambia la PRESENTACIÓN. Se respeta el contrato del DOM que leen
+  // getReps/actualizarRepsTotal/aplicarMismoNumero: un <tr> por rep dentro de
+  // #repsBody, con EXACTAMENTE 2 inputs y en este orden (email, número).
+  // El número de fila lo pinta un contador CSS y el reparto es un degradado
+  // sobre la propia fila: cero elementos extra que puedan romper los índices.
   tr.innerHTML = `
-    <td><input type="text" placeholder="email@docplanner.com" value="${esc(email)}" oninput="onRepEmailChange(this)"/></td>
-    <td style="text-align:center"><input type="number" min="0" placeholder="0" value="${esc(String(n))}" style="width:52px;text-align:center" oninput="actualizarRepsTotal()" ${hasEmail ? '' : 'disabled title="Ingresa un email primero"'}/></td>
-    <td><button class="rep-del" onclick="this.closest('tr').remove(); actualizarRepsTotal();">✕</button></td>
+    <td class="rep-c-mail"><input type="text" placeholder="email@docplanner.com" value="${esc(email)}" oninput="onRepEmailChange(this)" title="${esc(email)}"/></td>
+    <td class="rep-c-num"><input type="number" min="0" placeholder="0" value="${esc(String(n))}" oninput="actualizarRepsTotal()" ${hasEmail ? '' : 'disabled title="Ingresa un email primero"'}/></td>
+    <td class="rep-c-act"><span class="rep-share">—</span><button class="rep-del" onclick="this.closest('tr').remove(); actualizarRepsTotal();" title="Quitar representante">✕</button></td>
   `;
   tbody.appendChild(tr);
   actualizarRepsTotal();
@@ -1422,6 +1572,28 @@ function actualizarRepsTotal() {
     if (!isNaN(n) && n > 0) total += n;
   });
   document.getElementById('repsTotal').textContent = total;
+  pintarRepsShare(total);  // v16: solo presentación (ver abajo)
+}
+
+// v16 · Pinta el reparto de cada rep: % en texto y un degradado que llena la
+// propia fila en proporción. Se apoya en el total ya calculado arriba; no
+// altera ningún dato ni el cálculo original.
+function pintarRepsShare(total) {
+  document.querySelectorAll('#repsBody tr').forEach(tr => {
+    const n = parseInt(tr.querySelectorAll('input')[1].value);
+    const chip = tr.querySelector('.rep-share');
+    if (!chip) return;
+    if (!total || isNaN(n) || n <= 0) {
+      tr.style.setProperty('--share', '0%');
+      chip.textContent = '—';
+      chip.classList.remove('activo');
+      return;
+    }
+    const pct = Math.round((n / total) * 100);
+    tr.style.setProperty('--share', pct + '%');
+    chip.textContent = pct + '%';
+    chip.classList.add('activo');
+  });
 }
 
 function aplicarMismoNumero() {
@@ -3168,30 +3340,42 @@ function descartarJobPendiente() {
   if (banner) banner.classList.remove('visible');
 }
 
+
 // ══════════════════════════════════════════════════════════════════
-//  v15 · PANEL DE ADMINISTRACIÓN
+//  v16 · PANEL DE ADMINISTRACIÓN (pestaña propia con gráficas)
 //  Todos los usuarios lo VEN; solo los admins EDITAN. La verificación
 //  real de admin vive en el backend (aquí solo se ocultan botones).
+//  Las gráficas son SVG/CSS inline: sin librerías ni CDN.
 // ══════════════════════════════════════════════════════════════════
 let adminCache = null;
+let adminSeccionActiva = 'resumen';
 
-function abrirPanelAdmin() {
-  document.getElementById('adminModal').classList.add('open');
-  cargarPanelAdmin();
+// Entra a la pestaña admin y carga los datos si aún no están
+function irAAdmin() {
+  switchTab('admin');
+  if (!adminCache) cargarPanelAdmin();
 }
 
-function cerrarPanelAdmin() {
-  document.getElementById('adminModal').classList.remove('open');
+function admSeccion(sec) {
+  adminSeccionActiva = sec;
+  document.querySelectorAll('.adm-navbtn').forEach(b => b.classList.toggle('active', b.dataset.sec === sec));
+  document.querySelectorAll('.adm-pane').forEach(p => p.classList.remove('active'));
+  const pane = document.getElementById('admPane-' + sec);
+  if (pane) pane.classList.add('active');
 }
 
 async function cargarPanelAdmin() {
   const loading = document.getElementById('admLoading');
   const content = document.getElementById('admContent');
-  loading.style.display = 'block'; content.style.display = 'none';
+  loading.style.display = 'block';
+  loading.textContent = '⏳ Cargando datos del panel…';
+  content.classList.remove('visible');
   try {
     adminCache = await backendFetch({ action: 'adminData' });
     renderPanelAdmin(adminCache);
-    loading.style.display = 'none'; content.style.display = 'flex';
+    loading.style.display = 'none';
+    content.classList.add('visible');
+    admSeccion(adminSeccionActiva);
   } catch (err) {
     loading.textContent = '✗ ' + err.message;
     toast('❌ ' + err.message, 'bad');
@@ -3204,39 +3388,81 @@ function admFecha(ts) {
 }
 
 function renderPanelAdmin(d) {
-  // ── Rol ──
+  // ── Rol y cabecera ──
   const chip = document.getElementById('admRolChip');
   chip.textContent = d.esAdmin ? 'ADMIN' : 'SOLO LECTURA';
   chip.className = 'adm-chip ' + (d.esAdmin ? 'admin' : 'lector');
+  document.getElementById('admUpdated').textContent = 'Actualizado ' + new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
   document.getElementById('admAddForm').style.display = d.esAdmin ? 'flex' : 'none';
+  document.getElementById('admLectorBanner').style.display = d.esAdmin ? 'none' : 'block';
 
-  // ── Health ──
-  const h = d.health || {};
-  document.getElementById('admHealth').innerHTML =
-    `<div class="adm-hcard"><div class="hl">Backend</div><div class="hv ok">v${esc(h.version || '?')}</div></div>` +
-    `<div class="adm-hcard"><div class="hl">Sheet de auditoría</div><div class="hv ${h.sheetEscritura ? 'ok' : 'bad'}">${h.sheetEscritura ? '✓ Lectura y escritura' : '✗ No se puede escribir'}</div></div>` +
-    `<div class="adm-hcard"><div class="hl">Carpeta COE</div><div class="hv ${h.carpetaCOE ? 'ok' : 'bad'}">${h.carpetaCOE ? '✓ ' + esc(h.carpetaCOE) : '✗ Sin acceso'}</div></div>` +
-    `<div class="adm-hcard"><div class="hl">Fuente de usuarios</div><div class="hv ${String(h.whitelistFuente || '').indexOf('FALLBACK') === 0 ? 'bad' : 'ok'}">${esc(h.whitelistFuente || '—')}</div></div>`;
-
-  // ── Métricas ──
+  const us = d.usuarios || [];
   const m = d.metricas || {};
-  const activos30 = (d.usuarios || []).filter(u => u.ultimaActividad && (Date.now() - u.ultimaActividad) < 30 * 86400000).length;
-  document.getElementById('admStats').innerHTML =
-    `<div class="adm-stat"><div class="n">${m.totImports || 0}</div><div class="l">Imports exitosos</div></div>` +
-    `<div class="adm-stat"><div class="n">${(m.totProcesados || 0).toLocaleString('es-MX')}</div><div class="l">Registros procesados</div></div>` +
-    `<div class="adm-stat"><div class="n">${m.pctExito || 0}%</div><div class="l">Tasa de éxito</div></div>` +
-    `<div class="adm-stat"><div class="n">${activos30}</div><div class="l">Usuarios activos (30d)</div></div>`;
+  document.getElementById('admNavUsuarios').textContent = us.length;
+  document.getElementById('admUsrSub').textContent = us.length + ' con acceso · ' + (d.admins || []).length + ' administradores';
 
+  // ── KPIs ──
+  const activos30 = us.filter(u => u.ultimaActividad && (Date.now() - u.ultimaActividad) < 30 * 86400000).length;
   const sem = m.semanas || [];
-  let semHtml = '<table class="adm-tbl"><thead><tr><th>Semana</th><th>Imports</th><th>Registros</th><th>Fallidos</th></tr></thead><tbody>';
-  for (let i = 0; i < sem.length; i++) {
-    const et = i === 0 ? 'Esta semana' : `Hace ${i} sem`;
-    semHtml += `<tr><td>${et}</td><td>${sem[i].imports}</td><td>${sem[i].procesados.toLocaleString('es-MX')}</td><td>${sem[i].fallidos > 0 ? `<span class="adm-pill err">${sem[i].fallidos}</span>` : '0'}</td></tr>`;
+  const estaSem = sem[0] ? sem[0].imports : 0;
+  const pasadaSem = sem[1] ? sem[1].imports : 0;
+  const delta = estaSem - pasadaSem;
+  document.getElementById('admStats').innerHTML =
+    `<div class="adm-stat"><div class="n">${m.totImports || 0}</div><div class="l">Imports exitosos</div><div class="d">${estaSem} esta semana ${delta === 0 ? '' : (delta > 0 ? '<span style="color:var(--ok)">▲ ' + delta + '</span>' : '<span style="color:var(--err)">▼ ' + Math.abs(delta) + '</span>')}</div></div>` +
+    `<div class="adm-stat"><div class="n">${(m.totProcesados || 0).toLocaleString('es-MX')}</div><div class="l">Registros procesados</div><div class="d">${(m.totFallidos || 0).toLocaleString('es-MX')} fallidos</div></div>` +
+    `<div class="adm-stat"><div class="n">${m.pctExito || 0}%</div><div class="l">Tasa de éxito</div><div class="d">histórico acumulado</div></div>` +
+    `<div class="adm-stat"><div class="n">${activos30}</div><div class="l">Usuarios activos</div><div class="d">de ${us.length} con acceso · 30 días</div></div>`;
+
+  // ── Gráfica de barras: 8 semanas (invertida para leer de vieja → nueva) ──
+  const maxSem = Math.max(1, ...sem.map(s => s.imports));
+  let barras = '<div class="adm-bars">';
+  for (let i = sem.length - 1; i >= 0; i--) {
+    const s = sem[i];
+    const h = Math.round((s.imports / maxSem) * 100);
+    const lbl = i === 0 ? 'Ahora' : '-' + i + 'sem';
+    barras += `<div class="adm-bar" title="${s.imports} imports · ${s.procesados.toLocaleString('es-MX')} registros · ${s.fallidos} fallidos">` +
+      `<span class="adm-bar-val">${s.imports}</span>` +
+      `<div class="adm-bar-col ${s.imports === 0 ? 'vacio' : ''}" style="height:${Math.max(h, 2)}%"></div>` +
+      `<span class="adm-bar-lbl">${lbl}</span></div>`;
   }
-  document.getElementById('admSemanas').innerHTML = semHtml + '</tbody></table>';
+  document.getElementById('admChartSemanas').innerHTML = barras + '</div>';
+
+  // ── Dona de tasa de éxito (SVG puro) ──
+  const pct = m.pctExito || 0;
+  const R = 46, C = 2 * Math.PI * R;
+  const ok = (m.totProcesados || 0) - (m.totFallidos || 0);
+  document.getElementById('admChartExito').innerHTML =
+    `<div class="adm-donut">
+      <svg width="118" height="118" viewBox="0 0 118 118" role="img" aria-label="Tasa de éxito ${pct}%">
+        <circle cx="59" cy="59" r="${R}" fill="none" stroke="var(--sf2)" stroke-width="13"/>
+        <circle cx="59" cy="59" r="${R}" fill="none" stroke="var(--ok)" stroke-width="13" stroke-linecap="round"
+          stroke-dasharray="${(C * pct / 100).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 59 59)"/>
+        <text x="59" y="56" text-anchor="middle" fill="var(--text)" style="font-family:var(--disp); font-size:22px; font-weight:600;">${pct}%</text>
+        <text x="59" y="72" text-anchor="middle" fill="var(--muted)" style="font-size:9px;">éxito</text>
+      </svg>
+      <div class="adm-donut-legend">
+        <div class="adm-dl"><span class="adm-dl-sw" style="background:var(--ok)"></span>Exitosos <b>${ok.toLocaleString('es-MX')}</b></div>
+        <div class="adm-dl"><span class="adm-dl-sw" style="background:var(--err)"></span>Fallidos <b>${(m.totFallidos || 0).toLocaleString('es-MX')}</b></div>
+        <div class="adm-dl"><span class="adm-dl-sw" style="background:var(--sf2)"></span>Total <b>${(m.totProcesados || 0).toLocaleString('es-MX')}</b></div>
+      </div>
+    </div>`;
+
+  // ── Barras horizontales: uso por persona ──
+  const usados = us.filter(u => u.imports > 0).sort((a, b) => b.imports - a.imports);
+  const maxU = Math.max(1, ...usados.map(u => u.imports));
+  document.getElementById('admChartUsuarios').innerHTML = usados.length === 0
+    ? '<div class="adm-empty">Todavía no hay imports registrados por usuario.</div>'
+    : '<div class="adm-hbars">' + usados.map(u =>
+        `<div class="adm-hbar" title="${esc(u.email)}">` +
+        `<span class="adm-hbar-email">${esc(u.email.split('@')[0])}</span>` +
+        `<div class="adm-hbar-track"><div class="adm-hbar-fill" style="width:${Math.round((u.imports / maxU) * 100)}%"></div></div>` +
+        `<span class="adm-hbar-val">${u.imports}</span></div>`
+      ).join('') + '</div>';
 
   // ── Huérfanos ──
   const hu = d.huerfanos || [];
+  const card = document.getElementById('admCardHuerfanos');
+  card.classList.toggle('alerta', hu.length > 0);
   document.getElementById('admHuerfanos').innerHTML = hu.length === 0
     ? '<div class="adm-empty">✓ Sin imports huérfanos. Todo lo iniciado tiene su resultado registrado.</div>'
     : hu.map(o =>
@@ -3247,7 +3473,7 @@ function renderPanelAdmin(d) {
         `</div>`
       ).join('');
 
-  // ── Negados ──
+  // ── Accesos denegados ──
   const ng = d.negados || [];
   document.getElementById('admNegados').innerHTML = ng.length === 0
     ? '<div class="adm-empty">✓ Sin intentos de acceso denegados.</div>'
@@ -3256,7 +3482,6 @@ function renderPanelAdmin(d) {
       '</tbody></table>';
 
   // ── Usuarios ──
-  const us = d.usuarios || [];
   document.getElementById('admUsuarios').innerHTML =
     '<table class="adm-tbl"><thead><tr><th>Email</th><th>Rol</th><th>Última actividad</th><th>Imports</th><th>Agregado por</th>' + (d.esAdmin ? '<th></th>' : '') + '</tr></thead><tbody>' +
     us.map(u => {
@@ -3269,7 +3494,17 @@ function renderPanelAdmin(d) {
         `</tr>`;
     }).join('') + '</tbody></table>';
 
-  // ── Filtros del log (opciones dinámicas) ──
+  // ── Salud ──
+  const h = d.health || {};
+  document.getElementById('admHealth').innerHTML =
+    `<div class="adm-hcard"><div class="hl">Backend</div><div class="hv ok">v${esc(h.version || '?')}</div></div>` +
+    `<div class="adm-hcard"><div class="hl">Sheet de auditoría</div><div class="hv ${h.sheetEscritura ? 'ok' : 'bad'}">${h.sheetEscritura ? '✓ Lectura y escritura' : '✗ No se puede escribir'}</div></div>` +
+    `<div class="adm-hcard"><div class="hl">Carpeta COE</div><div class="hv ${h.carpetaCOE ? 'ok' : 'bad'}">${h.carpetaCOE ? '✓ ' + esc(h.carpetaCOE) : '✗ Sin acceso'}</div></div>` +
+    `<div class="adm-hcard"><div class="hl">Fuente de usuarios</div><div class="hv ${String(h.whitelistFuente || '').indexOf('FALLBACK') === 0 ? 'bad' : 'ok'}">${esc(h.whitelistFuente || '—')}</div></div>` +
+    `<div class="adm-hcard"><div class="hl">Bitácora</div><div class="hv ok">${(d.totalFilasLog || 0).toLocaleString('es-MX')} eventos</div></div>` +
+    `<div class="adm-hcard"><div class="hl">Imports huérfanos</div><div class="hv ${hu.length ? 'bad' : 'ok'}">${hu.length ? hu.length + ' pendientes' : '✓ Ninguno'}</div></div>`;
+
+  // ── Filtros de la bitácora ──
   const ops = [...new Set((d.log || []).map(r => r.op))].sort();
   const ests = [...new Set((d.log || []).map(r => r.estado))].sort();
   document.getElementById('admFiltroOp').innerHTML = '<option value="">Operación: todas</option>' + ops.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
@@ -3290,7 +3525,7 @@ function renderLogAdmin() {
   );
 
   document.getElementById('admLogInfo').textContent =
-    `— ${filas.length} de ${adminCache.log.length} filas mostradas (bitácora total: ${adminCache.totalFilasLog})`;
+    `${filas.length} de ${adminCache.log.length} mostradas · ${adminCache.totalFilasLog} eventos en total`;
 
   const pillEstado = e =>
     e === 'success' || e === 'add_user' ? 'ok' :
@@ -3330,7 +3565,6 @@ async function adminEliminarUI(email) {
 
 // ── Rescate de un import huérfano: reutiliza el flujo existente de recuperar ──
 function recuperarHuerfano(jobId) {
-  cerrarPanelAdmin();
   switchTab('import');
   ultimoJobIdRecuperable = jobId;
   abrirModalRecuperar();
