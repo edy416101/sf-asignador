@@ -1,5 +1,5 @@
 ﻿// ══════════════════════════════════════════════════════════════════════════
-//  SF ASIGNADOR · BACKEND — Google Apps Script  v15.0
+//  SF ASIGNADOR · BACKEND — Google Apps Script  v16.2
 //
 //  Operaciones:
 //    · default              → procesarAsignacion
@@ -222,7 +222,7 @@ function doPost(e) {
 
 function doGet(e) {
   return ContentService
-    .createTextOutput(JSON.stringify({ status: "OK", version: "15.0" }))
+    .createTextOutput(JSON.stringify({ status: "OK", version: "16.2" }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -1896,6 +1896,7 @@ function obtenerDatosAdmin(userEmail) {
   var DIA = 86400000;
   var jobIniciado = {};   // jobId → {ts, email, det}
   var jobCerrado  = {};   // jobId → true
+  var jobContado  = {};   // jobId → true (evita contar dos veces el mismo import)
   var negados = [];
   var porUsuario = {};    // email → {imports, ultimaActividad}
   var semanas = [];       // 8 cubetas: 0 = esta semana
@@ -1911,11 +1912,12 @@ function obtenerDatosAdmin(userEmail) {
     var estado = String(rows[i][3] || "");
     var det    = String(rows[i][4] || "");
 
-    // Última actividad + conteo de imports por usuario (solo emails reales)
-    if (email.indexOf("@") > 0 && email.indexOf("test-") !== 0) {
+    var esUsuarioReal = (email.indexOf("@") > 0 && email.indexOf("test-") !== 0);
+
+    // Última actividad por usuario
+    if (esUsuarioReal) {
       if (!porUsuario[email]) porUsuario[email] = { imports: 0, ultimaActividad: 0 };
       if (ts > porUsuario[email].ultimaActividad) porUsuario[email].ultimaActividad = ts;
-      if (op === "import" && estado === "success") porUsuario[email].imports++;
     }
 
     // Ciclo de vida de los jobs (para detectar huérfanos)
@@ -1925,14 +1927,27 @@ function obtenerDatosAdmin(userEmail) {
       else if (estado === "success" || estado === "error") jobCerrado[jm[1]] = true;
     }
 
-    // Métricas de imports exitosos
-    if (op === "import" && estado === "success") {
-      totImports++;
-      var pm = det.match(/processed=(\d+)/), fm = det.match(/failed=(\d+)/);
-      var proc = pm ? parseInt(pm[1], 10) : 0, fall = fm ? parseInt(fm[1], 10) : 0;
-      totProcesados += proc; totFallidos += fall;
-      var sem = Math.floor((ahora - ts) / (7 * DIA));
-      if (sem >= 0 && sem < 8) { semanas[sem].imports++; semanas[sem].procesados += proc; semanas[sem].fallidos += fall; }
+    // ── Métricas de imports · v16.2 ──
+    // Un import cuenta UNA vez por jobId, sin importar cómo se llame la fila
+    // que lo cierra:
+    //   · "import"       → flujo síncrono viejo, y v16.2+ en adelante
+    //   · "recuperarJob" → flujo asíncrono v14–v16.1, y recuperaciones manuales
+    // Antes solo se contaba "import", así que TODOS los imports hechos con el
+    // flujo asíncrono quedaban fuera de las métricas (imports 0, éxito 0).
+    // El de-duplicado por jobId evita el problema inverso: que un job cerrado
+    // y luego recuperado a mano se contara dos veces.
+    if (estado === "success" && (op === "import" || op === "recuperarJob")) {
+      var jid = jm ? jm[1] : null;
+      if (!jid || !jobContado[jid]) {
+        if (jid) jobContado[jid] = true;
+        totImports++;
+        if (esUsuarioReal && porUsuario[email]) porUsuario[email].imports++;
+        var pm = det.match(/processed=(\d+)/), fm = det.match(/failed=(\d+)/);
+        var proc = pm ? parseInt(pm[1], 10) : 0, fall = fm ? parseInt(fm[1], 10) : 0;
+        totProcesados += proc; totFallidos += fall;
+        var sem = Math.floor((ahora - ts) / (7 * DIA));
+        if (sem >= 0 && sem < 8) { semanas[sem].imports++; semanas[sem].procesados += proc; semanas[sem].fallidos += fall; }
+      }
     }
 
     // Accesos denegados / rate limit
@@ -1986,7 +2001,7 @@ function obtenerDatosAdmin(userEmail) {
   }
 
   // Health check: escritura real al Sheet (celda auxiliar, se limpia sola) + carpeta COE
-  var health = { version: "15.0", sheetLectura: true, sheetEscritura: false, carpetaCOE: "", whitelistFuente: fuenteWhitelist };
+  var health = { version: "16.2", sheetLectura: true, sheetEscritura: false, carpetaCOE: "", whitelistFuente: fuenteWhitelist };
   try {
     var celda = audit.getRange(1, 8);  // H1: fuera de las 5 columnas del log
     celda.setValue("health_ok");
