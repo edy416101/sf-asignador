@@ -1,12 +1,25 @@
 ﻿// ══════════════════════════════════════════════════════════════════════════
-//  SF ASIGNADOR · BACKEND — Google Apps Script  v12.0
+//  SF ASIGNADOR · BACKEND — Google Apps Script  v15.0
 //
 //  Operaciones:
 //    · default              → procesarAsignacion
 //    · "describe"           → describirObjeto
-//    · "import"             → ejecutarImportBulk
+//    · "importStart"        → iniciarImportBulk     ← v14: devuelve el jobId ya
+//    · "jobStatus"          → consultarEstadoJob    ← v14: consulta corta (~1s)
+//    · "recuperarJob"       → recuperarResultadoJob
+//    · "import"             → ejecutarImportBulk    (legacy síncrono; se conserva
+//                              como respaldo si un navegador tiene el front viejo
+//                              en caché. El flujo nuevo NO lo usa.)
 //    · "exportSheet"        → exportarResultadoASheet
 //    · "exportSheetFromFile"→ exportarSheetDesdeArchivo (CSV/Excel local)
+//
+//  CAMBIO CLAVE v14.0 — el backend ya no se queda esperando:
+//    Antes, "import" hacía crear+subir+cerrar+ESPERAR+descargar en una sola
+//    petición. Ese "esperar" era Utilities.sleep() en bucle (hasta 5.5 min) y
+//    chocaba con el límite de 6 min de Apps Script: con 790 registros la
+//    ejecución moría y se perdía el jobId, aunque Salesforce sí terminaba.
+//    Ahora la espera vive en el frontend, repartida en consultas de ~1s.
+//    Se sigue mandando UN SOLO job de Bulk API 2.0: se parte la espera, no los datos.
 //
 //  SEGURIDAD v11.0:
 //    · Todas las operaciones validan el id_token de Google del frontend
@@ -51,11 +64,33 @@ var ALLOWED_EMAILS = [
   "andres.fraile@docplanner.com"
 ];
 
+// ── ADMIN v15: administradores de la herramienta ──
+// HARDCODEADOS a propósito (no editables desde el panel): si fueran editables,
+// un error podría dejar a todos sin acceso al panel para arreglarlo.
+// Todos los usuarios pueden VER el panel; solo estos emails pueden EDITAR.
+var ADMIN_EMAILS = [
+  "edgar.martinez@docplanner.com",
+  "guilherme.foppa@docplanner.com"
+];
+
+// ── ADMIN v15: whitelist dinámica ──
+// La lista de usuarios vive en la pestaña "Usuarios" del Sheet de auditoría y
+// se administra SOLO desde el panel de la tool (nunca editando el Sheet a mano;
+// la pestaña se crea y siembra sola la primera vez). ALLOWED_EMAILS (arriba)
+// queda como FALLBACK: si el Sheet no responde, nadie pierde acceso.
+var USUARIOS_SHEET_NAME  = "Usuarios";
+var WHITELIST_CACHE_KEY  = "whitelist_v15";
+var WHITELIST_CACHE_SEG  = 300;  // 5 min: un alta/baja tarda máx esto en propagarse
+
 // ── SEGURIDAD: Rate limiting ──
 // Máximo N operaciones costosas por email por hora.
 // Protege contra bugs, bucles accidentales, y abuso.
 var RATE_LIMIT_MAX_POR_HORA  = 100;
-var RATE_LIMIT_OPERACIONES   = ["asignacion", "import", "exportSheet", "exportSheetFromFile", "recuperarJob"];
+// NOTA v14: "jobStatus" queda FUERA a propósito. Es una consulta de ~1s que el
+// frontend repite cada 10s mientras dura un import; con el tope de 100/hora un
+// import largo agotaría el límite del propio usuario. No hay riesgo de abuso:
+// requiere id_token válido + un jobId existente, y no descarga datos.
+var RATE_LIMIT_OPERACIONES   = ["asignacion", "import", "importStart", "exportSheet", "exportSheetFromFile", "recuperarJob"];
 
 // ── SEGURIDAD: campos que NUNCA se logean (sanitización) ──
 var CAMPOS_SENSIBLES = ["sid", "idToken", "fileContent", "access_token", "accessToken", "password"];
@@ -125,6 +160,22 @@ function doPost(e) {
                          "; failed=" + (resultado.failed || 0) +
                          "; rows=" + (payload.rows ? payload.rows.length : 0);
       registrarAuditoria(userEmail, operation, "success", auditDetails);
+    } else if (operation === "importStart") {
+      // v14: arranca el job y devuelve el jobId de inmediato.
+      // La auditoría "iniciado" se escribe DENTRO, en cuanto Salesforce
+      // asigna el jobId, para que nunca se pierda el rastro.
+      resultado = iniciarImportBulk(payload);
+    } else if (operation === "jobStatus") {
+      // v14: consulta corta que el frontend repite. Sin auditoría (sería ruido).
+      resultado = consultarEstadoJob(payload);
+    } else if (operation === "adminData") {
+      // v15: panel admin. TODOS los usuarios de la whitelist pueden VER;
+      // solo ADMIN_EMAILS puede editar (las acciones de abajo lo verifican).
+      resultado = obtenerDatosAdmin(userEmail);
+    } else if (operation === "adminAddUser") {
+      resultado = adminAgregarUsuario(userEmail, payload);
+    } else if (operation === "adminRemoveUser") {
+      resultado = adminEliminarUsuario(userEmail, payload);
     } else if (operation === "describe") {
       resultado = describirObjeto(payload);
     } else if (operation === "recuperarJob") {
@@ -165,7 +216,7 @@ function doPost(e) {
 
 function doGet(e) {
   return ContentService
-    .createTextOutput(JSON.stringify({ status: "OK", version: "12.0" }))
+    .createTextOutput(JSON.stringify({ status: "OK", version: "15.0" }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -222,8 +273,11 @@ function validarIdToken(idToken) {
     }
 
     // Verificar whitelist de emails (última capa antes de permitir acceso)
+    // v15: la lista viene de la pestaña "Usuarios" del Sheet (editable desde el
+    // panel admin de la tool). Si el Sheet falla, obtenerWhitelist() cae de
+    // vuelta a ALLOWED_EMAILS — un problema de Sheet nunca bloquea a todos.
     var emailLower = String(info.email).toLowerCase().trim();
-    if (ALLOWED_EMAILS.indexOf(emailLower) === -1) {
+    if (obtenerWhitelist().indexOf(emailLower) === -1) {
       return {
         valid: false,
         error: "Tu email no está autorizado para usar esta herramienta. Contacta a RevOps si necesitas acceso.",
@@ -1051,6 +1105,144 @@ function ejecutarImportBulk(params) {
 //  InProgress en la UI, pero Salesforce ya terminó de procesarlo.
 //  Consulta el estado actual del job + descarga sus CSVs de resultado.
 // ══════════════════════════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════════════════════════
+//  v14.0 · IMPORT ASÍNCRONO — iniciarImportBulk + consultarEstadoJob
+//
+//  POR QUÉ EXISTEN:
+//  ejecutarImportBulk() hace crear+subir+cerrar+ESPERAR+descargar dentro de
+//  una sola petición. Ese "esperar" (Utilities.sleep en bucle, hasta 5.5 min)
+//  choca contra el límite duro de 6 min de Apps Script: con volúmenes altos la
+//  ejecución muere y se pierde el jobId, aunque Salesforce sí haya terminado.
+//
+//  LA SOLUCIÓN NO ES PARTIR LOS DATOS (eso traicionaría a Bulk API 2.0, que
+//  está diseñada para un solo job), sino PARTIR LA ESPERA:
+//    · iniciarImportBulk  → crea/sube/cierra y devuelve el jobId  (~20s)
+//    · consultarEstadoJob → una pregunta corta, la repite el frontend (~1s)
+//    · recuperarResultadoJob (ya existía) → resultados, una sola vez al final
+//  Ninguna petición se acerca al límite, sin importar el volumen.
+// ══════════════════════════════════════════════════════════════════════════
+function iniciarImportBulk(params) {
+  var sid = params.sid, instanceUrl = params.instanceUrl;
+  var object = params.object || "Lead", operation = params.operation || "insert";
+  var externalId = params.externalId || "", headers = params.headers, rows = params.rows;
+  var userEmail = params.userEmail || "";
+
+  if (!rows || !rows.length) throw new Error("No se recibieron filas.");
+  if (!headers || !headers.length) throw new Error("No se recibieron headers.");
+
+  // CSV: mismo formato exacto que ejecutarImportBulk (no cambia el dato enviado)
+  var csvLines = [];
+  csvLines.push(headers.map(function(h){ return '"' + String(h).replace(/"/g,'""') + '"'; }).join(","));
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i] || [], cells = [];
+    for (var j = 0; j < headers.length; j++) {
+      var v = row[j];
+      if (v === null || v === undefined) v = "";
+      v = String(v).replace(/"/g, '""');
+      cells.push('"' + v + '"');
+    }
+    csvLines.push(cells.join(","));
+  }
+  var csvContent = csvLines.join("\n");
+
+  var base = instanceUrl + "/services/data/" + SF_API_VERSION;
+  var jsonHeaders = { "Authorization": "Bearer " + sid, "Content-Type": "application/json", "Accept": "application/json" };
+
+  // ── PASO 1: crear el job ──
+  var jobBody = { object: object, operation: operation, contentType: "CSV", lineEnding: "LF" };
+  if (operation === "upsert" && externalId) jobBody.externalIdFieldName = externalId;
+
+  var jobRes = UrlFetchApp.fetch(base + "/jobs/ingest", {
+    method: "post", headers: jsonHeaders, payload: JSON.stringify(jobBody), muteHttpExceptions: true
+  });
+  if (jobRes.getResponseCode() < 200 || jobRes.getResponseCode() >= 300) {
+    throw new Error("Error creando Job: " + jobRes.getContentText().slice(0, 400));
+  }
+  var jobId = JSON.parse(jobRes.getContentText()).id;
+
+  // ── AUDITORÍA AL NACER ──
+  // Se escribe AQUÍ, no al final: aunque todo lo demás falle, el jobId ya
+  // quedó registrado y el import siempre se puede recuperar.
+  registrarAuditoria(userEmail, "import", "iniciado",
+    "jobId=" + jobId + "; object=" + object + "; op=" + operation + "; rows=" + rows.length);
+
+  // ── PASOS 2 y 3: subir el CSV y cerrar el job ──
+  // Si algo falla aquí, se audita CON el jobId para no perder el rastro.
+  try {
+    var uploadRes = UrlFetchApp.fetch(base + "/jobs/ingest/" + jobId + "/batches", {
+      method: "put",
+      headers: { "Authorization": "Bearer " + sid, "Content-Type": "text/csv", "Accept": "application/json" },
+      payload: csvContent, muteHttpExceptions: true
+    });
+    if (uploadRes.getResponseCode() < 200 || uploadRes.getResponseCode() >= 300) {
+      throw new Error("Error subiendo CSV: " + uploadRes.getContentText().slice(0, 400));
+    }
+
+    var closeRes = UrlFetchApp.fetch(base + "/jobs/ingest/" + jobId, {
+      method: "patch", headers: jsonHeaders,
+      payload: JSON.stringify({ state: "UploadComplete" }), muteHttpExceptions: true
+    });
+    if (closeRes.getResponseCode() < 200 || closeRes.getResponseCode() >= 300) {
+      throw new Error("Error cerrando Job: " + closeRes.getContentText().slice(0, 400));
+    }
+  } catch (err) {
+    registrarAuditoria(userEmail, "import", "error_al_iniciar",
+      "jobId=" + jobId + "; " + String(err.message).slice(0, 250));
+    throw err;
+  }
+
+  // Devuelve de inmediato: el frontend se encarga de preguntar por el estado.
+  return {
+    jobId: jobId,
+    jobState: "UploadComplete",
+    total: rows.length,
+    object: object,
+    operation: operation
+  };
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  CONSULTA LIGERA DE ESTADO — la repite el frontend cada pocos segundos.
+//  Solo pregunta el estado del job: NO descarga los CSV de resultado, por eso
+//  tarda ~1s y queda fuera del rate limit (ver RATE_LIMIT_OPERACIONES).
+//  Los contadores vienen de Salesforce, así que la barra de progreso del
+//  frontend puede mostrar avance REAL en vez de una animación estimada.
+// ══════════════════════════════════════════════════════════════════════════
+function consultarEstadoJob(params) {
+  var sid = params.sid, instanceUrl = params.instanceUrl;
+  var jobId = String(params.jobId || "").trim();
+
+  if (!jobId) throw new Error("No se recibió un Job ID.");
+  if (!/^750[a-zA-Z0-9]{12}([a-zA-Z0-9]{3})?$/.test(jobId)) {
+    throw new Error("El Job ID no tiene un formato válido. Debe empezar con '750'.");
+  }
+
+  var res = UrlFetchApp.fetch(
+    instanceUrl + "/services/data/" + SF_API_VERSION + "/jobs/ingest/" + jobId,
+    { method: "get", headers: { "Authorization": "Bearer " + sid, "Accept": "application/json" }, muteHttpExceptions: true }
+  );
+
+  var code = res.getResponseCode();
+  if (code === 401) throw new Error("Tu sesión de Salesforce expiró. Pega un SID nuevo y vuelve a consultar (el job sigue corriendo en Salesforce).");
+  if (code === 404) throw new Error("No se encontró un Job con ese ID. Salesforce conserva los jobs ~7 días.");
+  if (code !== 200) throw new Error("Salesforce devolvió HTTP " + code + " al consultar el Job.");
+
+  var d = JSON.parse(res.getContentText());
+  var state = d.state || "Unknown";
+  var terminado = (state === "JobComplete" || state === "Failed" || state === "Aborted");
+
+  return {
+    jobId: jobId,
+    jobState: state,
+    processed: d.numberRecordsProcessed || 0,
+    failed: d.numberRecordsFailed || 0,
+    terminado: terminado,
+    errorMessage: (state === "Failed" || state === "Aborted") ? (d.errorMessage || "Sin mensaje de error") : ""
+  };
+}
+
 function recuperarResultadoJob(params) {
   var sid = params.sid, instanceUrl = params.instanceUrl;
   var jobId = String(params.jobId || "").trim();
@@ -1577,4 +1769,247 @@ function testCarpetaCOE() {
     Logger.log("     → Ejecuta esta función para forzar re-autorización.");
     Logger.log("     → Acepta todos los permisos que Google pida.");
   }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  v15.0 · MÓDULO ADMIN
+//
+//  · La whitelist vive en la pestaña "Usuarios" del Sheet de auditoría.
+//    La pestaña SE CREA Y SE SIEMBRA SOLA la primera vez (con ALLOWED_EMAILS):
+//    el Sheet es solo almacenamiento, nunca se edita a mano.
+//  · Todos los usuarios ven el panel (adminData); solo ADMIN_EMAILS edita.
+//  · La verificación de admin es AQUÍ, en el backend, contra el email del
+//    id_token verificado por Google. Ocultar botones en el frontend es
+//    cosmético: cualquiera puede forzarlos desde la consola del navegador.
+// ══════════════════════════════════════════════════════════════════════════
+
+function esAdmin(email) {
+  return ADMIN_EMAILS.indexOf(String(email || "").toLowerCase().trim()) !== -1;
+}
+
+// Devuelve la pestaña "Usuarios", creándola y sembrándola si no existe.
+function obtenerHojaUsuarios() {
+  var ss = SpreadsheetApp.openById(AUDIT_SHEET_ID);
+  var sh = ss.getSheetByName(USUARIOS_SHEET_NAME);
+  if (!sh) {
+    sh = ss.insertSheet(USUARIOS_SHEET_NAME);
+    sh.appendRow(["Email", "Agregado por", "Fecha"]);
+    sh.getRange(1, 1, 1, 3).setFontWeight("bold").setBackground("#1e2235").setFontColor("#ffffff");
+    sh.setFrozenRows(1);
+    sh.setColumnWidth(1, 280); sh.setColumnWidth(2, 240); sh.setColumnWidth(3, 160);
+    for (var i = 0; i < ALLOWED_EMAILS.length; i++) {
+      sh.appendRow([ALLOWED_EMAILS[i], "sistema (migración v15)", new Date()]);
+    }
+    Logger.log("[USUARIOS] Pestaña creada y sembrada con " + ALLOWED_EMAILS.length + " usuarios.");
+  }
+  return sh;
+}
+
+// Whitelist dinámica con caché de 5 min y fallback a la lista hardcodeada.
+function obtenerWhitelist() {
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get(WHITELIST_CACHE_KEY);
+  if (cached) {
+    try { return JSON.parse(cached); } catch (e) {}
+  }
+  try {
+    if (!AUDIT_SHEET_ID) throw new Error("sin AUDIT_SHEET_ID");
+    var sh = obtenerHojaUsuarios();
+    var last = sh.getLastRow();
+    var emails = [];
+    if (last >= 2) {
+      var vals = sh.getRange(2, 1, last - 1, 1).getValues();
+      for (var i = 0; i < vals.length; i++) {
+        var e = String(vals[i][0] || "").toLowerCase().trim();
+        if (e.indexOf("@") > 0 && emails.indexOf(e) === -1) emails.push(e);
+      }
+    }
+    // Los admins SIEMPRE están dentro, aunque alguien los borrara del Sheet
+    for (var a = 0; a < ADMIN_EMAILS.length; a++) {
+      if (emails.indexOf(ADMIN_EMAILS[a]) === -1) emails.push(ADMIN_EMAILS[a]);
+    }
+    if (emails.length > 0) {
+      cache.put(WHITELIST_CACHE_KEY, JSON.stringify(emails), WHITELIST_CACHE_SEG);
+      return emails;
+    }
+  } catch (err) {
+    Logger.log("[WHITELIST FALLBACK] " + err.message + " — usando lista hardcodeada.");
+  }
+  return ALLOWED_EMAILS;
+}
+
+// ── Alta de usuario (solo admins) ──
+function adminAgregarUsuario(userEmail, payload) {
+  if (!esAdmin(userEmail)) throw new Error("Solo los administradores pueden modificar usuarios.");
+  var nuevo = String(payload.email || "").toLowerCase().trim();
+  if (!/^[a-z0-9._%+-]+@docplanner\.com$/.test(nuevo)) {
+    throw new Error("Solo se aceptan correos @docplanner.com válidos.");
+  }
+  if (obtenerWhitelist().indexOf(nuevo) !== -1) {
+    throw new Error(nuevo + " ya tiene acceso.");
+  }
+  var sh = obtenerHojaUsuarios();
+  sh.appendRow([nuevo, userEmail, new Date()]);
+  CacheService.getScriptCache().remove(WHITELIST_CACHE_KEY);
+  registrarAuditoria(userEmail, "admin", "add_user", "email=" + nuevo);
+  return { ok: true, email: nuevo };
+}
+
+// ── Baja de usuario (solo admins; con barandales anti-autobloqueo) ──
+function adminEliminarUsuario(userEmail, payload) {
+  if (!esAdmin(userEmail)) throw new Error("Solo los administradores pueden modificar usuarios.");
+  var objetivo = String(payload.email || "").toLowerCase().trim();
+  if (!objetivo) throw new Error("No se recibió el email a eliminar.");
+  if (esAdmin(objetivo)) throw new Error("No se puede eliminar a un administrador.");
+  var sh = obtenerHojaUsuarios();
+  var last = sh.getLastRow();
+  var fila = -1;
+  if (last >= 2) {
+    var vals = sh.getRange(2, 1, last - 1, 1).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      if (String(vals[i][0] || "").toLowerCase().trim() === objetivo) { fila = i + 2; break; }
+    }
+  }
+  if (fila === -1) throw new Error(objetivo + " no está en la lista.");
+  sh.deleteRow(fila);
+  CacheService.getScriptCache().remove(WHITELIST_CACHE_KEY);
+  registrarAuditoria(userEmail, "admin", "remove_user", "email=" + objetivo);
+  return { ok: true, email: objetivo };
+}
+
+// ── El agregador del panel: lee TODA la auditoría y computa todo de un golpe ──
+function obtenerDatosAdmin(userEmail) {
+  if (!AUDIT_SHEET_ID) throw new Error("La auditoría no está configurada (AUDIT_SHEET_ID vacío): el panel no tiene datos que mostrar.");
+
+  var ss = SpreadsheetApp.openById(AUDIT_SHEET_ID);
+  var audit = ss.getSheets()[0];
+  var last = audit.getLastRow();
+  var rows = (last >= 2) ? audit.getRange(2, 1, last - 1, 5).getValues() : [];
+
+  var ahora = Date.now();
+  var DIA = 86400000;
+  var jobIniciado = {};   // jobId → {ts, email, det}
+  var jobCerrado  = {};   // jobId → true
+  var negados = [];
+  var porUsuario = {};    // email → {imports, ultimaActividad}
+  var semanas = [];       // 8 cubetas: 0 = esta semana
+  for (var s = 0; s < 8; s++) semanas.push({ imports: 0, procesados: 0, fallidos: 0 });
+  var totProcesados = 0, totFallidos = 0, totImports = 0;
+  var logRows = [];
+
+  for (var i = 0; i < rows.length; i++) {
+    var ts = rows[i][0] instanceof Date ? rows[i][0].getTime() : Date.parse(rows[i][0]);
+    if (isNaN(ts)) ts = 0;
+    var email  = String(rows[i][1] || "").toLowerCase().trim();
+    var op     = String(rows[i][2] || "");
+    var estado = String(rows[i][3] || "");
+    var det    = String(rows[i][4] || "");
+
+    // Última actividad + conteo de imports por usuario (solo emails reales)
+    if (email.indexOf("@") > 0 && email.indexOf("test-") !== 0) {
+      if (!porUsuario[email]) porUsuario[email] = { imports: 0, ultimaActividad: 0 };
+      if (ts > porUsuario[email].ultimaActividad) porUsuario[email].ultimaActividad = ts;
+      if (op === "import" && estado === "success") porUsuario[email].imports++;
+    }
+
+    // Ciclo de vida de los jobs (para detectar huérfanos)
+    var jm = det.match(/jobId=(750[a-zA-Z0-9]+)/);
+    if (jm) {
+      if (op === "import" && estado === "iniciado") jobIniciado[jm[1]] = { ts: ts, email: email, det: det };
+      else if (estado === "success" || estado === "error") jobCerrado[jm[1]] = true;
+    }
+
+    // Métricas de imports exitosos
+    if (op === "import" && estado === "success") {
+      totImports++;
+      var pm = det.match(/processed=(\d+)/), fm = det.match(/failed=(\d+)/);
+      var proc = pm ? parseInt(pm[1], 10) : 0, fall = fm ? parseInt(fm[1], 10) : 0;
+      totProcesados += proc; totFallidos += fall;
+      var sem = Math.floor((ahora - ts) / (7 * DIA));
+      if (sem >= 0 && sem < 8) { semanas[sem].imports++; semanas[sem].procesados += proc; semanas[sem].fallidos += fall; }
+    }
+
+    // Accesos denegados / rate limit
+    if (estado === "no_autorizado" || estado === "auth_rechazado" || estado === "rate_limited") {
+      negados.push({ ts: ts, email: email || "(desconocido)", estado: estado, det: det.slice(0, 140) });
+    }
+
+    logRows.push({ ts: ts, email: email, op: op, estado: estado, det: det.slice(0, 200) });
+  }
+
+  // Huérfanos: "iniciado" sin cierre, de los últimos 7 días (SF purga después)
+  var huerfanos = [];
+  for (var jobId in jobIniciado) {
+    if (!jobCerrado[jobId] && (ahora - jobIniciado[jobId].ts) <= 7 * DIA) {
+      huerfanos.push({
+        jobId: jobId,
+        email: jobIniciado[jobId].email,
+        ts: jobIniciado[jobId].ts,
+        edadMin: Math.round((ahora - jobIniciado[jobId].ts) / 60000),
+        det: jobIniciado[jobId].det.slice(0, 140)
+      });
+    }
+  }
+  huerfanos.sort(function(a, b) { return b.ts - a.ts; });
+
+  // Usuarios: pestaña + stats + rol
+  var usuarios = [];
+  var fuenteWhitelist = "";
+  try {
+    var sh = obtenerHojaUsuarios();
+    var lastU = sh.getLastRow();
+    if (lastU >= 2) {
+      var vals = sh.getRange(2, 1, lastU - 1, 3).getValues();
+      for (var u = 0; u < vals.length; u++) {
+        var em = String(vals[u][0] || "").toLowerCase().trim();
+        if (em.indexOf("@") <= 0) continue;
+        var st = porUsuario[em] || { imports: 0, ultimaActividad: 0 };
+        usuarios.push({
+          email: em,
+          esAdmin: esAdmin(em),
+          agregadoPor: String(vals[u][1] || ""),
+          fecha: vals[u][2] instanceof Date ? vals[u][2].getTime() : 0,
+          imports: st.imports,
+          ultimaActividad: st.ultimaActividad
+        });
+      }
+    }
+    fuenteWhitelist = "Pestaña Usuarios (" + usuarios.length + ")";
+  } catch (e) {
+    fuenteWhitelist = "FALLBACK: lista en código (" + ALLOWED_EMAILS.length + ") — " + e.message;
+  }
+
+  // Health check: escritura real al Sheet (celda auxiliar, se limpia sola) + carpeta COE
+  var health = { version: "15.0", sheetLectura: true, sheetEscritura: false, carpetaCOE: "", whitelistFuente: fuenteWhitelist };
+  try {
+    var celda = audit.getRange(1, 8);  // H1: fuera de las 5 columnas del log
+    celda.setValue("health_ok");
+    celda.clearContent();
+    health.sheetEscritura = true;
+  } catch (e) { health.sheetEscritura = false; }
+  try {
+    health.carpetaCOE = DriveApp.getFolderById(DEFAULT_DRIVE_FOLDER_ID).getName();
+  } catch (e) { health.carpetaCOE = ""; }
+
+  // Log: últimas 300 filas, la más nueva primero
+  logRows.sort(function(a, b) { return b.ts - a.ts; });
+  negados.sort(function(a, b) { return b.ts - a.ts; });
+
+  return {
+    esAdmin: esAdmin(userEmail),
+    admins: ADMIN_EMAILS,
+    usuarios: usuarios,
+    log: logRows.slice(0, 300),
+    totalFilasLog: logRows.length,
+    huerfanos: huerfanos,
+    negados: negados.slice(0, 50),
+    metricas: {
+      totImports: totImports,
+      totProcesados: totProcesados,
+      totFallidos: totFallidos,
+      pctExito: totProcesados > 0 ? Math.round(((totProcesados - totFallidos) / totProcesados) * 1000) / 10 : 0,
+      semanas: semanas
+    },
+    health: health
+  };
 }
