@@ -1743,13 +1743,33 @@ function getReps() {
   }, []);
 }
 
+// Limpia la lista pegada y descarta IDs repetidos (un export por oportunidad trae el mismo Contact varias veces).
+// Compara por los primeros 15 caracteres respetando mayúsculas: un ID de 15 y su versión de 18 son el mismo contacto.
+// Los que no miden 15 ni 18 pasan sin tocar (no cuentan como duplicados). Se conserva la primera aparición.
+function dedupIds(texto) {
+  const vistos = new Set();
+  const ids = [], duplicados = [];
+  texto.split('\n').forEach(l => {
+    const id = l.trim().replace(/^["']+|["']+$/g, '').trim();
+    if (!id) return;
+    if (id.length !== 15 && id.length !== 18) { ids.push(id); return; }
+    const key = id.slice(0, 15);
+    if (vistos.has(key)) { duplicados.push(id); return; }
+    vistos.add(key);
+    ids.push(id);
+  });
+  return { ids, duplicados };
+}
+
 function getIds() {
-  return document.getElementById('idsArea').value.split('\n').map(l => l.trim()).filter(Boolean);
+  return dedupIds(document.getElementById('idsArea').value);
 }
 
 function updateCount() {
-  const n = getIds().length;
-  document.getElementById('idsCount').textContent = `${n} ID${n !== 1 ? 's' : ''} cargado${n !== 1 ? 's' : ''}`;
+  const { ids, duplicados } = getIds();
+  const n = ids.length, d = duplicados.length;
+  document.getElementById('idsCount').textContent = `${n} ID${n !== 1 ? 's' : ''} cargado${n !== 1 ? 's' : ''}` +
+    (d > 0 ? ` (${d} duplicado${d !== 1 ? 's' : ''} descartado${d !== 1 ? 's' : ''})` : '');
 }
 
 function toggleSid() {
@@ -1811,7 +1831,7 @@ async function ejecutar() {
   const businessLine = document.getElementById('businessLine').value;
   const leadType = document.getElementById('leadType').value;
   const reps = getReps();
-  const ids = getIds();
+  const { ids, duplicados } = getIds();
 
   if (!sid) return toast('Falta el Session ID (SID).', 'bad');
   if (!businessLine) return toast('Selecciona una Business Line.', 'bad');
@@ -1845,6 +1865,12 @@ async function ejecutar() {
   log('Iniciando proceso de asignación…', 'info');
   if (dias > 0) log(`Reps: ${reps.length} | IDs: ${ids.length} | Días: ${dias}`, 'info');
   else log(`Reps: ${reps.length} | IDs: ${ids.length} | Días: 0 (solo excluye actividad de hoy)`, 'info');
+  if (duplicados.length > 0) {
+    log(`⚠ ${duplicados.length} IDs duplicados descartados (se usó la primera aparición)`, 'warn');
+    const muestra = [...new Set(duplicados)];
+    muestra.slice(0, 10).forEach(id => log(`   ↺ ${id}`, 'warn'));
+    if (muestra.length > 10) log(`   … y ${muestra.length - 10} más`, 'warn');
+  }
 
   try {
     const data = await backendFetch({ sid, instanceUrl: INSTANCE_URL, dias, businessLine, leadType, extraFields: customFields, fieldsFromSF: fieldsFromSF, fieldsManualValues: fieldsManualValues, camposFijosOcultos: camposFijosOcultos, reps, ids });
