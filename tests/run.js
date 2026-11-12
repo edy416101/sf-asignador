@@ -137,8 +137,17 @@ prueba('todas las filas tienen el OwnerId de un rep y ningún bloque falló', ()
   assert.strictEqual(res.bloquesFallidos, 0);
 });
 
+// ── v17 · Frontend: parser, headers, validación, candado, retry y escapes ──
+require('./frontend-v17')(html, prueba, g => { grupo = g; });
+
 // ── v17 · Backend: import en paralelo, lock, idempotencia y seguridad ──
-require('./backend-v17')(prueba, g => { grupo = g; });
+// Variable CODE_GS=ruta/a/Code.gs para correrlas contra otra versión del backend.
+// Con una versión vieja, la preparación puede tronar: se reporta como prueba fallida.
+try {
+  require('./backend-v17')(prueba, g => { grupo = g; });
+} catch (e) {
+  prueba('las pruebas v17 del backend pudieron correr', () => { throw e; });
+}
 
 // ── Reporte ─────────────────────────────────────────────────────
 let actual = '';

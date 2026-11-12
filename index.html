@@ -3167,7 +3167,7 @@ function validarFilasImport(sfHeaders, rows, meta) {
     return k ? meta[k] : null;
   });
   const requeridos = sfHeaders.map((h, j) => metas[j]
-    ? (metas[j].nillable === false && metas[j].createable !== false && metas[j].type !== 'boolean')
+    ? (h === 'OwnerId' || (metas[j].nillable === false && metas[j].createable !== false && metas[j].type !== 'boolean' && !metas[j].defaultedOnCreate))
     : (h === 'OwnerId' || h === 'LastName'));
   const errores = [];
   rows.forEach((r, i) => sfHeaders.forEach((h, j) => {
@@ -3564,11 +3564,10 @@ async function descargarResultados(params) {
       ultimoError = e;
     }
     ilog(`⚠ No se pudieron traer los resultados (intento ${intento}/3): ${ultimoError.message}`, 'warn');
-    if (intento < 3) await dormir(e429(ultimoError) ? 60000 : 5000);
+    if (intento < 3) await dormir(ultimoError.rateLimited ? 60000 : 5000);
   }
   throw new Error(`No se pudieron traer los resultados: ${ultimoError.message}. El import sí corrió: usa "🔍 Recuperar".`);
 }
-function e429(e) { return e && e.rateLimited; }
 
 // ── Persistencia: sobrevive a cerrar el navegador. Una llave por usuario. ──
 function llaveJobPendiente() { return JOB_STORAGE_PREFIJO + (loggedInEmail || 'anon'); }

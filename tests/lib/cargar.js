@@ -36,9 +36,9 @@ function serviciosGoogleFalsos() {
   const hojaAuditoria = {
     getLastRow: () => auditoria.length,
     appendRow: fila => auditoria.push(fila),
-    getRange: (fila, col, n) => ({
+    getRange: (fila, col, n, ncols) => ({
       setFontWeight() { return this; }, setBackground() { return this; }, setFontColor() { return this; },
-      getValues: () => auditoria.slice(fila - 1, fila - 1 + n).map(f => [f[col - 1]])
+      getValues: () => auditoria.slice(fila - 1, fila - 1 + n).map(f => f.slice(col - 1, col - 1 + (ncols || 1)))
     }),
     setFrozenRows() {}, setColumnWidth() {}
   };

@@ -745,6 +745,7 @@ function describirObjeto(params) {
         nillable: f.nillable === true,
         updateable: f.updateable === true,
         createable: f.createable === true,
+        defaultedOnCreate: f.defaultedOnCreate === true,
         picklistValues: (f.picklistValues || [])
           .filter(function(pv) { return pv.active !== false; })
           .map(function(pv) { return pv.value; })
@@ -1369,7 +1370,7 @@ function iniciarImportBulk(params) {
   if (!Array.isArray(rows) || !rows.length) throw new Error("No se recibieron filas.");
   if (!Array.isArray(headers) || !headers.length) throw new Error("No se recibieron headers.");
   for (var h = 0; h < headers.length; h++) {
-    if (typeof headers[h] !== "string" || !/^[A-Za-z0-9_.]+$/.test(headers[h])) {
+    if (typeof headers[h] !== "string" || !/^[A-Za-z0-9_.:]+$/.test(headers[h])) {
       throw new Error("Header no válido: " + String(headers[h]).slice(0, 60));
     }
   }
@@ -1658,33 +1659,43 @@ function recuperarResultadoJob(params) {
   var sid = params.sid, instanceUrl = params.instanceUrl;
   var ids = resolverJobIds(params);
   var base = instanceUrl + "/services/data/" + SF_API_VERSION;
-  var est = consultarEstadoJob({ sid: sid, instanceUrl: instanceUrl, jobIds: ids, loteId: params.loteId || "" });
+
+  // Si estos jobs ya tuvieron su reintento por bloqueo, sus filas se resolvieron en
+  // otro job. En una recuperación manual se juntan aquí: si no, esas filas saldrían
+  // como fallidas y un Retry las crearía dos veces.
+  var jobLock = (params.reintentarLock === true) ? "" : buscarReintentoLock(ids);
+  var todos = jobLock && ids.indexOf(jobLock) === -1 ? ids.concat([jobLock]) : ids;
+  var est = consultarEstadoJob({ sid: sid, instanceUrl: instanceUrl, jobIds: todos, loteId: params.loteId || "" });
 
   var salida = est;
   salida.successCsv = ""; salida.failedCsv = ""; salida.unprocessedCsv = "";
   salida.resultsError = ""; salida.reintentoLock = null;
+  salida.incluyeReintentoLock = !!(jobLock && todos.length > ids.length);
   salida.stillProcessing = !est.terminado;
   if (salida.stillProcessing) return salida;
 
   var TIPOS = ["successfulResults", "failedResults", "unprocessedrecords"];
   var peticiones = [];
-  ids.forEach(function(id) {
+  todos.forEach(function(id) {
     TIPOS.forEach(function(t) {
       peticiones.push({ url: base + "/jobs/ingest/" + id + "/" + t, method: "get",
                         headers: { "Authorization": "Bearer " + sid, "Accept": "text/csv" } });
     });
   });
   var res = sfFetchAll(peticiones);
-  var partes = [[], [], []], errores = [];
+  var partes = [[], [], []], partesLock = [[], [], []], errores = [];
   res.forEach(function(r, k) {
-    var id = ids[Math.floor(k / 3)], t = k % 3;
+    var id = todos[Math.floor(k / 3)], t = k % 3;
     if (r.code === 401) throw errorSesionSf("al descargar los resultados");
     if (r.code !== 200) errores.push(id + " " + TIPOS[t] + ": HTTP " + r.code);
+    else if (salida.incluyeReintentoLock && id === jobLock) partesLock[t].push(r.text);
     else partes[t].push(r.text);
   });
-  salida.successCsv = unirCsv(partes[0]);
-  salida.failedCsv = unirCsv(partes[1]);
-  salida.unprocessedCsv = unirCsv(partes[2]);
+  var fallidasPrincipales = unirCsv(partes[1]);
+  if (salida.incluyeReintentoLock) fallidasPrincipales = separarFilasLock(fallidasPrincipales).restoCsv;
+  salida.successCsv = unirCsv(partes[0].concat(partesLock[0]));
+  salida.failedCsv = unirCsv([fallidasPrincipales].concat(partesLock[1]));
+  salida.unprocessedCsv = unirCsv(partes[2].concat(partesLock[2]));
   if (errores.length) {
     salida.resultsError = "No se pudieron descargar todos los resultados (" + errores.join("; ") +
       "). Los registros sí se procesaron en Salesforce: vuelve a intentar con Recuperar.";
@@ -1704,6 +1715,33 @@ function recuperarResultadoJob(params) {
     }
   }
   return salida;
+}
+
+// El job de reintento por bloqueo de estos jobs, si existe: caché (6 h) o la fila
+// "reintentoLock · iniciado" de la auditoría (de=<jobIds originales>).
+function buscarReintentoLock(ids) {
+  var ordenados = ids.slice().sort().join(",");
+  try {
+    var c = CacheService.getScriptCache().get("lock_" + hashTexto(ordenados));
+    if (c) return c;
+  } catch (e) {}
+  if (!AUDIT_SHEET_ID) return "";
+  try {
+    var sh = SpreadsheetApp.openById(AUDIT_SHEET_ID).getSheets()[0];
+    var last = sh.getLastRow();
+    if (last < 2) return "";
+    var desde = Math.max(2, last - 5000);
+    var vals = sh.getRange(desde, 3, last - desde + 1, 3).getValues();   // Operación, Estado, Detalles
+    for (var i = vals.length - 1; i >= 0; i--) {
+      if (String(vals[i][0]) !== "reintentoLock" || String(vals[i][1]) !== "iniciado") continue;
+      var det = String(vals[i][2] || "");
+      var de = det.match(/de=([0-9A-Za-z,]+)/), jm = det.match(/jobId=(750[a-zA-Z0-9]+)/);
+      if (de && jm && de[1].split(",").sort().join(",") === ordenados) return jm[1];
+    }
+  } catch (e) {
+    Logger.log("[LOCK LOOKUP] " + e.message);
+  }
+  return "";
 }
 
 // Separa las filas fallidas por UNABLE_TO_LOCK_ROW. Devuelve sus columnas

@@ -27,7 +27,7 @@ function montar(opcionesBulk = {}, google) {
   const g = serviciosGoogleFalsos();
   const googleLlamadas = [];
   const googleFalso = url => { googleLlamadas.push(url); return google ? google(url) : { getResponseCode: () => 400, getContentText: () => '{}' }; };
-  const ctx = cargarBackend(urlFetchCombinado(bulk, googleFalso), null, g.globales);
+  const ctx = cargarBackend(urlFetchCombinado(bulk, googleFalso), process.env.CODE_GS || null, g.globales);
   return { bulk, g, ctx, googleLlamadas };
 }
 
@@ -162,7 +162,7 @@ module.exports = function (prueba, setGrupo) {
   // ── Resultados ────────────────────────────────────────────────
   setGrupo('v17 · Resultados y reintento por bloqueo');
   {
-    const { bulk, ctx } = montar({ lock: f => /[05]$/.test(f.Contact__c) });
+    const { bulk, ctx, g } = montar({ lock: f => /[05]$/.test(f.Contact__c) });
     const r = ctx.iniciarImportBulk({ sid: 'SID', instanceUrl: INSTANCIA, headers: HEADERS, rows: filas(200, i => OWNERS[i % 2]), object: 'Lead', operation: 'insert' });
     const res = ctx.recuperarResultadoJob({ sid: 'SID', instanceUrl: INSTANCIA, jobIds: r.jobIds, loteId: r.loteId, reintentarLock: true });
     prueba('las filas con UNABLE_TO_LOCK_ROW se reintentan solas en un job extra', () => {
@@ -181,6 +181,18 @@ module.exports = function (prueba, setGrupo) {
       const otra = ctx.recuperarResultadoJob({ sid: 'SID', instanceUrl: INSTANCIA, jobIds: r.jobIds, reintentarLock: true });
       assert.strictEqual(otra.reintentoLock.jobId, res.reintentoLock.jobId);
       assert.strictEqual(bulk.jobs.length, 3);
+    });
+    prueba('recuperar a mano el lote junta el reintento: las filas bloqueadas salen OK, no fallidas', () => {
+      const man = ctx.recuperarResultadoJob({ sid: 'SID', instanceUrl: INSTANCIA, loteId: r.loteId });
+      assert.strictEqual(man.incluyeReintentoLock, true);
+      assert.strictEqual(parsearCsv(man.successCsv).length - 1, 200);
+      assert.ok(!/UNABLE_TO_LOCK_ROW/.test(man.failedCsv), 'siguen saliendo como fallidas');
+    });
+    prueba('lo mismo sin caché (lo encuentra en la auditoría)', () => {
+      [...g.cache.keys()].filter(k => k.startsWith('lock_') || k.startsWith('lote_')).forEach(k => g.cache.delete(k));
+      const man = ctx.recuperarResultadoJob({ sid: 'SID', instanceUrl: INSTANCIA, jobIds: r.jobIds });
+      assert.strictEqual(man.incluyeReintentoLock, true);
+      assert.strictEqual(parsearCsv(man.successCsv).length - 1, 200);
     });
   }
   {
