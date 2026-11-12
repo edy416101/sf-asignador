@@ -137,6 +137,9 @@ prueba('todas las filas tienen el OwnerId de un rep y ningún bloque falló', ()
   assert.strictEqual(res.bloquesFallidos, 0);
 });
 
+// ── v17 · Backend: import en paralelo, lock, idempotencia y seguridad ──
+require('./backend-v17')(prueba, g => { grupo = g; });
+
 // ── Reporte ─────────────────────────────────────────────────────
 let actual = '';
 resultados.forEach(r => {

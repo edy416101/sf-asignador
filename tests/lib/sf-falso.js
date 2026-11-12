@@ -56,7 +56,9 @@
           records = [...vistos.values()];
         }
         return { getContentText: () => JSON.stringify({ records }), getResponseCode: () => 200 };
-      }
+      },
+      // Igual que UrlFetchApp.fetchAll: varias peticiones, respuestas en el mismo orden
+      fetchAll(reqs) { return reqs.map(r => sf.UrlFetchApp.fetch(r.url, r)); }
     };
     return sf;
   }
