@@ -1414,7 +1414,9 @@ function iniciarImportBulk(params) {
 
 function crearJobsEnParalelo(sid, instanceUrl, object, operation, externalId, headers, rows, userEmail, clientRequestId) {
   var base = instanceUrl + "/services/data/" + SF_API_VERSION;
-  var partes = repartirEnJobs(headers, rows);
+  // Compatibilidad: el frontend v16 (sin clientRequestId) solo sigue un jobId, así que
+  // para él se crea un solo job, como antes. El v17 manda clientRequestId y recibe N jobs.
+  var partes = clientRequestId ? repartirEnJobs(headers, rows) : [{ rows: rows }];
 
   var jobBody = { object: object, operation: operation, contentType: "CSV", lineEnding: "LF" };
   if (operation === "upsert" && externalId) jobBody.externalIdFieldName = externalId;

@@ -6,6 +6,7 @@ const { crearBulkFalso, parsearCsv } = require('./lib/bulk-falso');
 const SF = require('./lib/sf-falso');
 
 const INSTANCIA = 'https://docplanner.my.salesforce.com';
+let nReq = 0;   // cada import de prueba con su clientRequestId (como el frontend v17)
 const OWNERS = ['005P400000FpACnIAN', '005P400000Fp9aHIAR', '005P400000FpZZZIAR', '005P400000FpYYYIAR', '005P400000FpXXXIAR'];
 const HEADERS = ['Contact__c', 'Company', 'LastName', 'Email', 'OwnerId'];
 
@@ -42,7 +43,7 @@ module.exports = function (prueba, setGrupo) {
   {
     const { bulk, ctx, g } = montar();
     const rows = filas(500, i => OWNERS[i % 5]);
-    const r = ctx.iniciarImportBulk({ sid: 'SID', instanceUrl: INSTANCIA, object: 'Lead', operation: 'insert',
+    const r = ctx.iniciarImportBulk({ clientRequestId: 'req_prueba_' + (++nReq), sid: 'SID', instanceUrl: INSTANCIA, object: 'Lead', operation: 'insert',
       headers: HEADERS, rows, userEmail: 'edgar.martinez@docplanner.com', clientRequestId: 'req_prueba_0001' });
 
     prueba('500 filas → 5 jobs de 100', () => {
@@ -68,7 +69,7 @@ module.exports = function (prueba, setGrupo) {
       assert.ok(fila && fila[4].includes('lote=' + r.loteId) && fila[4].includes('jobIds=' + r.jobIds.join(',')), fila && fila[4]);
     });
     prueba('doble clic: el mismo clientRequestId no crea otro job', () => {
-      const otra = ctx.iniciarImportBulk({ sid: 'SID', instanceUrl: INSTANCIA, object: 'Lead', operation: 'insert',
+      const otra = ctx.iniciarImportBulk({ clientRequestId: 'req_prueba_' + (++nReq), sid: 'SID', instanceUrl: INSTANCIA, object: 'Lead', operation: 'insert',
         headers: HEADERS, rows, userEmail: 'edgar.martinez@docplanner.com', clientRequestId: 'req_prueba_0001' });
       assert.strictEqual(bulk.jobs.length, 5, 'se crearon ' + bulk.jobs.length + ' jobs');
       assert.deepStrictEqual(otra.jobIds, r.jobIds);
@@ -102,20 +103,28 @@ module.exports = function (prueba, setGrupo) {
   {
     const { bulk, ctx } = montar();
     const rows = filas(500, i => (i < 300 ? OWNERS[0] : i < 450 ? OWNERS[1] : OWNERS[2]));
-    const r = ctx.iniciarImportBulk({ sid: 'SID', instanceUrl: INSTANCIA, headers: HEADERS, rows, object: 'Lead', operation: 'insert' });
+    const r = ctx.iniciarImportBulk({ clientRequestId: 'req_prueba_' + (++nReq), sid: 'SID', instanceUrl: INSTANCIA, headers: HEADERS, rows, object: 'Lead', operation: 'insert' });
     prueba('owners disparejos (300/150/50) → 3 jobs, un owner por job', () => {
       assert.strictEqual(bulk.jobs.length, 3);
       assert.deepStrictEqual([...r.jobs.map(j => j.filas)].sort((a, b) => b - a), [300, 150, 50]);
     });
   }
   {
+    const { bulk, ctx } = montar();
+    const r = ctx.iniciarImportBulk({ sid: 'SID', instanceUrl: INSTANCIA, headers: HEADERS, rows: filas(500, i => OWNERS[i % 5]), object: 'Lead', operation: 'insert' });
+    prueba('frontend v16 (sin clientRequestId) → un solo job, como antes (backend primero no rompe nada)', () => {
+      assert.strictEqual(bulk.jobs.length, 1);
+      assert.strictEqual(r.jobId, r.jobIds[0]);
+    });
+  }
+  {
     const { ctx } = montar();
-    const r = ctx.iniciarImportBulk({ sid: 'SID', instanceUrl: INSTANCIA, headers: HEADERS, rows: filas(3000, i => '005' + String(i).padStart(12, '0')), object: 'Lead', operation: 'insert' });
+    const r = ctx.iniciarImportBulk({ clientRequestId: 'req_prueba_' + (++nReq), sid: 'SID', instanceUrl: INSTANCIA, headers: HEADERS, rows: filas(3000, i => '005' + String(i).padStart(12, '0')), object: 'Lead', operation: 'insert' });
     prueba('3,000 filas → nunca más de 10 jobs', () => assert.strictEqual(r.jobIds.length, 10));
   }
   {
     const { bulk, ctx } = montar({ sondeosParaTerminar: 1 });
-    const r = ctx.iniciarImportBulk({ sid: 'SID', instanceUrl: INSTANCIA, headers: HEADERS, rows: filas(200, i => OWNERS[i % 2]), object: 'Lead', operation: 'insert' });
+    const r = ctx.iniciarImportBulk({ clientRequestId: 'req_prueba_' + (++nReq), sid: 'SID', instanceUrl: INSTANCIA, headers: HEADERS, rows: filas(200, i => OWNERS[i % 2]), object: 'Lead', operation: 'insert' });
     prueba('mientras un job sigue, terminado = false y recuperar no baja nada', () => {
       const est = ctx.recuperarResultadoJob({ sid: 'SID', instanceUrl: INSTANCIA, jobIds: r.jobIds });
       assert.strictEqual(est.stillProcessing, true);
@@ -129,7 +138,7 @@ module.exports = function (prueba, setGrupo) {
   {
     const { bulk, ctx } = montar({ falloCrear: [2] });
     let error = null;
-    try { ctx.iniciarImportBulk({ sid: 'SID', instanceUrl: INSTANCIA, headers: HEADERS, rows: filas(500, i => OWNERS[i % 5]), object: 'Lead', operation: 'insert' }); }
+    try { ctx.iniciarImportBulk({ clientRequestId: 'req_prueba_' + (++nReq), sid: 'SID', instanceUrl: INSTANCIA, headers: HEADERS, rows: filas(500, i => OWNERS[i % 5]), object: 'Lead', operation: 'insert' }); }
     catch (e) { error = e; }
     prueba('si un job no se crea, los demás se abortan y no se sube nada', () => {
       assert.ok(error, 'no lanzó error');
@@ -140,7 +149,7 @@ module.exports = function (prueba, setGrupo) {
   {
     const { bulk, ctx } = montar({ falloSubida: [1] });
     const rows = filas(500, i => OWNERS[i % 5]);
-    const r = ctx.iniciarImportBulk({ sid: 'SID', instanceUrl: INSTANCIA, headers: HEADERS, rows, object: 'Lead', operation: 'insert' });
+    const r = ctx.iniciarImportBulk({ clientRequestId: 'req_prueba_' + (++nReq), sid: 'SID', instanceUrl: INSTANCIA, headers: HEADERS, rows, object: 'Lead', operation: 'insert' });
     prueba('si falla la subida de un job: ese se aborta y sus filas vuelven como no enviadas', () => {
       assert.strictEqual(r.jobIds.length, 4);
       assert.strictEqual(r.filasNoEnviadas.length, 100);
@@ -152,7 +161,7 @@ module.exports = function (prueba, setGrupo) {
   {
     const { ctx } = montar({ sesionVencida: true });
     let error = null;
-    try { ctx.iniciarImportBulk({ sid: 'SID', instanceUrl: INSTANCIA, headers: HEADERS, rows: filas(10, () => OWNERS[0]), object: 'Lead', operation: 'insert' }); }
+    try { ctx.iniciarImportBulk({ clientRequestId: 'req_prueba_' + (++nReq), sid: 'SID', instanceUrl: INSTANCIA, headers: HEADERS, rows: filas(10, () => OWNERS[0]), object: 'Lead', operation: 'insert' }); }
     catch (e) { error = e; }
     prueba('SID vencido (401) → error marcado como sesión expirada', () => {
       assert.ok(error && error.sfSesionExpirada === true, error && error.message);
@@ -163,7 +172,7 @@ module.exports = function (prueba, setGrupo) {
   setGrupo('v17 · Resultados y reintento por bloqueo');
   {
     const { bulk, ctx, g } = montar({ lock: f => /[05]$/.test(f.Contact__c) });
-    const r = ctx.iniciarImportBulk({ sid: 'SID', instanceUrl: INSTANCIA, headers: HEADERS, rows: filas(200, i => OWNERS[i % 2]), object: 'Lead', operation: 'insert' });
+    const r = ctx.iniciarImportBulk({ clientRequestId: 'req_prueba_' + (++nReq), sid: 'SID', instanceUrl: INSTANCIA, headers: HEADERS, rows: filas(200, i => OWNERS[i % 2]), object: 'Lead', operation: 'insert' });
     const res = ctx.recuperarResultadoJob({ sid: 'SID', instanceUrl: INSTANCIA, jobIds: r.jobIds, loteId: r.loteId, reintentarLock: true });
     prueba('las filas con UNABLE_TO_LOCK_ROW se reintentan solas en un job extra', () => {
       assert.ok(res.reintentoLock && res.reintentoLock.jobId, 'no hubo reintento');
@@ -197,7 +206,7 @@ module.exports = function (prueba, setGrupo) {
   }
   {
     const { ctx } = montar({ falloDescarga: 'failedResults', rechazo: f => (f.LastName === 'Doc3' ? 'REQUIRED_FIELD_MISSING:x:--' : '') });
-    const r = ctx.iniciarImportBulk({ sid: 'SID', instanceUrl: INSTANCIA, headers: HEADERS, rows: filas(10, () => OWNERS[0]), object: 'Lead', operation: 'insert' });
+    const r = ctx.iniciarImportBulk({ clientRequestId: 'req_prueba_' + (++nReq), sid: 'SID', instanceUrl: INSTANCIA, headers: HEADERS, rows: filas(10, () => OWNERS[0]), object: 'Lead', operation: 'insert' });
     const res = ctx.recuperarResultadoJob({ sid: 'SID', instanceUrl: INSTANCIA, jobIds: r.jobIds });
     prueba('si falla una descarga, devuelve resultsError (no un éxito vacío)', () => {
       assert.ok(res.resultsError && /failedResults/.test(res.resultsError), res.resultsError);
