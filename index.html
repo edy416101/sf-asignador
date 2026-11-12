@@ -26,7 +26,8 @@
   <meta name="twitter:card" content="summary"/>
 
   <script src="https://accounts.google.com/gsi/client" async></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- v17: SheetJS 0.20.3 (la 0.18.5 tiene vulnerabilidades conocidas). SheetJS ya no publica en cdnjs. -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
   <style>
     /* ══ v13 · PALETA OFICIAL "DOCPLANNER OPS SUITE" ══
@@ -666,7 +667,7 @@
           <div class="field">
             <label>Session ID (SID)</label>
             <div class="sid-wrap">
-              <input id="sid" class="mono" type="password" placeholder="Pega tu SID aquí…"/>
+              <input id="sid" class="mono" type="password" placeholder="Pega tu SID aquí…" autocomplete="off" spellcheck="false"/>
               <span class="sid-eye" onclick="toggleSid()">VER</span>
             </div>
           </div>
@@ -787,7 +788,7 @@
           <div class="isec">
             <div class="slabel">Configure Import</div>
             <div class="cfg-grid">
-              <div class="field"><label>Action</label><select id="cfg-action" onchange="onActionChange()"><option value="insert">Insert</option><option value="update">Update</option><option value="upsert">Upsert</option><option value="delete">Delete</option><option value="undelete">Undelete</option></select></div>
+              <div class="field"><label>Action</label><select id="cfg-action" onchange="onActionChange()"><option value="insert">Insert</option><option value="upsert">Upsert</option></select></div>
               <div class="field" id="extIdField"><label>External ID Field (Upsert)</label><input id="cfg-extid" type="text" placeholder="ej. Id, Email, Custom_Id__c"/></div>
               <div class="field"><label>Object</label><select id="cfg-object"><option value="Lead" selected>Lead</option></select></div>
             </div>
@@ -1393,6 +1394,8 @@ let importResultRows = [];
 let toastTimer       = null;
 let totalAsignados   = 0;
 let leadFieldsCache  = null;
+let leadFieldsCacheSid = '';   // v17: el describe se cachea por SID (ahorra ~7 s por import)
+let importEnCurso    = false;  // v17: candado contra doble import / retry / recuperación a la vez
 let ownerStatsCache  = [];
 let ultimaAsignacion = {};
 let loggedInEmail    = "";
@@ -1475,10 +1478,17 @@ function initGSI() {
   );
 }
 
+// v17: el payload del JWT en UTF-8 (atob solo da bytes: "Martínez" salía como "MartÃ­nez")
+function decodificarJwt(token) {
+  let b64 = String(token).split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+  while (b64.length % 4) b64 += '=';
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  return JSON.parse(new TextDecoder('utf-8').decode(bytes));
+}
+
 function onSignIn(response) {
   try {
-    const parts   = response.credential.split('.');
-    const payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+    const payload = decodificarJwt(response.credential);
     if (!payload.email?.toLowerCase().endsWith('@docplanner.com')) {
       toast('❌ Solo se permiten cuentas @docplanner.com', 'bad'); return;
     }
@@ -1501,6 +1511,10 @@ function logout() {
   leadFieldsCache = null; ownerStatsCache = [];
   ultimaAsignacion = {}; loggedInEmail = ""; idTokenCache = "";
   customFields = []; fieldsFromSF = []; fieldsManualValues = {}; camposFijosOcultos = []; contactFieldsCache = null;
+  leadFieldsMetadata = null; leadFieldsCacheSid = '';
+  // v17: el SID no se queda en la página al cerrar sesión
+  const sidInput = document.getElementById('sid');
+  if (sidInput) { sidInput.value = ''; sidInput.type = 'password'; }
   resetPaisSelector();  // v12: el selector de país vuelve al default (MX)
   resetAsigUI(); resetImportUI();
 }
@@ -1508,14 +1522,28 @@ function logout() {
 // ══════════════════════════════════════════════════════════════════
 //  HELPER: fetch al backend con id_token
 // ══════════════════════════════════════════════════════════════════
-async function backendFetch(payload) {
-  if (!idTokenCache) throw new Error("Sesión expirada. Vuelve a iniciar sesión.");
+// v17: errores con tipo, para que el sondeo decida qué hacer sin sacar al usuario.
+function errorBackend(data) {
+  const e = new Error(data.error || 'Error desconocido');
+  e.rateLimited = data.rateLimited === true;
+  e.authError = data.authError === true;
+  e.notAuthorized = data.notAuthorized === true;
+  e.sfSessionExpired = data.sfSessionExpired === true;
+  return e;
+}
+
+// opciones.silencioso: sin alert ni logout (lo usa el sondeo de un import en curso,
+// que no debe perder el trabajo si la sesión de Google vence o hay rate limit).
+async function backendFetch(payload, opciones = {}) {
+  if (!idTokenCache) { const e = new Error("Sesión expirada. Vuelve a iniciar sesión."); e.authError = true; throw e; }
   const withToken = Object.assign({ idToken: idTokenCache }, payload);
   const res = await fetch(APPS_SCRIPT_URL, {
     method: 'POST', redirect: 'follow', body: JSON.stringify(withToken)
   });
   if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
   const data = await res.json();
+
+  if (opciones.silencioso && (data.rateLimited || data.authError || data.notAuthorized || data.error)) throw errorBackend(data);
 
   // Rate limit alcanzado
   if (data.rateLimited) {
@@ -1525,7 +1553,7 @@ async function backendFetch(payload) {
       data.error + "\n\n" +
       "Esto protege la herramienta contra abuso y bucles accidentales."
     );
-    throw new Error(data.error);
+    throw errorBackend(data);
   }
 
   // Email no está en la whitelist (distinto de expirado)
@@ -1536,17 +1564,18 @@ async function backendFetch(payload) {
       "Si necesitas acceso, contacta al equipo de RevOps."
     );
     setTimeout(() => logout(), 500);
-    throw new Error(data.error);
+    throw errorBackend(data);
   }
 
   // Token expirado o inválido genérico
   if (data.authError) {
     toast('⚠ Tu sesión expiró. Vuelve a iniciar sesión.', 'bad');
-    setTimeout(() => logout(), 2000);
-    throw new Error(data.error);
+    // v17: si hay un import corriendo no se cierra la sesión: se perdería el contexto del job
+    if (!importEnCurso) setTimeout(() => logout(), 2000);
+    throw errorBackend(data);
   }
 
-  if (data.error) throw new Error(data.error);
+  if (data.error) throw errorBackend(data);
   return data;
 }
 
@@ -1779,12 +1808,22 @@ function toggleSid() {
   else { i.type = 'password'; b.textContent = 'VER'; }
 }
 
-function log(msg, type = 'info') {
-  const box = document.getElementById('logBox');
+// v17: un solo logger para los dos paneles, siempre escapado (los mensajes traen
+// texto de Salesforce y del backend). Se agrega un nodo, no se reescribe innerHTML.
+const LOG_TIPOS = new Set(['info', 'ok', 'warn', 'err']);
+function escribirLog(boxId, msg, type) {
+  const box = document.getElementById(boxId);
+  if (!box) return;
   const ts = new Date().toLocaleTimeString('es-MX');
-  box.innerHTML += `\n<span class="${type}">[${ts}] ${msg}</span>`;
+  const span = document.createElement('span');
+  span.className = LOG_TIPOS.has(type) ? type : 'info';
+  span.textContent = `[${ts}] ${msg}`;
+  box.appendChild(document.createTextNode('\n'));
+  box.appendChild(span);
   box.scrollTop = box.scrollHeight;
 }
+function log(msg, type = 'info') { escribirLog('logBox', msg, type); }
+function ilog(msg, type = 'info') { escribirLog('importLog', msg, type); }
 
 function setStatus(msg, state = '') {
   document.getElementById('statusMsg').textContent = msg;
@@ -2128,8 +2167,7 @@ function renderPreTemplate(headers, rows) {
 
 function descargarCSV() {
   if (!preTemplateRows.length) return;
-  const e = v => `"${String(v ?? '').replace(/"/g,'""')}"`;
-  const lines = [PT_HEADERS.map(e).join(','), ...preTemplateRows.map(r => r.map(e).join(','))];
+  const lines = [csvLinea(PT_HEADERS), ...preTemplateRows.map(csvLinea)];
   descargarBlob('\uFEFF' + lines.join('\r\n'), 'text/csv', `pre_template_${hoy()}.csv`);
   toast('⬇ CSV descargado', 'ok');
 }
@@ -2260,21 +2298,6 @@ function getMapeoValor(tr) {
     return input.value.trim();
   }
   return select.value;
-}
-
-function syncMapCheck(sel, col) {
-  const cell = document.getElementById(`fmap-ok-${col}`);
-  if (!cell) return;
-  if (sel.value === '--skip--') { cell.textContent = '—'; cell.className = 'fmap-ok skip'; }
-  else if (sel.value === '--custom--') { cell.textContent = '✏'; cell.className = 'fmap-ok warn'; }
-  else { cell.textContent = '•'; cell.className = 'fmap-ok pending'; }
-}
-
-function ilog(msg, type = 'info') {
-  const box = document.getElementById('importLog');
-  const ts = new Date().toLocaleTimeString('es-MX');
-  box.innerHTML += `\n<span class="${type}">[${ts}] ${msg}</span>`;
-  box.scrollTop = box.scrollHeight;
 }
 
 function setImportStatus(msg, state = '') {
@@ -3958,10 +3981,9 @@ async function ejecutarRecuperar() {
 function descargarFallidosCSV() {
   const failedRows = importResultRows.filter(r => r.__Status === 'Failed');
   if (!failedRows.length) { toast('No hay filas fallidas.', 'bad'); return; }
-  const e = v => `"${String(v ?? '').replace(/"/g,'""')}"`;
   const lines = [
-    IMPORT_RESULT_HEADERS.map(e).join(','),
-    ...failedRows.map(r => IMPORT_RESULT_HEADERS.map(h => e(r[h] || '')).join(','))
+    csvLinea(IMPORT_RESULT_HEADERS),
+    ...failedRows.map(r => csvLinea(IMPORT_RESULT_HEADERS.map(h => r[h] || '')))
   ];
   descargarBlob('\uFEFF' + lines.join('\r\n'), 'text/csv', `filas_fallidas_${hoy()}.csv`);
   toast(`⬇ ${failedRows.length} fila(s) fallida(s) descargadas.`, 'ok');
@@ -4756,7 +4778,7 @@ async function ejecutarExport() {
 //  DESCARGAR 3 CSVs
 // ══════════════════════════════════════════════════════════════════
 function descargarTodosLosCSVs(baseName) {
-  const e = v => `"${String(v ?? '').replace(/"/g,'""')}"`;
+  const e = csvCelda;
 
   // Summary CSV
   const summaryLines = [];
@@ -4774,13 +4796,13 @@ function descargarTodosLosCSVs(baseName) {
   descargarBlob('\uFEFF' + summaryLines.join('\r\n'), 'text/csv', `${baseName}_summary.csv`);
 
   // Pre Template CSV
-  const ptLines = [PT_HEADERS.map(e).join(','), ...preTemplateRows.map(r => r.map(e).join(','))];
+  const ptLines = [csvLinea(PT_HEADERS), ...preTemplateRows.map(csvLinea)];
   descargarBlob('\uFEFF' + ptLines.join('\r\n'), 'text/csv', `${baseName}_pre_template.csv`);
 
   // Import Result CSV
   const irLines = [
-    IMPORT_RESULT_HEADERS.map(e).join(','),
-    ...importResultRows.map(r => IMPORT_RESULT_HEADERS.map(h => e(r[h] || '')).join(','))
+    csvLinea(IMPORT_RESULT_HEADERS),
+    ...importResultRows.map(r => csvLinea(IMPORT_RESULT_HEADERS.map(h => r[h] || '')))
   ];
   descargarBlob('\uFEFF' + irLines.join('\r\n'), 'text/csv', `${baseName}_import_result.csv`);
 }
@@ -4789,8 +4811,18 @@ function descargarTodosLosCSVs(baseName) {
 //  UTILIDADES
 // ══════════════════════════════════════════════════════════════════
 function esc(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
+
+// v17: una sola celda CSV para todas las descargas. Neutraliza lo que Excel/Sheets
+// ejecutarían como fórmula (= @ tab CR, y + o - seguidos de algo que no sea un número
+// o teléfono). Un teléfono "+52 55 1234 5678" o un "-5" se quedan igual.
+function csvCelda(v) {
+  let s = String(v ?? '');
+  if (/^[=@\t\r]/.test(s) || (/^[+-]/.test(s) && !/^[+-][\d\s().,-]*$/.test(s))) s = "'" + s;
+  return '"' + s.replace(/"/g, '""') + '"';
+}
+function csvLinea(valores) { return valores.map(csvCelda).join(','); }
 
 function toast(msg, type = 'ok') {
   const el = document.getElementById('toast');
