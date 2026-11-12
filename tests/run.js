@@ -66,7 +66,7 @@ prueba('IDs con largo distinto de 15/18 pasan sin tocar y no cuentan como duplic
 
 // ── Frontend: resultado del import (CSV de Bulk API 2.0) ────────
 const HEADERS_RESULTADO = ['Contact__c', 'Company', 'LastName', 'Country__c', 'OwnerId', '__Status', '__Id', '__Action', '__Errors'];
-const parseSfResultCsv = cargarFunciones(html, ['parseCsvRecords', 'parseCsvRow', 'parseSfResultCsv'], 'parseSfResultCsv', { IMPORT_RESULT_HEADERS: HEADERS_RESULTADO });
+const parseSfResultCsv = cargarFunciones(html, ['parseCsvRecords', 'parseCsvRow', 'parseDelimitado', 'parseSfResultCsv'], 'parseSfResultCsv', { IMPORT_RESULT_HEADERS: HEADERS_RESULTADO });
 const q = v => '"' + String(v).replace(/"/g, '""') + '"';
 const HDR_FALLIDOS = ['sf__Id', 'sf__Error', 'Contact__c', 'Company', 'LastName', 'Country__c', 'OwnerId'].map(q).join(',');
 const filaFallida = (error, company) => ['', error, '0031100000ABCDEFGH', company, 'Carlos Guerrero', 'Mexico', '005P400000FpACnIAN'].map(q).join(',');

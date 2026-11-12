@@ -828,7 +828,7 @@
         <div class="result-header">
           <h2>Resultado del Import</h2>
           <div class="result-btns">
-            <button class="btn-icon" style="background:var(--ac2)" id="recoverJobBtn" onclick="abrirModalRecuperar()" title="Recuperar el resultado de un import que quedó procesando usando su Job ID">🔍 Recuperar por Job ID</button>
+            <button class="btn-icon" style="background:var(--ac2)" id="recoverJobBtn" onclick="abrirModalRecuperar()" title="Recuperar el resultado de un import que quedó procesando, con su Lote o su Job ID">🔍 Recuperar por Lote o Job ID</button>
             <button class="btn-icon" style="background:var(--accent)" id="copyResultBtn" onclick="copiarResultado()" disabled>📋 Copiar</button>
             <button class="btn-icon" style="background:var(--warn)" id="retryBtn" onclick="abrirModalRetry()" disabled>🔁 Reintentar (0)</button>
             <button class="btn-icon" style="background:var(--ok)" id="dlResultBtn" onclick="abrirModalExport()" disabled>💾 Guardar</button>
@@ -1239,8 +1239,8 @@
       </div>
 
       <div class="modal-field">
-        <label>Job ID</label>
-        <input type="text" id="recuperarJobId" placeholder="ej. 750Tt00000gk1XBIAY" style="font-family:var(--mono);"/>
+        <label>Lote o Job ID</label>
+        <input type="text" id="recuperarJobId" placeholder="ej. lote_1a2b3c4d5e6f7a8b o 750Tt00000gk1XBIAY" style="font-family:var(--mono);"/>
         <span class="hint">Empieza con "750". Lo encuentras en el log del import o en Setup → Bulk Data Load Jobs. Salesforce conserva los jobs ~7 días.</span>
       </div>
 
@@ -1914,6 +1914,18 @@ async function ejecutar() {
   try {
     const data = await backendFetch({ sid, instanceUrl: INSTANCE_URL, dias, businessLine, leadType, extraFields: customFields, fieldsFromSF: fieldsFromSF, fieldsManualValues: fieldsManualValues, camposFijosOcultos: camposFijosOcultos, reps, ids });
 
+    // v17: avisos del backend sobre la entrada
+    if (data.idsInvalidos && data.idsInvalidos.length) {
+      log(`⚠ ${data.idsInvalidos.length} ID(s) con formato inválido no se consultaron:`, 'warn');
+      data.idsInvalidos.slice(0, 10).forEach(id => log(`   ✗ ${id}`, 'warn'));
+    }
+    if (data.repsRepetidos && data.repsRepetidos.length) {
+      log(`⚠ Reps repetidos (se usó la primera cuota): ${data.repsRepetidos.join(', ')}`, 'warn');
+    }
+    if (data.idsSinConsultar > 0) {
+      log(`⚠ Corte por tiempo: ${data.idsSinConsultar} ID(s) no alcanzaron a consultarse. Córrelos aparte.`, 'err');
+    }
+
     // Sincronizar customFields con lo que efectivamente usó el backend (por si algún nombre inválido fue rechazado)
     if (data.extraFieldsUsados) {
       customFields = [...data.extraFieldsUsados];  // ya viene como array de objetos {name, mode, value?}
@@ -2086,8 +2098,9 @@ function renderAllocBar() {
   panel.classList.add('visible');
 }
 
-function renderPreTemplate(headers, rows) {
+function renderPreTemplate(headers, rows, conservarPagina) {
   const wrap = document.getElementById('tblWrap');
+  if (!conservarPagina) ptLimite = PAGINA_FILAS;
   if (!rows.length) {
     wrap.innerHTML = `<div class="empty"><div class="empty-ico">📋</div><p>El pre template aparecerá aquí después de ejecutar.</p></div>`;
     return;
@@ -2123,7 +2136,7 @@ function renderPreTemplate(headers, rows) {
     html += `<th title="${esc(h)}">${esc(h)}${badges}</th>`;
   });
   html += `</tr></thead><tbody>`;
-  rows.forEach(row => {
+  rows.slice(0, ptLimite).forEach(row => {
     html += `<tr>`;
     row.forEach((cell, i) => {
       const v = String(cell ?? '');
@@ -2161,6 +2174,7 @@ function renderPreTemplate(headers, rows) {
     });
     html += `</tr>`;
   });
+  if (rows.length > ptLimite) html += filaVerMas(PT_HEADERS.length, ptLimite, rows.length, 'verMasPreTemplate');
   html += `</tbody></table>`;
   wrap.innerHTML = html;
 }
@@ -2192,8 +2206,10 @@ function actualizarFuenteImport() {
     dot.classList.remove('empty');
     label.textContent = `Pre Template listo — ${preTemplateRows.length} filas · ${totalAsignados} asignados`;
     count.textContent = `${PT_HEADERS.length} columnas · Objeto: Lead`;
-    btn.disabled = false;
-    buildFieldMapping();
+    // v17: a mitad de un import el botón sigue apagado (antes se reactivaba aquí y
+    // un segundo clic creaba los Leads otra vez)
+    btn.disabled = importEnCurso;
+    if (!importEnCurso) buildFieldMapping();
     document.getElementById('badge-import').textContent = preTemplateRows.length;
   } else {
     dot.classList.add('empty');
@@ -2326,9 +2342,10 @@ function resetImportUI() {
 }
 
 function limpiarImport() {
+  if (importEnCurso) { toast('Hay un import en curso. Espera a que termine.', 'bad'); return; }
   resetImportUI();
   importResultRows = [];
-  leadFieldsCache = null;
+  // v17: el describe de Lead se conserva (se cachea por SID; ahorra ~7 s por import)
   if (preTemplateRows.length > 0) {
     PT_HEADERS.forEach(col => {
       const cell = document.getElementById(`fmap-ok-${col}`);
@@ -2349,9 +2366,11 @@ function updateProgress(total, processed, success, failed) {
 }
 
 async function obtenerCamposLead(sid) {
-  if (leadFieldsCache) return leadFieldsCache;
+  if (leadFieldsCache && leadFieldsCacheSid === sid) return leadFieldsCache;
   const data = await backendFetch({ action: 'describe', sid: sid, instanceUrl: INSTANCE_URL, object: 'Lead' });
+  if (data.sfSessionExpired) { const e = new Error(data.error); e.sfSessionExpired = true; throw e; }
   leadFieldsCache = data.fields || [];
+  leadFieldsCacheSid = sid;
   leadFieldsMetadata = data.fieldsMetadata || {};
   return leadFieldsCache;
 }
@@ -3131,7 +3150,51 @@ function validarFieldMapping(realFields) {
   return { obligatoriosInvalidos, opcionalesInvalidos };
 }
 
+// v17: valida las filas ANTES de mandarlas. Usa el describe de Lead si está
+// (obligatorios = no nillable, sin booleanos; tipos email/date/datetime; largo).
+// Devuelve [{ fila, campo, valor, motivo }] con fila contada desde 1.
+const RE_ID_USER    = /^005[a-zA-Z0-9]{12}([a-zA-Z0-9]{3})?$/;
+const RE_ID_CONTACT = /^003[a-zA-Z0-9]{12}([a-zA-Z0-9]{3})?$/;
+const RE_EMAIL      = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const RE_FECHA      = /^\d{4}-\d{2}-\d{2}$/;
+const RE_FECHA_HORA = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
+const TIPOS_CON_LARGO = new Set(['string', 'textarea', 'email', 'phone', 'url', 'picklist', 'multipicklist']);
+
+function validarFilasImport(sfHeaders, rows, meta) {
+  const metas = sfHeaders.map(h => {
+    if (!meta) return null;
+    const k = Object.keys(meta).find(x => x.toLowerCase() === String(h).toLowerCase());
+    return k ? meta[k] : null;
+  });
+  const requeridos = sfHeaders.map((h, j) => metas[j]
+    ? (metas[j].nillable === false && metas[j].createable !== false && metas[j].type !== 'boolean')
+    : (h === 'OwnerId' || h === 'LastName'));
+  const errores = [];
+  rows.forEach((r, i) => sfHeaders.forEach((h, j) => {
+    const v = String(r[j] ?? '');
+    const m = metas[j];
+    const err = motivo => errores.push({ fila: i + 1, campo: h, valor: v.slice(0, 40), motivo });
+    if (!v) { if (requeridos[j]) err('vacío (obligatorio)'); return; }
+    if (h === 'OwnerId' && !RE_ID_USER.test(v)) err('debe ser un User (005…) de 15 o 18 caracteres');
+    else if (h === 'Contact__c' && !RE_ID_CONTACT.test(v)) err('debe ser un Contact (003…) de 15 o 18 caracteres');
+    else if ((h === 'Email' || (m && m.type === 'email')) && !RE_EMAIL.test(v)) err('email no válido');
+    else if (m && m.type === 'date' && !RE_FECHA.test(v)) err('fecha con formato AAAA-MM-DD');
+    else if (m && m.type === 'datetime' && !RE_FECHA_HORA.test(v)) err('fecha y hora ISO (AAAA-MM-DDThh:mm:ssZ)');
+    else if (m && m.length && TIPOS_CON_LARGO.has(m.type) && v.length > m.length) err(`más de ${m.length} caracteres`);
+  }));
+  return errores;
+}
+
+function nuevoRequestId() {
+  const base = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+    : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  return base.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
+}
+
+const dormir = ms => new Promise(r => setTimeout(r, ms));
+
 async function ejecutarImport() {
+  if (importEnCurso) { toast('Ya hay un import en curso. Espera a que termine.', 'bad'); return; }
   if (!preTemplateRows.length) { toast('Sin datos.', 'bad'); return; }
 
   const sid = document.getElementById('sid').value.trim();
@@ -3143,246 +3206,376 @@ async function ejecutarImport() {
   if (action === 'upsert' && !extId) return toast('Para Upsert debes indicar el External ID Field.', 'bad');
 
   const btn = document.getElementById('importBtn');
+  importEnCurso = true;
   btn.disabled = true; btn.textContent = '⏳ Validando campos…';
-  document.getElementById('progressWrap').classList.add('visible');
-  document.getElementById('importLog').innerHTML = '';
-  importResultRows = [];
-  renderImportResult([]);
-  document.getElementById('dlResultBtn').disabled = true;
-  document.getElementById('copyResultBtn').disabled = true;
-
-  updateProgress(preTemplateRows.length, 0, 0, 0);
-  setImportStatus(`Validando campos en Salesforce…`, 'run');
-  ilog('🔍 Paso 1/2: Consultando campos reales del objeto Lead…', 'info');
-
+  const inicioMs = Date.now();
   try {
-    const realFields = await obtenerCamposLead(sid);
-    if (realFields.length === 0) {
-      ilog('⚠ Lead describe devolvió 0 campos. Continuando sin validación previa.', 'warn');
-    } else {
-      ilog(`✓ Lead tiene ${realFields.length} campos en Salesforce`, 'ok');
-      const { obligatoriosInvalidos, opcionalesInvalidos } = validarFieldMapping(realFields);
+    document.getElementById('progressWrap').classList.add('visible');
+    document.getElementById('importLog').innerHTML = '';
+    importResultRows = [];
+    renderImportResult([]);
+    document.getElementById('dlResultBtn').disabled = true;
+    document.getElementById('copyResultBtn').disabled = true;
 
-      // ── NUEVA REGLA: BLOQUEAR el import si hay CUALQUIER campo mapeado que no existe en Lead ──
-      // El usuario debe manualmente marcar los campos problemáticos como "Omitir columna"
-      // en el Field Mapping antes de poder ejecutar el import.
-      const todosInvalidos = [...obligatoriosInvalidos, ...opcionalesInvalidos];
+    updateProgress(preTemplateRows.length, 0, 0, 0);
+    setImportStatus(`Validando campos en Salesforce…`, 'run');
+    ilog('🔍 Paso 1/3: Consultando campos reales del objeto Lead…', 'info');
 
-      if (todosInvalidos.length > 0) {
-        ilog(`⛔ Import BLOQUEADO: ${todosInvalidos.length} campo(s) NO existen en Lead:`, 'err');
-        todosInvalidos.forEach(f => {
-          const tipo = obligatoriosInvalidos.some(x => x.csvCol === f.csvCol) ? 'OBLIGATORIO' : 'opcional';
-          ilog(`   • ${f.sfVal}  (CSV: ${f.csvCol}) [${tipo}]`, 'err');
-        });
+    try {
+      const realFields = await obtenerCamposLead(sid);
+      if (realFields.length === 0) {
+        ilog('⚠ Lead describe devolvió 0 campos. Continuando sin validación previa.', 'warn');
+      } else {
+        ilog(`✓ Lead tiene ${realFields.length} campos en Salesforce`, 'ok');
+        const { obligatoriosInvalidos, opcionalesInvalidos } = validarFieldMapping(realFields);
 
-        const listaSimple = todosInvalidos.map(f => `  • ${f.sfVal}`).join('\n');
-        alert(
-          `⛔ Campos no encontrados en Lead\n\n` +
-          `Los siguientes campos NO existen en el objeto Lead de Salesforce:\n\n` +
-          listaSimple +
-          `\n\n` +
-          `Para continuar con el import, ve al panel Field Mapping (a la izquierda) y cambia manualmente cada uno de estos campos a "— Omitir columna —".\n\n` +
-          `Si crees que estos campos SÍ deberían existir en Lead, contacta a tu admin de Salesforce.\n\n` +
-          `Import bloqueado hasta que resuelvas esto.`
-        );
-
-        setImportStatus(`Import bloqueado: ${todosInvalidos.length} campo(s) sin resolver en Field Mapping.`, 'err');
-        toast(`⛔ ${todosInvalidos.length} campo(s) requieren atención en Field Mapping.`, 'bad');
-        btn.disabled = false; btn.textContent = '📥 Ejecutar Import a Salesforce';
+        // Se bloquea si CUALQUIER campo mapeado no existe en Lead: el usuario lo marca
+        // como "Omitir columna" en el Field Mapping antes de importar.
+        const todosInvalidos = [...obligatoriosInvalidos, ...opcionalesInvalidos];
+        if (todosInvalidos.length > 0) {
+          ilog(`⛔ Import BLOQUEADO: ${todosInvalidos.length} campo(s) NO existen en Lead:`, 'err');
+          todosInvalidos.forEach(f => {
+            const tipo = obligatoriosInvalidos.some(x => x.csvCol === f.csvCol) ? 'OBLIGATORIO' : 'opcional';
+            ilog(`   • ${f.sfVal}  (CSV: ${f.csvCol}) [${tipo}]`, 'err');
+          });
+          const listaSimple = todosInvalidos.map(f => `  • ${f.sfVal}`).join('\n');
+          alert(
+            `⛔ Campos no encontrados en Lead\n\n` +
+            `Los siguientes campos NO existen en el objeto Lead de Salesforce:\n\n` +
+            listaSimple +
+            `\n\n` +
+            `Para continuar con el import, ve al panel Field Mapping (a la izquierda) y cambia manualmente cada uno de estos campos a "— Omitir columna —".\n\n` +
+            `Si crees que estos campos SÍ deberían existir en Lead, contacta a tu admin de Salesforce.\n\n` +
+            `Import bloqueado hasta que resuelvas esto.`
+          );
+          setImportStatus(`Import bloqueado: ${todosInvalidos.length} campo(s) sin resolver en Field Mapping.`, 'err');
+          toast(`⛔ ${todosInvalidos.length} campo(s) requieren atención en Field Mapping.`, 'bad');
+          return;
+        }
+        ilog('✓ Todos los campos activos validados correctamente contra Lead', 'ok');
+      }
+    } catch (err) {
+      if (err.sfSessionExpired) {
+        ilog(`✗ ${err.message}`, 'err');
+        setImportStatus('Tu SID venció. Pega uno nuevo y vuelve a intentar.', 'err');
         return;
       }
-
-      ilog('✓ Todos los campos activos validados correctamente contra Lead', 'ok');
+      ilog(`⚠ No se pudo validar campos: ${err.message}. Continuando…`, 'warn');
     }
-  } catch (err) {
-    ilog(`⚠ No se pudo validar campos: ${err.message}. Continuando…`, 'warn');
-  }
 
-  const fmapRows = document.querySelectorAll('#fmapBody tr');
-  const sfHeaders = [], colIndexes = [], colNames = [];
-  fmapRows.forEach((tr, i) => {
-    const sfVal = getMapeoValor(tr);  // respeta el modo custom si está activo
-    if (sfVal !== '--skip--' && sfVal !== '--custom--' && sfVal.trim()) {
-      sfHeaders.push(sfVal.trim());
-      colIndexes.push(i);
-      colNames.push(PT_HEADERS[i]);
-    }
-  });
-
-  if (!sfHeaders.length) {
-    toast('El field mapping está vacío.', 'bad');
-    btn.disabled = false; btn.textContent = '📥 Ejecutar Import a Salesforce';
-    return;
-  }
-
-  const rowsToSend = [];
-  for (let i = 0; i < preTemplateRows.length; i++) {
-    const row = preTemplateRows[i];
-    if (!Array.isArray(row)) continue;
-    const newRow = [];
-    for (let j = 0; j < colIndexes.length; j++) {
-      const idx = colIndexes[j];
-      newRow.push(row[idx] !== undefined && row[idx] !== null ? row[idx] : '');
-    }
-    rowsToSend.push(newRow);
-  }
-
-  const total = rowsToSend.length;
-  btn.textContent = '⏳ Enviando al servidor…';
-  ilog(`📤 Paso 2/2: Iniciando Bulk Import`, 'info');
-  ilog(`Objeto: ${object} | Acción: ${action} | Registros: ${total}`, 'info');
-  ilog('⏳ Puede tardar 30 seg a varios minutos…', 'warn');
-  setImportStatus(`Enviando ${total} registros al servidor…`, 'run');
-
-  try {
-    // ══════════════════════════════════════════════════════════════════
-    //  v14 · FLUJO ASÍNCRONO: arrancar → sondear → recuperar
-    //  Antes era UNA petición que esperaba hasta 6 min y moría con volumen
-    //  alto. Ahora ninguna llamada pasa de ~20s, sin importar el tamaño.
-    // ══════════════════════════════════════════════════════════════════
-
-    // ── PASO A: arrancar el job (~20s) — devuelve el jobId de inmediato ──
-    const inicio = await backendFetch({
-      action: 'importStart', sid, instanceUrl: INSTANCE_URL,
-      object, operation: action, externalId: extId,
-      headers: sfHeaders, rows: rowsToSend
+    const fmapRows = document.querySelectorAll('#fmapBody tr');
+    const sfHeaders = [], colIndexes = [], colNames = [];
+    fmapRows.forEach((tr, i) => {
+      const sfVal = getMapeoValor(tr);  // respeta el modo custom si está activo
+      if (sfVal !== '--skip--' && sfVal !== '--custom--' && sfVal.trim()) {
+        sfHeaders.push(sfVal.trim());
+        colIndexes.push(i);
+        colNames.push(PT_HEADERS[i]);
+      }
     });
 
-    const jobId = inicio.jobId;
-    ultimoJobIdRecuperable = jobId;
-    guardarJobPendiente({ jobId, object, operation: action, total, extId, sfHeaders, colIndexes, colNames });
-    mostrarJobIdEnVivo(jobId);
+    if (!sfHeaders.length) { toast('El field mapping está vacío.', 'bad'); return; }
 
-    ilog(`✓ Job creado: ${jobId}`, 'ok');
-    ilog(`  (guardado — si se cierra el navegador, podrás recuperarlo)`, 'info');
-    setImportStatus(`Salesforce está procesando ${total} registros…`, 'run');
-    btn.textContent = '⏳ Procesando en Salesforce…';
-
-    // ── PASO B: sondear el estado (~1s cada vez) ──
-    const data = await sondearJob(jobId, sid, total, action);
-
-    ilog(`✓ Estado final: ${data.jobState || 'N/A'}`, data.jobState === 'JobComplete' ? 'ok' : 'warn');
-    if (data.errorMessage) ilog(`⚠ Salesforce dice: ${data.errorMessage}`, 'err');
-
-    if (data.stillProcessing) {
-      ilog(`⏱ Sigue procesando tras la espera máxima. Nada se perdió:`, 'warn');
-      ilog(`   → Job ID guardado: ${jobId}`, 'warn');
-      ilog(`   → Usa "🔍 Recuperar por Job ID" en unos minutos.`, 'warn');
-    } else {
-      limpiarJobPendiente();
+    // v17: valores sin espacios a los lados (un " 005…" fallaba en Salesforce)
+    const rowsToSend = [];
+    for (let i = 0; i < preTemplateRows.length; i++) {
+      const row = preTemplateRows[i];
+      if (!Array.isArray(row)) continue;
+      rowsToSend.push(colIndexes.map(idx => String(row[idx] ?? '').trim()));
     }
 
-    const okRows = parseSfResultCsv(data.successCsv || '', true, action);
-    const failRows = parseSfResultCsv(data.failedCsv || '', false, action);
-    importResultRows = okRows.concat(failRows);
-    const success = okRows.length, failed = failRows.length;
-
-    // ── RETRY: guardar configuración del import base para reutilizar en retries ──
-    ultimoImportConfig = {
-      action, object, extId,
-      sfHeaders: [...sfHeaders],
-      colIndexes: [...colIndexes],
-      colNames: [...colNames]
-    };
-    historialRetries = [{
-      intento: 0,
-      jobId: data.jobId || 'N/A',
-      jobState: data.jobState || 'N/A',
-      total, exitosos: success, fallidos: failed,
-      timestamp: new Date().toLocaleString('es-MX')
-    }];
-
-    updateProgress(total, success + failed, success, failed);
-    document.getElementById('progPct').textContent = '100%';
-    document.getElementById('progBar').style.width = '100%';
-    ilog(`✓ Exitosos: ${success} | Fallidos: ${failed}`, success > 0 ? 'ok' : 'warn');
-
-    renderImportResult(importResultRows);
-    renderRetryHistory();
-    actualizarBotonRetry();
-
-    if (data.stillProcessing) {
-      setImportStatus(`Import aún procesando en Salesforce. Usa "Recuperar por Job ID": ${data.jobId}`, 'run');
-      toast(`⏱ El import sigue corriendo. Recupéralo con el Job ID en unos minutos.`, 'bad');
-      // Pre-cargar el Job ID en el modal de recuperar para que sea 1 clic
-      const recInput = document.getElementById('recuperarJobId');
-      if (recInput) recInput.value = data.jobId || '';
-    } else {
-      setImportStatus(`Import completado: ${success} exitosos, ${failed} fallidos.`, failed === 0 && success > 0 ? 'ok' : 'err');
-      toast(`✅ Import completo: ${success} OK · ${failed} errores`, failed === 0 && success > 0 ? 'ok' : 'bad');
+    // ── v17 · Paso 2: validar las filas antes de enviar ──
+    ilog('🔎 Paso 2/3: Revisando las filas antes de enviarlas…', 'info');
+    const errores = validarFilasImport(sfHeaders, rowsToSend, leadFieldsMetadata);
+    if (errores.length) {
+      const filasMalas = new Set(errores.map(e => e.fila)).size;
+      ilog(`⛔ Import BLOQUEADO: ${filasMalas} fila(s) con datos que Salesforce rechazaría:`, 'err');
+      errores.slice(0, 50).forEach(e => ilog(`   • Fila ${e.fila} · ${e.campo}: ${e.motivo}${e.valor ? ` ("${e.valor}")` : ''}`, 'err'));
+      if (errores.length > 50) ilog(`   … y ${errores.length - 50} problema(s) más`, 'err');
+      alert(`⛔ ${filasMalas} fila(s) no se pueden importar así.\n\n` +
+        errores.slice(0, 10).map(e => `• Fila ${e.fila} · ${e.campo}: ${e.motivo}`).join('\n') +
+        (errores.length > 10 ? `\n… y ${errores.length - 10} más (ver el log).` : '') +
+        `\n\nCorrige el pre-template (o marca la columna como "Omitir") y vuelve a intentar.`);
+      setImportStatus(`Import bloqueado: ${filasMalas} fila(s) con errores. Revisa el log.`, 'err');
+      return;
     }
-    document.getElementById('dlResultBtn').disabled = importResultRows.length === 0;
-    document.getElementById('copyResultBtn').disabled = importResultRows.length === 0;
-    document.getElementById('badge-import').textContent = `${success} ✓`;
+    ilog(`✓ ${rowsToSend.length} fila(s) revisadas, sin errores`, 'ok');
 
+    const cfg = { action, object, extId, sfHeaders: [...sfHeaders], colIndexes: [...colIndexes], colNames: [...colNames] };
+    const total = rowsToSend.length;
+    btn.textContent = '⏳ Enviando al servidor…';
+    ilog(`📤 Paso 3/3: Iniciando Bulk Import`, 'info');
+    ilog(`Objeto: ${object} | Acción: ${action} | Registros: ${total}`, 'info');
+    setImportStatus(`Enviando ${total} registros al servidor…`, 'run');
+
+    const r = await correrImportBulk({ sid, cfg, rows: rowsToSend, total, btn });
+    cfg.jobIds = r.jobIds || [];
+    ultimoImportConfig = cfg;
+    mostrarResultadoImport(r, { total, intento: 0, inicioMs });
   } catch (err) {
     console.error(err);
     ilog(`✗ Error: ${err.message}`, 'err');
     setImportStatus('Error en el import. Revisa el log.', 'err');
     toast('❌ ' + err.message, 'bad');
+  } finally {
+    importEnCurso = false;
+    btn.textContent = '📥 Ejecutar Import a Salesforce';
+    btn.disabled = preTemplateRows.length === 0;
   }
-
-  btn.disabled = false; btn.textContent = '📥 Ejecutar Import a Salesforce';
 }
 
-
 // ══════════════════════════════════════════════════════════════════
-//  v14 · IMPORT ASÍNCRONO — sondeo, persistencia y recuperación
+//  v17 · IMPORT EN PARALELO — arrancar → sondear → resultados
 //
-//  El backend ya no espera (eso reventaba el límite de 6 min de Apps
-//  Script). La espera vive aquí, partida en consultas de ~1 segundo.
+//  El backend parte la carga en varios jobs (Bulk API 2.0 procesa cada job
+//  en serie). Aquí se sondean todos juntos, se suma el progreso y al final
+//  se traen los resultados unidos. Las filas con UNABLE_TO_LOCK_ROW las
+//  reintenta el backend una vez, en un job aparte que también se espera aquí.
 // ══════════════════════════════════════════════════════════════════
-const POLL_INTERVALO_MS = 10000;    // cada cuánto preguntamos
+const POLL_RAPIDO_MS    = 5000;     // los primeros 2 min
+const POLL_LENTO_MS     = 15000;    // después, si el job tarda
+const POLL_CAMBIO_MS    = 120000;
 const POLL_MAX_MINUTOS  = 30;       // techo: después ofrecemos recuperar luego
-const JOB_STORAGE_KEY   = 'catalyst_job_pendiente';
+const JOB_STORAGE_KEY   = 'catalyst_job_pendiente';   // v16 (una sola llave para todos)
+const JOB_STORAGE_PREFIJO = 'catalyst_job_pendiente:';  // v17: una por usuario
 
-// ── Sondeo: pregunta el estado hasta que termine ──
-async function sondearJob(jobId, sid, total, action) {
-  const maxIntentos = Math.floor((POLL_MAX_MINUTOS * 60000) / POLL_INTERVALO_MS);
+// Una petición que crea Leads: si se pierde la respuesta, se reintenta con el MISMO
+// clientRequestId y el backend devuelve los jobs que ya creó (nunca duplica).
+async function iniciarConReintento(payload) {
+  for (let intento = 1; ; intento++) {
+    try {
+      return await backendFetch(payload);
+    } catch (e) {
+      const enCreacion = /ya se está creando/.test(e.message);
+      const deRed = !e.message || e instanceof TypeError || /^HTTP \d/.test(e.message);
+      if (intento >= 3 || !(deRed || enCreacion)) throw e;
+      ilog(`⚠ ${enCreacion ? 'El servidor aún está creando el import' : 'Sin respuesta al crear el import'}; reintento ${intento + 1}/3 con el mismo identificador (no duplica)…`, 'warn');
+      await dormir(5000);
+    }
+  }
+}
+
+async function correrImportBulk({ sid, cfg, rows, total, btn }) {
+  const inicio = await iniciarConReintento({
+    action: 'importStart', sid, instanceUrl: INSTANCE_URL,
+    object: cfg.object, operation: cfg.action, externalId: cfg.extId,
+    headers: cfg.sfHeaders, rows, clientRequestId: nuevoRequestId()
+  });
+
+  const jobIds = (inicio.jobIds && inicio.jobIds.length) ? inicio.jobIds : [inicio.jobId];
+  const loteId = inicio.loteId || '';
+  ultimoJobIdRecuperable = loteId || jobIds[0];
+  guardarJobPendiente({ loteId, jobIds, object: cfg.object, operation: cfg.action, total, cfg });
+  mostrarJobIdEnVivo(loteId || jobIds[0]);
+
+  if (inicio.repetido) ilog('ℹ El servidor ya había creado este import: se usan los mismos jobs (sin duplicar).', 'info');
+  ilog(`✓ ${jobIds.length} job(s) en paralelo: ${(inicio.jobs || []).map(j => j.filas).join(' + ') || total} filas`, 'ok');
+  jobIds.forEach(id => ilog(`   · ${id}`, 'info'));
+  if (loteId) ilog(`  Lote ${loteId} guardado: si se cierra el navegador, podrás recuperarlo.`, 'info');
+
+  const noEnviadas = filasNoEnviadasAResultado(inicio.filasNoEnviadas || [], cfg, inicio.errorNoEnviadas);
+  if (noEnviadas.length) ilog(`⚠ ${noEnviadas.length} fila(s) NO se enviaron (su job no se pudo cerrar y se abortó). Quedan como fallidas para reintentar.`, 'warn');
+
+  setImportStatus(`Salesforce está procesando ${inicio.total ?? total} registros…`, 'run');
+  if (btn) btn.textContent = '⏳ Procesando en Salesforce…';
+
+  const fin = await sondearJob({ jobIds, loteId, sid, total: inicio.total ?? total });
+  if (fin.motivo !== 'terminado') return { estado: 'pendiente', motivo: fin.motivo, error: fin.error, jobIds, loteId, noEnviadas };
+
+  const data = await descargarResultados({ sid, jobIds, loteId, cierreAutomatico: true, reintentarLock: true });
+  const mapa = mapaApiAPt(cfg);
+  let okRows = parseSfResultCsv(data.successCsv || '', 'ok', cfg.action, mapa);
+  let failRows = parseSfResultCsv(data.failedCsv || '', 'fail', cfg.action, mapa)
+    .concat(parseSfResultCsv(data.unprocessedCsv || '', 'unprocessed', cfg.action, mapa))
+    .concat(noEnviadas);
+  const avisos = [];
+  if (data.reintentoLockError) avisos.push(data.reintentoLockError);
+
+  // ── Reintento por bloqueo (lo lanzó el backend; aquí solo se espera) ──
+  if (data.reintentoLock && data.reintentoLock.jobId) {
+    const rl = data.reintentoLock;
+    ilog(`🔁 ${rl.filas} fila(s) chocaron por bloqueo (UNABLE_TO_LOCK_ROW): se reintentan solas en el job ${rl.jobId}…`, 'warn');
+    guardarJobPendiente({ loteId: '', jobIds: [rl.jobId], object: cfg.object, operation: cfg.action, total: rl.filas, cfg, nota: 'reintento por bloqueo' });
+    const fin2 = await sondearJob({ jobIds: [rl.jobId], loteId: '', sid, total: rl.filas, silencioProgreso: true });
+    if (fin2.motivo === 'terminado') {
+      const d2 = await descargarResultados({ sid, jobIds: [rl.jobId], loteId: '', cierreAutomatico: true, esReintentoLock: true });
+      const ok2 = parseSfResultCsv(d2.successCsv || '', 'ok', cfg.action, mapa);
+      const fail2 = parseSfResultCsv(d2.failedCsv || '', 'fail', cfg.action, mapa)
+        .concat(parseSfResultCsv(d2.unprocessedCsv || '', 'unprocessed', cfg.action, mapa));
+      ok2.forEach(r => { r.__Action = `${r.__Action} (reintento por bloqueo)`; });
+      okRows = okRows.concat(ok2);
+      failRows = failRows.concat(fail2);
+      ilog(`✓ Reintento por bloqueo: ${ok2.length} OK · ${fail2.length} fallidas`, ok2.length ? 'ok' : 'warn');
+      if (d2.resultsError) avisos.push(d2.resultsError);
+    } else {
+      avisos.push(`${rl.filas} fila(s) siguen en el reintento por bloqueo (job ${rl.jobId}). Recupéralas con ese Job ID.`);
+      return { estado: 'terminado', okRows, failRows, data, jobIds, loteId, avisos, pendienteLock: rl.jobId };
+    }
+  }
+  return { estado: 'terminado', okRows, failRows, data, jobIds, loteId, avisos };
+}
+
+// API Name enviado → columna del pre-template (el resultado de Salesforce trae los API Names)
+function mapaApiAPt(cfg) {
+  const m = {};
+  if (cfg && cfg.sfHeaders) cfg.sfHeaders.forEach((h, j) => { m[h] = cfg.colNames[j]; });
+  return m;
+}
+
+function filasNoEnviadasAResultado(filas, cfg, motivo) {
+  return filas.map(vals => {
+    const row = {};
+    IMPORT_RESULT_HEADERS.forEach(h => { row[h] = ''; });
+    cfg.colNames.forEach((c, j) => { row[c] = vals[j] ?? ''; });
+    row.__Status = 'Failed';
+    row.__Errors = 'NO_ENVIADA: ' + String(motivo || 'el job no se pudo cerrar y se abortó').replace(/\s*\r?\n\s*/g, ' ');
+    return row;
+  });
+}
+
+// Pinta el resultado de un import o un retry (tabla, historial, estado y job pendiente).
+function mostrarResultadoImport(r, { total, intento, inicioMs }) {
+  const ref = r.loteId || (r.jobIds || [])[0] || '';
+  if (r.estado === 'pendiente') {
+    const motivos = {
+      sfSesion:     `Tu SID de Salesforce venció. El import sigue en Salesforce: pega un SID nuevo y usa "🔍 Recuperar" con ${ref}.`,
+      googleSesion: `Tu sesión de Google venció. El import sigue en Salesforce: vuelve a entrar y usa "🔍 Recuperar" con ${ref}.`,
+      tiempo:       `Sigue procesando tras ${POLL_MAX_MINUTOS} min. Nada se perdió: usa "🔍 Recuperar" con ${ref} en unos minutos.`
+    };
+    const msg = motivos[r.motivo] || `El import quedó sin terminar. Usa "🔍 Recuperar" con ${ref}.`;
+    ilog(`⏱ ${msg}`, 'warn');
+    setImportStatus(msg, 'run');
+    toast('⏱ El import sigue en Salesforce. Recupéralo con el Lote o Job ID.', 'bad');
+    const recInput = document.getElementById('recuperarJobId');
+    if (recInput) recInput.value = ref;
+    return;
+  }
+
+  const { okRows, failRows, data } = r;
+  if (intento === 0) {
+    importResultRows = okRows.concat(failRows);
+    historialRetries = [];
+  } else {
+    mergeRetryResult(okRows, failRows, intento, ultimoImportConfig ? ultimoImportConfig.colNames : null);
+  }
+  const success = okRows.length, failed = failRows.length;
+  historialRetries.push({
+    intento,
+    jobId: r.loteId || (r.jobIds || []).join(', ') || 'N/A',
+    jobState: data.jobState || 'N/A',
+    total, exitosos: success, fallidos: failed,
+    timestamp: new Date().toLocaleString('es-MX')
+  });
+
+  ilog(`✓ Estado final: ${data.jobState || 'N/A'}`, data.jobState === 'JobComplete' ? 'ok' : 'warn');
+  if (data.errorMessage) ilog(`⚠ Salesforce dice: ${data.errorMessage}`, 'err');
+  ilog(`✓ Exitosos: ${success} | Fallidos: ${failed}`, success > 0 ? 'ok' : 'warn');
+  if (inicioMs) {
+    const seg = Math.round((Date.now() - inicioMs) / 1000);
+    ilog(`⏱ Tiempo total: ${Math.floor(seg / 60)} min ${seg % 60} s · retries de Salesforce: ${data.retries || 0} · Apex: ${Math.round((data.apexProcessingTime || 0) / 1000)} s · procesamiento: ${Math.round((data.totalProcessingTime || 0) / 1000)} s`, 'info');
+  }
+  (r.avisos || []).forEach(a => ilog(`⚠ ${a}`, 'warn'));
+
+  const hayErrorResultados = !!data.resultsError;
+  if (hayErrorResultados) {
+    ilog(`⚠ ${data.resultsError}`, 'err');
+    ultimoImportConfig = null;   // la tabla está incompleta: no se reintenta sobre ella
+  } else if (!r.pendienteLock) {
+    limpiarJobPendiente();
+  }
+
+  const totalFallidos = importResultRows.filter(x => x.__Status === 'Failed').length;
+  const totalOk = importResultRows.filter(x => x.__Status === 'Succeeded').length;
+  updateProgress(importResultRows.length, importResultRows.length, totalOk, totalFallidos);
+  document.getElementById('progPct').textContent = '100%';
+  document.getElementById('progBar').style.width = '100%';
+
+  renderImportResult(importResultRows);
+  renderRetryHistory();
+  actualizarBotonRetry();
+
+  if (hayErrorResultados) {
+    setImportStatus(`Resultados incompletos: ${data.resultsError}`, 'err');
+    toast('⚠ No se pudieron bajar todos los resultados. Usa Recuperar.', 'bad');
+  } else if (intento === 0) {
+    setImportStatus(`Import completado: ${success} exitosos, ${failed} fallidos.`, failed === 0 && success > 0 ? 'ok' : 'err');
+    toast(`✅ Import completo: ${success} OK · ${failed} errores`, failed === 0 && success > 0 ? 'ok' : 'bad');
+  } else {
+    setImportStatus(`Retry #${intento} completado. Total actual: ${totalOk} OK · ${totalFallidos} pendientes.`, totalFallidos === 0 ? 'ok' : 'err');
+    toast(`✅ Retry #${intento}: +${success} recuperados, ${failed} siguen fallando`, success > 0 ? 'ok' : 'bad');
+  }
+  document.getElementById('dlResultBtn').disabled = importResultRows.length === 0;
+  document.getElementById('copyResultBtn').disabled = importResultRows.length === 0;
+  document.getElementById('badge-import').textContent = `${totalOk} ✓`;
+}
+
+// ── Sondeo: pregunta el estado de TODOS los jobs hasta que terminen ──
+// Mide tiempo, no intentos. Sin alerts: rate limit = esperar; sesión vencida = parar
+// y conservar el job pendiente (nunca se cierra la sesión ni se pierde el Job ID).
+async function sondearJob({ jobIds, loteId, sid, total, silencioProgreso }) {
+  const inicio = Date.now();
   let ultimoLogueado = -1;
-
-  for (let intento = 0; intento < maxIntentos; intento++) {
-    await new Promise(r => setTimeout(r, POLL_INTERVALO_MS));
+  while (Date.now() - inicio < POLL_MAX_MINUTOS * 60000) {
+    await dormir((Date.now() - inicio) < POLL_CAMBIO_MS ? POLL_RAPIDO_MS : POLL_LENTO_MS);
 
     let est;
     try {
-      est = await backendFetch({ action: 'jobStatus', sid, instanceUrl: INSTANCE_URL, jobId });
+      est = await backendFetch({ action: 'jobStatus', sid, instanceUrl: INSTANCE_URL, jobIds, loteId }, { silencioso: true });
     } catch (e) {
+      if (e.sfSessionExpired) return { motivo: 'sfSesion', error: e };
+      if (e.authError || e.notAuthorized) return { motivo: 'googleSesion', error: e };
+      if (e.rateLimited) { ilog('⏱ Límite de consultas alcanzado; espero un minuto y sigo…', 'warn'); await dormir(60000); continue; }
       // Un fallo de red puntual no debe tumbar el import: se reintenta.
       ilog(`⚠ No se pudo consultar el estado (reintentando): ${e.message}`, 'warn');
       continue;
     }
 
-    // Progreso REAL de Salesforce (antes la barra era una estimación)
+    // Progreso REAL de Salesforce, sumado entre todos los jobs
     const proc = est.processed || 0;
-    updateProgress(total, proc, Math.max(0, proc - (est.failed || 0)), est.failed || 0);
-
+    if (!silencioProgreso) updateProgress(total, proc, Math.max(0, proc - (est.failed || 0)), est.failed || 0);
     if (proc !== ultimoLogueado) {
-      ilog(`⏳ Procesados: ${proc} de ${total}` + (est.failed ? ` · ${est.failed} fallidos` : ''), 'info');
-      setImportStatus(`Procesando… ${proc} de ${total}`, 'run');
+      const corriendo = (est.jobs || []).filter(j => !['JobComplete', 'Failed', 'Aborted'].includes(j.state)).length;
+      ilog(`⏳ Procesados: ${proc} de ${total}` + (est.failed ? ` · ${est.failed} fallidos` : '') +
+        ((est.jobs || []).length > 1 ? ` · ${corriendo} de ${est.jobs.length} jobs corriendo` : ''), 'info');
+      if (!silencioProgreso) setImportStatus(`Procesando… ${proc} de ${total}`, 'run');
       ultimoLogueado = proc;
     }
 
     if (est.terminado) {
-      ilog(`✓ Salesforce terminó (${est.jobState}). Descargando resultados…`, 'ok');
-      // Una sola llamada pesada, al final: trae los CSV de resultado
-      // cierreAutomatico: esto es el cierre normal del import, no una
-      // recuperación manual. El backend lo audita como "import" para que
-      // las métricas del panel lo cuenten.
-      const full = await backendFetch({ action: 'recuperarJob', sid, instanceUrl: INSTANCE_URL, jobId, cierreAutomatico: true });
-      full.stillProcessing = false;
-      return full;
+      const seg = Math.round((Date.now() - inicio) / 1000);
+      ilog(`✓ Salesforce terminó (${est.jobState}) en ${seg} s. Descargando resultados…`, 'ok');
+      return { motivo: 'terminado', estado: est };
     }
   }
-
-  // Se agotó el techo de espera: el job SIGUE vivo en Salesforce.
-  return { jobId, jobState: 'InProgress', stillProcessing: true, successCsv: '', failedCsv: '', processed: 0, failed: 0, errorMessage: '' };
+  return { motivo: 'tiempo' };
 }
 
-// ── Persistencia: sobrevive a cerrar el navegador ──
+// La única llamada pesada, al final. Se reintenta 3 veces: si falla, el job sigue
+// guardado como pendiente y se recupera después (antes un fallo aquí lo perdía).
+async function descargarResultados(params) {
+  let ultimoError = null;
+  for (let intento = 1; intento <= 3; intento++) {
+    try {
+      const data = await backendFetch(Object.assign({ action: 'recuperarJob', sid: params.sid, instanceUrl: INSTANCE_URL }, params), { silencioso: true });
+      if (!data.stillProcessing) return data;
+      ultimoError = new Error('Salesforce aún no termina');
+    } catch (e) {
+      if (e.sfSessionExpired || e.authError || e.notAuthorized) throw e;
+      ultimoError = e;
+    }
+    ilog(`⚠ No se pudieron traer los resultados (intento ${intento}/3): ${ultimoError.message}`, 'warn');
+    if (intento < 3) await dormir(e429(ultimoError) ? 60000 : 5000);
+  }
+  throw new Error(`No se pudieron traer los resultados: ${ultimoError.message}. El import sí corrió: usa "🔍 Recuperar".`);
+}
+function e429(e) { return e && e.rateLimited; }
+
+// ── Persistencia: sobrevive a cerrar el navegador. Una llave por usuario. ──
+function llaveJobPendiente() { return JOB_STORAGE_PREFIJO + (loggedInEmail || 'anon'); }
+
 function guardarJobPendiente(info) {
   try {
-    localStorage.setItem(JOB_STORAGE_KEY, JSON.stringify({
+    localStorage.setItem(llaveJobPendiente(), JSON.stringify({
       ...info,
       fecha: new Date().toISOString(),
       fechaLegible: new Date().toLocaleString('es-MX')
@@ -3391,14 +3584,16 @@ function guardarJobPendiente(info) {
 }
 
 function limpiarJobPendiente() {
-  try { localStorage.removeItem(JOB_STORAGE_KEY); } catch (e) {}
+  try { localStorage.removeItem(llaveJobPendiente()); localStorage.removeItem(JOB_STORAGE_KEY); } catch (e) {}
 }
 
 function leerJobPendiente() {
   try {
-    const raw = localStorage.getItem(JOB_STORAGE_KEY);
+    let raw = localStorage.getItem(llaveJobPendiente());
+    if (!raw) raw = localStorage.getItem(JOB_STORAGE_KEY);   // pendiente guardado por la v16
     if (!raw) return null;
     const info = JSON.parse(raw);
+    if (!info.jobIds && info.jobId) info.jobIds = [info.jobId];
     // Salesforce conserva los jobs ~7 días: más viejo que eso, ya no sirve
     if (Date.now() - new Date(info.fecha).getTime() > 7 * 24 * 3600 * 1000) {
       limpiarJobPendiente();
@@ -3408,7 +3603,7 @@ function leerJobPendiente() {
   } catch (e) { return null; }
 }
 
-// ── Muestra el Job ID en vivo, con botón de copiar ──
+// ── Muestra el Lote / Job ID en vivo, con botón de copiar ──
 function mostrarJobIdEnVivo(jobId) {
   const cont = document.getElementById('jobIdLive');
   if (!cont) return;
@@ -3419,7 +3614,7 @@ function mostrarJobIdEnVivo(jobId) {
 function copiarJobId() {
   const v = document.getElementById('jobIdLiveValue').textContent;
   navigator.clipboard.writeText(v)
-    .then(() => toast('📋 Job ID copiado', 'ok'))
+    .then(() => toast('📋 Copiado', 'ok'))
     .catch(() => toast('No se pudo copiar', 'bad'));
 }
 
@@ -3430,22 +3625,25 @@ function revisarJobPendiente() {
   if (!info || !banner) return;
   document.getElementById('jobPendienteTexto').innerHTML =
     `Import pendiente del <strong>${esc(info.fechaLegible)}</strong> — ` +
-    `${esc(String(info.object || 'Lead'))}, ${info.total || '?'} registros`;
+    `${esc(String(info.object || 'Lead'))}, ${esc(info.total || '?')} registros` +
+    (info.nota ? ` (${esc(info.nota)})` : '');
   banner.classList.add('visible');
-  banner.dataset.jobid = info.jobId;
+  banner.dataset.jobid = info.loteId || (info.jobIds || [])[0] || '';
 }
 
+// v17: NO borra el pendiente al abrir: solo se borra cuando la recuperación sale bien.
 function recuperarJobPendiente() {
   const banner = document.getElementById('jobPendienteBanner');
-  const jobId = banner ? banner.dataset.jobid : '';
-  if (!jobId) return;
-  descartarJobPendiente();
+  const ref = banner ? banner.dataset.jobid : '';
+  if (!ref) return;
+  if (banner) banner.classList.remove('visible');
   switchTab('import');
-  ultimoJobIdRecuperable = jobId;
+  ultimoJobIdRecuperable = ref;
   abrirModalRecuperar();
 }
 
 function descartarJobPendiente() {
+  if (!confirm('¿Olvidar este import pendiente?\n\nEl job sigue en Salesforce; solo deja de aparecer el aviso.')) return;
   limpiarJobPendiente();
   const banner = document.getElementById('jobPendienteBanner');
   if (banner) banner.classList.remove('visible');
@@ -3578,9 +3776,9 @@ function renderPanelAdmin(d) {
     ? '<div class="adm-empty">✓ Sin imports huérfanos. Todo lo iniciado tiene su resultado registrado.</div>'
     : hu.map(o =>
         `<div class="adm-huerfano">` +
-        `<span class="hj">${esc(o.jobId)}</span>` +
+        `<span class="hj">${esc(o.loteId || o.jobId)}</span>` +
         `<span class="hm">${esc(o.email)} · ${admFecha(o.ts)} · hace ${o.edadMin < 60 ? o.edadMin + ' min' : Math.round(o.edadMin / 60) + ' h'}${o.edadMin < 15 ? ' · <strong>podría seguir en curso</strong>' : ''}</span>` +
-        `<button onclick="recuperarHuerfano('${esc(o.jobId)}')">🔍 Recuperar</button>` +
+        `<button onclick="recuperarHuerfano('${esc(o.loteId || o.jobId)}')">🔍 Recuperar</button>` +
         `</div>`
       ).join('');
 
@@ -3680,9 +3878,15 @@ function recuperarHuerfano(jobId) {
   ultimoJobIdRecuperable = jobId;
   abrirModalRecuperar();
 }
-function parseSfResultCsv(csvText, isOk, operation) {
+// Convierte un CSV de resultado de Bulk API 2.0 en filas de la tabla.
+// tipo: 'ok' (o true) | 'fail' (o false) | 'unprocessed'.
+// v17: `mapa` traduce el API Name enviado a la columna del pre-template (si una columna
+// se mapeó a "Otro API Name", antes el resultado salía vacío en esa columna).
+function parseSfResultCsv(csvText, tipo, operation, mapa) {
   if (!csvText || !csvText.trim()) return [];
-  const records = parseCsvRecords(csvText);
+  if (tipo === true) tipo = 'ok';
+  if (tipo === false) tipo = 'fail';
+  const records = parseDelimitado(csvText, ',');
   if (records.length < 2) return [];
   const csvHdrs = records[0];
   const result = [];
@@ -3692,11 +3896,15 @@ function parseSfResultCsv(csvText, isOk, operation) {
   for (let i = 1; i < records.length; i++) {
     const vals = records[i];
     const obj = {};
-    csvHdrs.forEach((h, idx) => { obj[h] = vals[idx] !== undefined ? vals[idx] : ''; });
+    csvHdrs.forEach((h, idx) => {
+      const v = vals[idx] !== undefined ? vals[idx] : '';
+      obj[h] = v;
+      if (mapa && mapa[h] && !(mapa[h] in obj)) obj[mapa[h]] = v;
+    });
     const row = {};
     IMPORT_RESULT_HEADERS.forEach(h => { row[h] = obj[h] || ''; });
     row['__Id'] = obj['sf__Id'] || '';
-    if (isOk) {
+    if (tipo === 'ok') {
       row['__Status'] = 'Succeeded';
       row['__Action'] = (operation === 'upsert') ? (obj['sf__Created'] === 'true' ? 'Inserted' : 'Updated') : defaultLabel;
       row['__Errors'] = '';
@@ -3704,42 +3912,82 @@ function parseSfResultCsv(csvText, isOk, operation) {
       row['__Status'] = 'Failed';
       row['__Action'] = '';
       // El error en un solo renglón: así cabe en una celda al copiar o exportar
-      row['__Errors'] = (obj['sf__Error'] || 'Unknown error').replace(/\s*\r?\n\s*/g, ' ');
+      row['__Errors'] = tipo === 'unprocessed'
+        ? 'UNPROCESSED: Salesforce no llegó a procesar esta fila (el job se detuvo antes). Reinténtala.'
+        : (obj['sf__Error'] || 'Unknown error').replace(/\s*\r?\n\s*/g, ' ');
     }
     result.push(row);
   }
   return result;
 }
 
-// Lee el CSV completo respetando comillas: un salto de línea dentro de un valor entre comillas
-// (p. ej. un sf__Error de dos renglones) ya no parte la fila en dos. Ignora las líneas vacías.
-function parseCsvRecords(text) {
+// v17 · EL parser de CSV/TSV de la tool (reemplaza a parseTsv, parseCsvFullText,
+// parseCsvRowWithDelim y parseCsvRecords). Respeta comillas como Excel/Sheets: una
+// celda entre comillas puede traer el delimitador, saltos de línea y "" escapadas.
+// Una comilla a mitad de una celda sin comillas es texto normal (p. ej. 5" o O"Brien).
+// Ignora líneas vacías y el BOM.
+function parseDelimitado(text, delim = ',') {
+  text = String(text ?? '').replace(/^﻿/, '');
   const rows = [];
-  let row = [], cur = '', inQ = false;
+  let row = [], cur = '', inQ = false, inicioCampo = true;
+  const cerrarCampo = () => { row.push(cur); cur = ''; inicioCampo = true; };
   const cerrarFila = () => {
-    row.push(cur); cur = '';
+    cerrarCampo();
     if (row.length > 1 || row[0].trim()) rows.push(row);
     row = [];
   };
   for (let i = 0; i < text.length; i++) {
     const c = text[i];
     if (inQ) {
-      if (c === '"' && text[i+1] === '"') { cur += '"'; i++; }
-      else if (c === '"') inQ = false;
+      if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else inQ = false; }
       else cur += c;
-    } else if (c === '"') inQ = true;
-    else if (c === ',') { row.push(cur); cur = ''; }
+    } else if (c === '"' && inicioCampo) { inQ = true; inicioCampo = false; }
+    else if (c === delim) cerrarCampo();
     else if (c === '\n' || c === '\r') {
-      if (c === '\r' && text[i+1] === '\n') i++;
+      if (c === '\r' && text[i + 1] === '\n') i++;
       cerrarFila();
-    } else cur += c;
+    } else { cur += c; inicioCampo = false; }
   }
-  cerrarFila();
+  if (cur !== '' || row.length || inQ) cerrarFila();
   return rows;
 }
 
-function renderImportResult(rows) {
+// Delimitador de un CSV: el que más aparece fuera de comillas en la primera fila.
+function detectarDelimitador(text) {
+  const cuenta = { ',': 0, ';': 0, '\t': 0 };
+  let inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"') inQ = !inQ;
+    else if (!inQ && (c === '\n' || c === '\r')) break;
+    else if (!inQ && c in cuenta) cuenta[c]++;
+  }
+  return Object.keys(cuenta).reduce((a, b) => (cuenta[b] > cuenta[a] ? b : a), ',');
+}
+
+// v17: los CSV que guarda Excel en Windows vienen en ANSI (Windows-1252), no en UTF-8:
+// "Peña" salía "Pe�a". Se intenta UTF-8 estricto y, si falla, Windows-1252.
+async function leerTextoArchivo(file) {
+  const buf = await file.arrayBuffer();
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+  catch (e) { return new TextDecoder('windows-1252').decode(buf); }
+}
+
+// v17: las tablas grandes se pintan por páginas (antes se pintaban todas las filas)
+const PAGINA_FILAS = 200;
+let resLimite = PAGINA_FILAS;
+let ptLimite  = PAGINA_FILAS;
+function filaVerMas(colspan, mostradas, total, fn) {
+  return `<tr><td colspan="${colspan}" style="text-align:center; padding:8px;">` +
+    `<button class="btn-icon" onclick="${fn}()">Mostrar ${Math.min(PAGINA_FILAS, total - mostradas)} más</button> ` +
+    `<span style="color:var(--muted); font-size:10.5px;">(${mostradas} de ${total})</span></td></tr>`;
+}
+function verMasResultado() { resLimite += PAGINA_FILAS; renderImportResult(importResultRows, true); }
+function verMasPreTemplate() { ptLimite += PAGINA_FILAS; renderPreTemplate(PT_HEADERS, preTemplateRows, true); }
+
+function renderImportResult(rows, conservarPagina) {
   const wrap = document.getElementById('resTblWrap');
+  if (!conservarPagina) resLimite = PAGINA_FILAS;
   if (!rows.length) {
     wrap.innerHTML = `<div class="empty"><div class="empty-ico">📥</div><p>El resultado del import aparecerá aquí.</p></div>`;
     return;
@@ -3747,7 +3995,7 @@ function renderImportResult(rows) {
   let html = `<table class="res-import"><thead><tr>`;
   IMPORT_RESULT_HEADERS.forEach(h => { html += `<th title="${esc(h)}">${esc(h)}</th>`; });
   html += `</tr></thead><tbody>`;
-  rows.forEach(row => {
+  rows.slice(0, resLimite).forEach(row => {
     const isOk = row['__Status'] === 'Succeeded';
     html += `<tr>`;
     IMPORT_RESULT_HEADERS.forEach(h => {
@@ -3760,6 +4008,7 @@ function renderImportResult(rows) {
     });
     html += `</tr>`;
   });
+  if (rows.length > resLimite) html += filaVerMas(IMPORT_RESULT_HEADERS.length, resLimite, rows.length, 'verMasResultado');
   html += `</tbody></table>`;
   wrap.innerHTML = html;
 }
@@ -3780,7 +4029,7 @@ async function copiarResultado() {
 function actualizarBotonRetry() {
   const failedCount = importResultRows.filter(r => r.__Status === 'Failed').length;
   const btn = document.getElementById('retryBtn');
-  btn.disabled = failedCount === 0 || !ultimoImportConfig;
+  btn.disabled = failedCount === 0 || !ultimoImportConfig || importEnCurso;
   btn.textContent = `🔁 Reintentar (${failedCount})`;
 }
 
@@ -3820,6 +4069,7 @@ function agruparErrores(failedRows) {
 }
 
 function abrirModalRetry() {
+  if (importEnCurso) { toast('Ya hay un import o retry en curso.', 'bad'); return; }
   if (!ultimoImportConfig) { toast('No hay un import base para reintentar.', 'bad'); return; }
   const failedRows = importResultRows.filter(r => r.__Status === 'Failed');
   if (!failedRows.length) { toast('No hay filas fallidas.', 'bad'); return; }
@@ -3868,84 +4118,78 @@ function cerrarModalRecuperar() {
   document.getElementById('recuperarModal').classList.remove('open');
 }
 
+// v17: acepta un Lote (lote_…) o un Job ID suelto (750…), como antes.
 async function ejecutarRecuperar() {
   const sid = document.getElementById('sid').value.trim();
-  const jobId = document.getElementById('recuperarJobId').value.trim();
+  const ref = document.getElementById('recuperarJobId').value.trim();
   const statusDiv = document.getElementById('recuperarStatus');
   const btn = document.getElementById('btnRecuperarConfirm');
-
-  if (!sid) {
+  const pintar = (fondo, color, html) => {
     statusDiv.style.display = 'block';
-    statusDiv.style.background = 'rgba(244,63,94,0.08)';
-    statusDiv.style.color = 'var(--err)';
-    statusDiv.innerHTML = '❌ Falta el Session ID. Ponlo en la pestaña de Asignación primero.';
-    return;
-  }
-  if (!jobId) {
-    statusDiv.style.display = 'block';
-    statusDiv.style.background = 'rgba(244,63,94,0.08)';
-    statusDiv.style.color = 'var(--err)';
-    statusDiv.innerHTML = '❌ Pega un Job ID.';
-    return;
+    statusDiv.style.background = fondo;
+    statusDiv.style.color = color;
+    statusDiv.innerHTML = html;
+  };
+  const ROJO = ['rgba(244,63,94,0.08)', 'var(--err)'], AMBAR = ['rgba(245,158,11,0.08)', 'var(--warn)'];
+
+  if (importEnCurso) return pintar(...AMBAR, '⏳ Hay un import en curso. Espera a que termine.');
+  if (!sid) return pintar(...ROJO, '❌ Falta el Session ID. Ponlo en la pestaña de Asignación primero.');
+  if (!ref) return pintar(...ROJO, '❌ Pega un Lote o un Job ID.');
+  const esLote = /^lote_[a-f0-9]{16}$/.test(ref);
+  if (!esLote && !/^750[a-zA-Z0-9]{12}([a-zA-Z0-9]{3})?$/.test(ref)) {
+    return pintar(...ROJO, '❌ Formato no válido. Usa un Lote (lote_…) o un Job ID (750…).');
   }
 
+  importEnCurso = true;
   btn.disabled = true; btn.textContent = '⏳ Consultando Salesforce…';
-  statusDiv.style.display = 'block';
-  statusDiv.style.background = 'rgba(107,114,154,0.1)';
-  statusDiv.style.color = 'var(--muted)';
-  statusDiv.innerHTML = '⏳ Consultando el estado del Job en Salesforce…';
+  pintar('rgba(107,114,154,0.1)', 'var(--muted)', '⏳ Consultando el estado en Salesforce…');
 
   try {
-    const data = await backendFetch({
-      action: 'recuperarJob', sid, instanceUrl: INSTANCE_URL, jobId
-    });
+    const data = await backendFetch({ action: 'recuperarJob', sid, instanceUrl: INSTANCE_URL, ...(esLote ? { loteId: ref } : { jobId: ref }) });
 
-    // Si el job SIGUE procesando en Salesforce
     if (data.stillProcessing) {
-      statusDiv.style.background = 'rgba(245,158,11,0.08)';
-      statusDiv.style.color = 'var(--warn)';
-      statusDiv.innerHTML = `⏱ El Job todavía está procesando en Salesforce (estado: <strong>${esc(data.jobState)}</strong>). Espera un par de minutos más e intenta de nuevo.`;
+      pintar(...AMBAR, `⏱ Salesforce todavía está procesando (estado: <strong>${esc(data.jobState)}</strong>, ${esc(data.processed || 0)} procesados). Espera un par de minutos e intenta de nuevo.`);
       btn.disabled = false; btn.textContent = '🔍 Reintentar';
       return;
     }
 
-    // Parsear los CSV de resultado (usamos 'insert' como acción por defecto para etiquetas)
-    const accionParaLabels = (data.operation || 'insert').toLowerCase();
-    const okRows = parseSfResultCsv(data.successCsv || '', true, accionParaLabels);
-    const failRows = parseSfResultCsv(data.failedCsv || '', false, accionParaLabels);
+    // La config del import (para el retry) solo se conserva si es de ESTE job
+    const pendiente = leerJobPendiente();
+    const esDelPendiente = pendiente && (pendiente.loteId === ref || (pendiente.jobIds || []).includes(ref) ||
+      (data.jobIds || []).some(id => (pendiente.jobIds || []).includes(id)));
+    if (esDelPendiente && pendiente.cfg) ultimoImportConfig = pendiente.cfg;
+    else if (!(ultimoImportConfig && ultimoImportConfig.jobIds && (data.jobIds || []).every(id => ultimoImportConfig.jobIds.includes(id)))) {
+      ultimoImportConfig = null;   // v17: otro job → sin config vieja (el retry mezclaría columnas)
+    }
+    const mapa = mapaApiAPt(ultimoImportConfig);
+    const accion = (data.operation || 'insert').toLowerCase();
+    const okRows = parseSfResultCsv(data.successCsv || '', 'ok', accion, mapa);
+    const failRows = parseSfResultCsv(data.failedCsv || '', 'fail', accion, mapa)
+      .concat(parseSfResultCsv(data.unprocessedCsv || '', 'unprocessed', accion, mapa));
     const recuperadas = okRows.concat(failRows);
     const success = okRows.length, failed = failRows.length;
 
     if (recuperadas.length === 0) {
-      statusDiv.style.background = 'rgba(245,158,11,0.08)';
-      statusDiv.style.color = 'var(--warn)';
-      statusDiv.innerHTML = `⚠ El Job está en estado <strong>${esc(data.jobState)}</strong> pero no devolvió filas de resultado. ` +
-        `Puede que Salesforce ya haya purgado los archivos (se conservan ~7 días) o que el job no haya procesado registros.`;
+      pintar(...AMBAR, `⚠ Estado <strong>${esc(data.jobState)}</strong> pero sin filas de resultado. ` +
+        (data.resultsError ? esc(data.resultsError) : 'Puede que Salesforce ya haya purgado los archivos (se conservan ~7 días) o que el job no haya procesado registros.'));
       btn.disabled = false; btn.textContent = '🔍 Recuperar resultado';
       return;
     }
 
-    // Cargar el resultado recuperado en la tabla principal
     importResultRows = recuperadas;
-
-    // Registrar en el historial como recuperación
+    if (ultimoImportConfig) ultimoImportConfig.jobIds = data.jobIds || [];
     historialRetries = [{
       intento: 0,
-      jobId: data.jobId || jobId,
+      jobId: data.loteId || (data.jobIds || [ref]).join(', '),
       jobState: data.jobState || 'JobComplete',
       total: recuperadas.length, exitosos: success, fallidos: failed,
       timestamp: new Date().toLocaleString('es-MX') + ' (recuperado)'
     }];
 
-    // Reconstruir config del import para permitir retry de las filas fallidas recuperadas
-    // Usamos las columnas del pre-template actual si coinciden; si no, retry quedará deshabilitado
-    if (ultimoImportConfig) {
-      // mantener la config previa si existe
-    }
-
-    ilog(`🔍 Resultado recuperado del Job ${data.jobId || jobId}`, 'info');
+    ilog(`🔍 Resultado recuperado de ${ref} (${(data.jobIds || []).length} job(s))`, 'info');
     ilog(`✓ Estado: ${data.jobState} | Exitosos: ${success} | Fallidos: ${failed}`, success > 0 ? 'ok' : 'warn');
     if (data.errorMessage) ilog(`⚠ Salesforce dice: ${data.errorMessage}`, 'err');
+    if (data.resultsError) ilog(`⚠ ${data.resultsError}`, 'err');
 
     updateProgress(recuperadas.length, success + failed, success, failed);
     document.getElementById('progressWrap').classList.add('visible');
@@ -3958,23 +4202,33 @@ async function ejecutarRecuperar() {
     document.getElementById('dlResultBtn').disabled = importResultRows.length === 0;
     document.getElementById('copyResultBtn').disabled = importResultRows.length === 0;
     document.getElementById('badge-import').textContent = `${success} ✓`;
-    setImportStatus(`Resultado recuperado: ${success} exitosos, ${failed} fallidos.`, failed === 0 && success > 0 ? 'ok' : 'err');
 
-    statusDiv.style.background = 'rgba(34,197,94,0.08)';
-    statusDiv.style.color = 'var(--ok)';
-    statusDiv.innerHTML = `✅ Resultado recuperado: <strong>${success}</strong> exitosos, <strong>${failed}</strong> fallidos. Ya aparece en la tabla.`;
+    if (data.resultsError) {
+      setImportStatus(`Resultados incompletos: ${data.resultsError}`, 'err');
+      pintar(...AMBAR, `⚠ Se recuperó una parte (${success} OK, ${failed} fallidos), pero ${esc(data.resultsError)}`);
+      btn.disabled = false; btn.textContent = '🔍 Reintentar';
+      return;
+    }
+
+    // v17: el pendiente se borra solo cuando la recuperación sale bien
+    if (esDelPendiente) {
+      limpiarJobPendiente();
+      const banner = document.getElementById('jobPendienteBanner');
+      if (banner) banner.classList.remove('visible');
+    }
+    setImportStatus(`Resultado recuperado: ${success} exitosos, ${failed} fallidos.`, failed === 0 && success > 0 ? 'ok' : 'err');
+    pintar('rgba(34,197,94,0.08)', 'var(--ok)', `✅ Resultado recuperado: <strong>${success}</strong> exitosos, <strong>${failed}</strong> fallidos. Ya aparece en la tabla.` +
+      (ultimoImportConfig ? '' : '<br><span style="color:var(--muted)">El retry queda desactivado: no es el último import hecho desde este navegador.</span>'));
     btn.textContent = '✓ Recuperado';
     toast(`✅ Resultado recuperado: ${success} OK · ${failed} errores`, failed === 0 && success > 0 ? 'ok' : 'bad');
-
-    // Cerrar el modal tras un momento
     setTimeout(() => cerrarModalRecuperar(), 1800);
 
   } catch (err) {
     console.error(err);
-    statusDiv.style.background = 'rgba(244,63,94,0.08)';
-    statusDiv.style.color = 'var(--err)';
-    statusDiv.innerHTML = `❌ ${esc(err.message)}`;
+    pintar(...ROJO, `❌ ${esc(err.message)}`);
     btn.disabled = false; btn.textContent = '🔍 Reintentar';
+  } finally {
+    importEnCurso = false;
   }
 }
 
@@ -3985,11 +4239,12 @@ function descargarFallidosCSV() {
     csvLinea(IMPORT_RESULT_HEADERS),
     ...failedRows.map(r => csvLinea(IMPORT_RESULT_HEADERS.map(h => r[h] || '')))
   ];
-  descargarBlob('\uFEFF' + lines.join('\r\n'), 'text/csv', `filas_fallidas_${hoy()}.csv`);
+  descargarBlob('﻿' + lines.join('\r\n'), 'text/csv', `filas_fallidas_${hoy()}.csv`);
   toast(`⬇ ${failedRows.length} fila(s) fallida(s) descargadas.`, 'ok');
 }
 
 async function ejecutarRetry() {
+  if (importEnCurso) { toast('Ya hay un import o retry en curso.', 'bad'); return; }
   const sid = document.getElementById('sid').value.trim();
   if (!sid) { toast('Falta el Session ID.', 'bad'); return; }
   if (!ultimoImportConfig) { toast('No hay import base.', 'bad'); return; }
@@ -4000,21 +4255,18 @@ async function ejecutarRetry() {
   const cfg = ultimoImportConfig;
   const intentoNuevo = historialRetries.length;  // 0 = original, 1 = primer retry, ...
 
-  // Construir rows para el retry a partir de las failedRows (solo columnas del pre-template)
-  // Necesitamos aplicar el mismo colIndexes que el import base
-  const rowsRetry = failedRows.map(row => {
-    const newRow = [];
-    for (let j = 0; j < cfg.colIndexes.length; j++) {
-      const colName = cfg.colNames[j];
-      newRow.push(row[colName] !== undefined && row[colName] !== null ? row[colName] : '');
-    }
-    return newRow;
-  });
+  // Filas del retry con las mismas columnas (por nombre) que el import base
+  const rowsRetry = failedRows.map(row => cfg.colNames.map(c => String(row[c] ?? '').trim()));
 
   const btn = document.getElementById('btnRetryConfirm');
   btn.disabled = true; btn.textContent = '⏳ Reintentando…';
-
   cerrarModalRetry();
+
+  importEnCurso = true;
+  const retryBtn = document.getElementById('retryBtn');
+  if (retryBtn) retryBtn.disabled = true;
+  document.getElementById('importBtn').disabled = true;
+  const inicioMs = Date.now();
 
   document.getElementById('progressWrap').classList.add('visible');
   document.getElementById('progPct').textContent = '0%';
@@ -4024,86 +4276,46 @@ async function ejecutarRetry() {
   ilog(`🔁 Retry #${intentoNuevo}: enviando ${rowsRetry.length} filas fallidas al import…`, 'warn');
 
   try {
-    // v14: el retry usa el mismo flujo asíncrono que el import principal,
-    // así un reintento grande tampoco puede morir por el límite de 6 min.
-    const inicioRetry = await backendFetch({
-      action: 'importStart', sid, instanceUrl: INSTANCE_URL,
-      object: cfg.object, operation: cfg.action, externalId: cfg.extId,
-      headers: cfg.sfHeaders, rows: rowsRetry
-    });
-
-    const jobIdRetry = inicioRetry.jobId;
-    ultimoJobIdRecuperable = jobIdRetry;
-    guardarJobPendiente({ jobId: jobIdRetry, object: cfg.object, operation: cfg.action, total: rowsRetry.length });
-    mostrarJobIdEnVivo(jobIdRetry);
-    ilog(`✓ Retry #${intentoNuevo} — Job creado: ${jobIdRetry}`, 'ok');
-
-    const data = await sondearJob(jobIdRetry, sid, rowsRetry.length, cfg.action);
-    if (!data.stillProcessing) limpiarJobPendiente();
-
-    ilog(`✓ Retry #${intentoNuevo} — Job ID: ${data.jobId || jobIdRetry}`, 'ok');
-    ilog(`✓ Estado final: ${data.jobState || 'N/A'}`, data.jobState === 'JobComplete' ? 'ok' : 'warn');
-    if (data.errorMessage) ilog(`⚠ Salesforce dice: ${data.errorMessage}`, 'err');
-
-    const okRows = parseSfResultCsv(data.successCsv || '', true, cfg.action);
-    const failRowsNuevos = parseSfResultCsv(data.failedCsv || '', false, cfg.action);
-    const success = okRows.length, failed = failRowsNuevos.length;
-
-    // Fusionar resultados en importResultRows usando Contact__c como key
-    mergeRetryResult(okRows, failRowsNuevos, intentoNuevo);
-
-    updateProgress(rowsRetry.length, success + failed, success, failed);
-    document.getElementById('progPct').textContent = '100%';
-    document.getElementById('progBar').style.width = '100%';
-
-    // Registrar en el historial
-    historialRetries.push({
-      intento: intentoNuevo,
-      jobId: data.jobId || 'N/A',
-      jobState: data.jobState || 'N/A',
-      total: rowsRetry.length, exitosos: success, fallidos: failed,
-      timestamp: new Date().toLocaleString('es-MX')
-    });
-
-    ilog(`✓ Retry #${intentoNuevo} exitosos: ${success} | fallidos: ${failed}`, success > 0 ? 'ok' : 'warn');
-
-    renderImportResult(importResultRows);
-    renderRetryHistory();
-    actualizarBotonRetry();
-
-    const totalFallidosAhora = importResultRows.filter(r => r.__Status === 'Failed').length;
-    const totalExitososAhora = importResultRows.filter(r => r.__Status === 'Succeeded').length;
-    setImportStatus(
-      `Retry #${intentoNuevo} completado. Total actual: ${totalExitososAhora} OK · ${totalFallidosAhora} pendientes.`,
-      totalFallidosAhora === 0 ? 'ok' : 'err'
-    );
-    document.getElementById('badge-import').textContent = `${totalExitososAhora} ✓`;
-    toast(`✅ Retry #${intentoNuevo}: +${success} recuperados, ${failed} siguen fallando`, success > 0 ? 'ok' : 'bad');
-
+    // Mismo flujo que el import principal: jobs en paralelo, sondeo y reintento por bloqueo
+    const r = await correrImportBulk({ sid, cfg, rows: rowsRetry, total: rowsRetry.length });
+    mostrarResultadoImport(r, { total: rowsRetry.length, intento: intentoNuevo, inicioMs });
   } catch (err) {
     console.error(err);
     ilog(`✗ Error en retry: ${err.message}`, 'err');
     setImportStatus('Error en el retry. Revisa el log.', 'err');
     toast('❌ ' + err.message, 'bad');
+  } finally {
+    importEnCurso = false;
+    document.getElementById('importBtn').disabled = preTemplateRows.length === 0;
+    actualizarBotonRetry();
   }
 }
 
-function mergeRetryResult(okRows, failRowsNuevos, intentoNum) {
-  // Mapa por Contact__c del resultado del retry
-  const porContact = new Map();
-  okRows.forEach(r => { if (r.Contact__c) porContact.set(String(r.Contact__c).trim(), { ...r, _ok: true }); });
-  failRowsNuevos.forEach(r => { if (r.Contact__c) porContact.set(String(r.Contact__c).trim(), { ...r, _ok: false }); });
+// v17: la llave de cada fila son TODOS los valores enviados (no Contact__c, que se
+// puede omitir o repetir). Filas idénticas se emparejan en orden.
+function llaveFila(row, colNames) {
+  return colNames.map(c => String(row[c] ?? '').trim()).join('\u0001');
+}
+
+function mergeRetryResult(okRows, failRowsNuevos, intentoNum, colNames) {
+  const cols = colNames || (ultimoImportConfig ? ultimoImportConfig.colNames : PT_HEADERS);
+  const porLlave = new Map();
+  const meter = (r, ok) => {
+    const k = llaveFila(r, cols);
+    if (!porLlave.has(k)) porLlave.set(k, []);
+    porLlave.get(k).push({ ...r, _ok: ok });
+  };
+  okRows.forEach(r => meter(r, true));
+  failRowsNuevos.forEach(r => meter(r, false));
 
   importResultRows = importResultRows.map(originalRow => {
-    // Solo actualizar filas que estaban Failed y estaban en el batch de retry
+    // Solo se actualizan filas que estaban Failed y que iban en el retry
     if (originalRow.__Status !== 'Failed') return originalRow;
-
-    const contactKey = String(originalRow.Contact__c || '').trim();
-    const resultadoRetry = porContact.get(contactKey);
-    if (!resultadoRetry) return originalRow;  // No estaba en el retry
+    const cola = porLlave.get(llaveFila(originalRow, cols));
+    const resultadoRetry = cola && cola.shift();
+    if (!resultadoRetry) return originalRow;
 
     if (resultadoRetry._ok) {
-      // Ahora sí tuvo éxito
       return {
         ...originalRow,
         __Status: 'Succeeded',
@@ -4111,15 +4323,13 @@ function mergeRetryResult(okRows, failRowsNuevos, intentoNum) {
         __Action: `${resultadoRetry.__Action || 'Inserted'} (retry #${intentoNum})`,
         __Errors: ''
       };
-    } else {
-      // Sigue fallando
-      return {
-        ...originalRow,
-        __Status: 'Failed',
-        __Action: `Failed (retry #${intentoNum})`,
-        __Errors: resultadoRetry.__Errors || originalRow.__Errors
-      };
     }
+    return {
+      ...originalRow,
+      __Status: 'Failed',
+      __Action: `Failed (retry #${intentoNum})`,
+      __Errors: resultadoRetry.__Errors || originalRow.__Errors
+    };
   });
 }
 
@@ -4193,47 +4403,99 @@ async function onLoadFileSelected(input) {
   actualizarPreviewCarga();
 }
 
-// Parser TSV (para paste desde Sheets/Excel)
-function parseTsv(text) {
-  const lines = text.split('\n').map(l => l.replace(/\r$/, '')).filter(l => l.length > 0);
-  return lines.map(l => l.split('\t'));
-}
+// v17: Paste y CSV usan el mismo parser (parseDelimitado), que respeta comillas y
+// saltos de línea dentro de una celda. Antes una celda con salto partía la fila.
 
-// Parser CSV con detección de delimitador
-function parseCsvFullText(text) {
-  const firstLine = text.split('\n')[0] || '';
-  const commaCount = (firstLine.match(/,/g) || []).length;
-  const semiCount = (firstLine.match(/;/g) || []).length;
-  const delim = (semiCount > commaCount) ? ';' : ',';
-  const lines = text.split('\n').map(l => l.replace(/\r$/, '')).filter(l => l.trim().length > 0);
-  return lines.map(line => parseCsvRowWithDelim(line, delim));
-}
-
-function parseCsvRowWithDelim(line, delim) {
-  const result = [];
-  let cur = '', inQ = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (c === '"') {
-      if (inQ && line[i+1] === '"') { cur += '"'; i++; }
-      else inQ = !inQ;
-    } else if (c === delim && !inQ) { result.push(cur); cur = ''; }
-    else { cur += c; }
+// v17: una fecha de Excel sale como AAAA-MM-DD (o ISO con hora), que es lo que
+// Salesforce acepta. Antes salía "Thu Nov 12 2026 00:00:00 GMT-0600" o un número.
+function celdaExcelATexto(cell) {
+  if (cell === null || cell === undefined) return '';
+  if (cell instanceof Date && !isNaN(cell)) {
+    const p = n => String(n).padStart(2, '0');
+    if (cell.getHours() === 0 && cell.getMinutes() === 0 && cell.getSeconds() === 0) {
+      return `${cell.getFullYear()}-${p(cell.getMonth() + 1)}-${p(cell.getDate())}`;
+    }
+    return cell.toISOString();
   }
-  result.push(cur);
-  return result;
+  return String(cell);
 }
 
 // Parser Excel con SheetJS (primera hoja)
 async function parseExcelFile(file) {
   if (typeof XLSX === 'undefined') throw new Error('SheetJS no está disponible. Recarga la página.');
   const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf, { type: 'array' });
+  const wb = XLSX.read(buf, { type: 'array', cellDates: true });
   const firstSheetName = wb.SheetNames[0];
   if (!firstSheetName) throw new Error('El archivo Excel no tiene hojas.');
   const ws = wb.Sheets[firstSheetName];
-  const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', blankrows: false });
-  return data.map(row => row.map(cell => cell === null || cell === undefined ? '' : String(cell)));
+  const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', blankrows: false, raw: true });
+  return data.map(row => row.map(celdaExcelATexto));
+}
+
+// v17: arma la vista previa SIN tocar el estado global. Devuelve todo lo que
+// aplicarCarga necesita (filas ya ordenadas como quedará el pre-template).
+function analizarCarga(matrix, ptHeadersActuales) {
+  // ── PASO 1: Detectar headers ──
+  // Para tratar la primera fila como headers se exigen 2 nombres CONOCIDOS (columnas
+  // del pre-template). Antes bastaban 3 "nombres válidos": una fila de datos como
+  // "Mexico, FALSE, Assigned" se convertía en 3 campos custom.
+  const primeraFila = matrix[0].map(c => String(c || '').trim());
+  const buscar = (lista, h) => { const n = normalizarHeader(h); return n ? (lista.find(pt => pt.toLowerCase() === n) || null) : null; };
+  const headersReconocidos = primeraFila.filter(h => buscar(ptHeadersActuales, h) !== null).length;
+  const hayHeaders = headersReconocidos >= 2;
+
+  // Candidatos a nuevos custom fields (solo si la primera fila SÍ son headers)
+  const nuevosCustom = [];
+  if (hayHeaders) {
+    primeraFila.forEach(h => {
+      if (!h) return;
+      if (h.startsWith('__')) return;                  // reservado (columna de resultado)
+      if (buscar(ptHeadersActuales, h)) return;        // ya se mapea a algo del PT actual
+      if (!VALID_FIELD_REGEX.test(h)) return;          // sintaxis inválida (espacios, puntos, etc.)
+      if (PT_HEADERS_BASE.includes(h)) return;         // ya es base (aunque esté oculto)
+      if (nuevosCustom.some(x => x.toLowerCase() === h.toLowerCase())) return;
+      nuevosCustom.push(h);
+    });
+  }
+  // Columnas que tendrá el pre-template si se aplica la carga: las actuales + las nuevas al final
+  const ptPreview = [...ptHeadersActuales, ...nuevosCustom];
+
+  const dataRows = (hayHeaders ? matrix.slice(1) : matrix).filter(r => r.some(c => String(c || '').trim() !== ''));
+
+  // ── PASO 2: mapeo columna origen → columna PT ──
+  // Con headers: por nombre. Sin headers: por posición contra el pre-template actual.
+  const mapeoColumnas = [];
+  const ptToOrigenIdx = new Array(ptPreview.length).fill(-1);
+  if (hayHeaders) {
+    primeraFila.forEach((headerOrig, colIdx) => {
+      const ptName = buscar(ptPreview, headerOrig);
+      if (ptName && ptToOrigenIdx[ptPreview.indexOf(ptName)] === -1) {
+        const ptIndex = ptPreview.indexOf(ptName);
+        mapeoColumnas.push({ origen: headerOrig, colIdxOrigen: colIdx, ptIndex, ptName });
+        ptToOrigenIdx[ptIndex] = colIdx;
+      } else {
+        mapeoColumnas.push({ origen: headerOrig || `(col ${colIdx + 1} vacía)`, colIdxOrigen: colIdx, ptIndex: -1, ptName: null });
+      }
+    });
+  } else {
+    const numCols = dataRows.length ? Math.max(...dataRows.map(r => r.length)) : 0;
+    for (let i = 0; i < numCols && i < ptHeadersActuales.length; i++) {
+      mapeoColumnas.push({ origen: `col ${i + 1} (posicional)`, colIdxOrigen: i, ptIndex: i, ptName: ptPreview[i] });
+      ptToOrigenIdx[i] = i;
+    }
+  }
+
+  // ── PASO 3: reordenar cada fila al orden del pre-template (valores sin espacios a los lados) ──
+  const filas = dataRows.map(row => ptPreview.map((pt, ptIdx) => {
+    const o = ptToOrigenIdx[ptIdx];
+    return (o >= 0 && o < row.length && row[o] !== null && row[o] !== undefined) ? String(row[o]).trim() : '';
+  }));
+
+  // ── PASO 4: columnas mínimas ──
+  const cubiertos = new Set(mapeoColumnas.filter(m => m.ptIndex >= 0).map(m => m.ptName));
+  const faltantesObligatorios = MIN_REQUIRED_LOAD.filter(c => !cubiertos.has(c));
+
+  return { hayHeaders, nuevosCustom, ptPreview, ptToOrigenIdx, mapeoColumnas, filas, faltantesObligatorios };
 }
 
 async function actualizarPreviewCarga() {
@@ -4248,15 +4510,15 @@ async function actualizarPreviewCarga() {
     if (loadMode === 'paste') {
       const text = document.getElementById('pastedData').value;
       if (!text.trim()) { previewDiv.style.display = 'none'; btnConfirm.disabled = true; loadedPreview = null; return; }
-      matrix = parseTsv(text);
+      matrix = parseDelimitado(text, '\t');
       sourceFormat = 'Paste (TSV)';
     } else if (loadMode === 'file') {
       const file = document.getElementById('loadFile').files[0];
       if (!file) return;
       const ext = file.name.toLowerCase().split('.').pop();
       if (ext === 'csv') {
-        const text = await file.text();
-        matrix = parseCsvFullText(text);
+        const text = await leerTextoArchivo(file);
+        matrix = parseDelimitado(text, detectarDelimitador(text));
         sourceFormat = 'CSV';
       } else if (ext === 'xlsx' || ext === 'xls') {
         matrix = await parseExcelFile(file);
@@ -4281,44 +4543,10 @@ async function actualizarPreviewCarga() {
     return;
   }
 
-  // ── PASO 1: Detectar headers y AUTO-AGREGAR customs válidos ──
-  const primeraFila = matrix[0].map(c => String(c || '').trim());
+  const a = analizarCarga(matrix, PT_HEADERS);
+  const { hayHeaders, nuevosCustom, ptPreview, ptToOrigenIdx, mapeoColumnas, filas, faltantesObligatorios } = a;
 
-  // Primera pasada: contar cuántos headers coinciden con PT_HEADERS actual (base + customs ya activos)
-  const mapeoInicial = primeraFila.map(h => mapearHeaderAPT(h));
-  const headersReconocidos = mapeoInicial.filter(m => m !== null).length;
-
-  // Detectar candidatos a nuevos custom fields de esta carga (nombres que no matchean pero son sintaxis válida)
-  const nuevosCustomDetectados = [];
-  primeraFila.forEach((headerOrig, colIdx) => {
-    const h = String(headerOrig || '').trim();
-    if (!h) return;
-    if (h.startsWith('__')) return;                  // reservado (columna de resultado)
-    if (mapearHeaderAPT(h)) return;                  // ya se mapea a algo del PT actual
-    if (!VALID_FIELD_REGEX.test(h)) return;          // sintaxis inválida (espacios, puntos, etc.)
-    if (PT_HEADERS_BASE.includes(h)) return;         // ya es base
-    if (nuevosCustomDetectados.includes(h)) return;  // ya detectado en esta carga
-    nuevosCustomDetectados.push(h);
-  });
-
-  // Si al menos 3 headers son reconocidos (incluyendo nuevos custom), tratamos primera fila como headers
-  const hayHeaders = (headersReconocidos + nuevosCustomDetectados.length) >= 3;
-
-  // Agregar los nuevos customs detectados al estado global ANTES de continuar
-  // Se marcan como mode:'sf' por default (los valores del archivo ya están en las filas)
-  if (hayHeaders && nuevosCustomDetectados.length > 0) {
-    nuevosCustomDetectados.forEach(f => {
-      if (!customFields.some(cf => cf.name.toLowerCase() === f.toLowerCase())) {
-        customFields.push({ name: f, mode: 'sf' });
-      }
-    });
-    actualizarHeadersDinamicos();
-  }
-
-  let dataRows = hayHeaders ? matrix.slice(1) : matrix;
-  dataRows = dataRows.filter(r => r.some(c => String(c || '').trim() !== ''));
-
-  if (!dataRows.length) {
+  if (!filas.length) {
     mappingDiv.innerHTML = `<div style="color:var(--err); font-weight:600;">❌ Sin filas de datos (solo se detectaron headers).</div>`;
     tableWrap.innerHTML = '';
     previewDiv.style.display = 'block';
@@ -4327,65 +4555,20 @@ async function actualizarPreviewCarga() {
     return;
   }
 
-  // ── PASO 2: construir mapeo columna origen → columna PT ──
-  // Si HAY headers: usa el mapeo por nombre
-  // Si NO hay headers: asume orden posicional del PT_HEADERS
-  let mapeoColumnas = [];  // [{origen: 'Email' o 'col 3', ptIndex: 4, ptName: 'Email'}]
-  let ptToOrigenIdx = new Array(PT_HEADERS.length).fill(-1);  // para cada columna PT, qué col origen
-
-  if (hayHeaders) {
-    primeraFila.forEach((headerOrig, colIdx) => {
-      const ptName = mapearHeaderAPT(headerOrig);
-      if (ptName) {
-        const ptIndex = PT_HEADERS.indexOf(ptName);
-        mapeoColumnas.push({ origen: headerOrig, colIdxOrigen: colIdx, ptIndex, ptName });
-        ptToOrigenIdx[ptIndex] = colIdx;
-      } else {
-        mapeoColumnas.push({ origen: headerOrig || `(col ${colIdx + 1} vacía)`, colIdxOrigen: colIdx, ptIndex: -1, ptName: null });
-      }
-    });
-  } else {
-    // Sin headers: mapear por posición contra PT_HEADERS
-    const numCols = Math.max(...dataRows.map(r => r.length));
-    for (let i = 0; i < numCols && i < PT_HEADERS.length; i++) {
-      mapeoColumnas.push({ origen: `col ${i + 1} (posicional)`, colIdxOrigen: i, ptIndex: i, ptName: PT_HEADERS[i] });
-      ptToOrigenIdx[i] = i;
-    }
-  }
-
-  // ── PASO 3: reordenar cada fila al orden del PT_HEADERS ──
-  const filasReordenadas = dataRows.map(row => {
-    const nuevaFila = new Array(PT_HEADERS.length).fill('');
-    for (let ptIdx = 0; ptIdx < PT_HEADERS.length; ptIdx++) {
-      const origIdx = ptToOrigenIdx[ptIdx];
-      if (origIdx >= 0 && origIdx < row.length) {
-        const val = row[origIdx];
-        nuevaFila[ptIdx] = (val !== null && val !== undefined) ? String(val) : '';
-      }
-    }
-    return nuevaFila;
-  });
-
-  // ── PASO 4: validar campos mínimos obligatorios ──
-  const ptCubiertos = new Set(mapeoColumnas.filter(m => m.ptIndex >= 0).map(m => m.ptName));
-  const faltantesObligatorios = MIN_REQUIRED_LOAD.filter(campo => !ptCubiertos.has(campo));
-
   // ── PASO 5: renderizar mapeo ──
   let mappingHtml = `<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
-    <span style="background:rgba(34,197,94,.15); color:var(--ok); border-radius:100px; padding:3px 10px; font-size:10.5px; font-weight:700;">✓ ${filasReordenadas.length} fila(s)</span>
+    <span style="background:rgba(34,197,94,.15); color:var(--ok); border-radius:100px; padding:3px 10px; font-size:10.5px; font-weight:700;">✓ ${filas.length} fila(s)</span>
     <span style="color:var(--muted); font-size:10.5px;">Fuente: ${esc(sourceFormat)}</span>
     <span style="color:var(--muted); font-size:10.5px;">Headers: ${hayHeaders ? '<strong style="color:var(--ok)">detectados por nombre</strong>' : '<strong style="color:var(--warn)">no detectados — mapeo posicional</strong>'}</span>
   </div>`;
 
-  // Aviso de custom fields auto-agregados desde esta carga
-  if (nuevosCustomDetectados.length > 0) {
+  if (nuevosCustom.length > 0) {
     mappingHtml += `<div style="background:rgba(124,58,237,0.08); border-left:3px solid var(--ac2); border-radius:6px; padding:8px 10px; font-size:11px; margin-bottom:8px; color:var(--text);">
-      <strong style="color:#c4b5fd;">➕ ${nuevosCustomDetectados.length} campo(s) custom auto-detectado(s):</strong> ${nuevosCustomDetectados.map(esc).join(', ')}<br>
-      <span style="color:var(--muted); font-size:10.5px;">Se agregaron automáticamente y aparecerán en el Field Mapping para validación contra Lead.</span>
+      <strong style="color:#c4b5fd;">➕ ${nuevosCustom.length} campo(s) custom detectado(s):</strong> ${nuevosCustom.map(esc).join(', ')}<br>
+      <span style="color:var(--muted); font-size:10.5px;">Se agregarán al aplicar la carga y aparecerán en el Field Mapping para validarlos contra Lead.</span>
     </div>`;
   }
 
-  // Detalle del mapeo (compacto)
   mappingHtml += `<div style="font-size:10.5px; line-height:1.9; color:var(--muted);">`;
   mapeoColumnas.forEach(m => {
     if (m.ptIndex >= 0) {
@@ -4394,36 +4577,31 @@ async function actualizarPreviewCarga() {
       mappingHtml += `<span style="display:inline-block; margin-right:12px; color:var(--warn);">${esc(m.origen)} → <em>ignorada</em></span>`;
     }
   });
-
-  // Mostrar columnas del PT que NO recibieron datos (irán vacías)
-  const ptSinDatos = PT_HEADERS.filter((pt, idx) => ptToOrigenIdx[idx] === -1);
+  const ptSinDatos = ptPreview.filter((pt, idx) => ptToOrigenIdx[idx] === -1);
   if (ptSinDatos.length > 0) {
     mappingHtml += `<div style="margin-top:6px;">Columnas del pre-template que quedarán <strong style="color:var(--muted);">vacías</strong>: ${ptSinDatos.map(esc).join(', ')}</div>`;
   }
   mappingHtml += `</div>`;
 
-  // Advertencia por obligatorios faltantes
   if (faltantesObligatorios.length > 0) {
     mappingHtml += `<div style="margin-top:8px; padding:8px 10px; background:rgba(244,63,94,.08); border-left:3px solid var(--err); border-radius:6px; font-size:11px; color:var(--err); font-weight:600;">
       ⚠ Faltan columnas obligatorias: ${faltantesObligatorios.map(esc).join(', ')}
     </div>`;
   }
-
   mappingDiv.innerHTML = mappingHtml;
 
-  // ── PASO 6: renderizar tabla preview (primeras 5 filas) ──
-  const preview5 = filasReordenadas.slice(0, 5);
+  // ── PASO 6: tabla preview (primeras 5 filas) ──
   let tableHtml = `<table style="width:100%; border-collapse:collapse; font-size:10px;">
     <thead>
       <tr style="background:var(--surface); position:sticky; top:0; z-index:1;">`;
-  PT_HEADERS.forEach((h, idx) => {
+  ptPreview.forEach((h, idx) => {
     const tieneOrigen = ptToOrigenIdx[idx] !== -1;
     const bgColor = tieneOrigen ? 'var(--surface)' : 'rgba(107,114,154,.15)';
     const color = tieneOrigen ? 'var(--text)' : 'var(--muted)';
     tableHtml += `<th style="padding:6px 10px; text-align:left; font-weight:700; font-size:9px; color:${color}; background:${bgColor}; border-bottom:1px solid var(--border); white-space:nowrap;" title="${esc(h)}">${esc(h)}</th>`;
   });
   tableHtml += `</tr></thead><tbody>`;
-  preview5.forEach(row => {
+  filas.slice(0, 5).forEach(row => {
     tableHtml += `<tr>`;
     row.forEach((cell, idx) => {
       const tieneOrigen = ptToOrigenIdx[idx] !== -1;
@@ -4434,25 +4612,19 @@ async function actualizarPreviewCarga() {
     });
     tableHtml += `</tr>`;
   });
-  if (filasReordenadas.length > 5) {
-    tableHtml += `<tr><td colspan="${PT_HEADERS.length}" style="padding:6px 10px; text-align:center; color:var(--muted); font-size:10px; font-style:italic; border-top:1px dashed var(--border);">… y ${filasReordenadas.length - 5} fila(s) más</td></tr>`;
+  if (filas.length > 5) {
+    tableHtml += `<tr><td colspan="${ptPreview.length}" style="padding:6px 10px; text-align:center; color:var(--muted); font-size:10px; font-style:italic; border-top:1px dashed var(--border);">… y ${filas.length - 5} fila(s) más</td></tr>`;
   }
   tableHtml += `</tbody></table>`;
   tableWrap.innerHTML = tableHtml;
 
-  loadedPreview = {
-    rows: filasReordenadas,
-    hasHeader: hayHeaders,
-    sourceFormat,
-    mapeoColumnas,
-    faltantesObligatorios
-  };
-
+  loadedPreview = { rows: filas, hasHeader: hayHeaders, sourceFormat, mapeoColumnas, faltantesObligatorios, nuevosCustom, ptPreview };
   previewDiv.style.display = 'block';
   btnConfirm.disabled = (faltantesObligatorios.length > 0);
 }
 
 function aplicarCarga() {
+  if (importEnCurso) { toast('Hay un import en curso. Espera a que termine.', 'bad'); return; }
   if (!loadedPreview || !loadedPreview.rows || !loadedPreview.rows.length) {
     toast('❌ No hay datos válidos.', 'bad');
     return;
@@ -4477,6 +4649,16 @@ function aplicarCarga() {
       `¿Continuar?`
     );
     if (!proceder) return;
+  }
+
+  // v17: ahora sí se agregan los custom nuevos (la vista previa no los tocó)
+  (loadedPreview.nuevosCustom || []).forEach(f => {
+    if (!customFields.some(cf => cf.name.toLowerCase() === f.toLowerCase())) customFields.push({ name: f, mode: 'sf' });
+  });
+  actualizarHeadersDinamicos();
+  if (loadedPreview.ptPreview && loadedPreview.ptPreview.join('|') !== PT_HEADERS.join('|')) {
+    toast('❌ Cambió la configuración de campos. Vuelve a cargar el archivo.', 'bad');
+    return;
   }
 
   // Reemplazar preTemplateRows
