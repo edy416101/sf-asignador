@@ -85,7 +85,32 @@ debería quedar entre 2 y 3 min. Falta confirmarlo con una carga real.
 - El JWT se decodifica sin UTF-8. Los CSV en ANSI (Excel en Windows) se leen mal.
 - `syncMapCheck` y varias copias de `log`, `ilog` y del escape CSV sobran.
 
-## 3. Fuera de la tool
+## 3. Qué hizo la v17 (rama `mejoras/v17`)
+
+Todos los hallazgos de arriba quedaron corregidos. Pruebas: `node tests/run.js` (77/77) y el
+simulador del navegador (15/15). Decisiones que cambian lo que se planeó:
+
+- **Asignación en bloques de 40 IDs, no de 150.** UrlFetchApp corta las URLs de más de 2 kB y
+  el query va en la URL. La mejora es que ahora salen 10 bloques a la vez con `fetchAll`.
+- **Un owner nunca se parte entre jobs.** Si un solo rep tiene casi todas las filas, su job es
+  grande y la carga no se acelera tanto. Las filas que choquen por bloqueo se reintentan solas.
+- **Solo Insert y Upsert.** Update, Delete y Undelete salen del menú y el backend los rechaza.
+  Undelete nunca funcionó en Bulk API 2.0 y el pre-template no trae `Id` para Update o Delete.
+- **Descargas CSV.** Se neutraliza lo que empieza con `=`, `@`, tab o CR, y lo que empieza con
+  `+` o `-` si no es un número o teléfono. Un `+52 55 1234 5678` o un `-5` quedan igual.
+- **Compatibilidad.** Sin `clientRequestId` (frontend v16 en caché) el backend crea un solo job,
+  como antes. Así el backend se puede publicar primero.
+
+### Despliegue (con Edgar)
+
+1. Apps Script: pegar `Code.gs` y `appsscript.json`, y publicar una **versión nueva** del mismo
+   deployment (la URL no cambia). Como ahora se declaran `oauthScopes`, correr una vez
+   `testAutorizarScopes()` desde el editor.
+2. Probar con una carga real que ya haga falta, de unas 500 filas. Comparar contra los 10.5 min
+   y revisar en el log `retries`, `Apex` y el tiempo total.
+3. PR de `mejoras/v17` a `main` (publica Pages).
+
+## 4. Fuera de la tool
 
 Pedir a Global SF (con Alejandro) que revise la automatización del insert de Lead. Evidencia: el
 job `750Tt00000mJwvvIAC` y los `apexProcessingTime` que la v17 muestra en el log. El texto se
