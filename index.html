@@ -3659,15 +3659,15 @@ function recuperarHuerfano(jobId) {
 }
 function parseSfResultCsv(csvText, isOk, operation) {
   if (!csvText || !csvText.trim()) return [];
-  const lines = csvText.split('\n').filter(l => l.trim());
-  if (lines.length < 2) return [];
-  const csvHdrs = parseCsvRow(lines[0]);
+  const records = parseCsvRecords(csvText);
+  if (records.length < 2) return [];
+  const csvHdrs = records[0];
   const result = [];
   const actionLabels = { insert: 'Inserted', update: 'Updated', upsert: 'Upserted', delete: 'Deleted', undelete: 'Undeleted' };
   const defaultLabel = actionLabels[operation] || 'Processed';
 
-  for (let i = 1; i < lines.length; i++) {
-    const vals = parseCsvRow(lines[i]);
+  for (let i = 1; i < records.length; i++) {
+    const vals = records[i];
     const obj = {};
     csvHdrs.forEach((h, idx) => { obj[h] = vals[idx] !== undefined ? vals[idx] : ''; });
     const row = {};
@@ -3680,26 +3680,39 @@ function parseSfResultCsv(csvText, isOk, operation) {
     } else {
       row['__Status'] = 'Failed';
       row['__Action'] = '';
-      row['__Errors'] = obj['sf__Error'] || 'Unknown error';
+      // El error en un solo renglón: así cabe en una celda al copiar o exportar
+      row['__Errors'] = (obj['sf__Error'] || 'Unknown error').replace(/\s*\r?\n\s*/g, ' ');
     }
     result.push(row);
   }
   return result;
 }
 
-function parseCsvRow(line) {
-  const result = [];
-  let cur = '', inQ = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (c === '"') {
-      if (inQ && line[i+1] === '"') { cur += '"'; i++; }
-      else inQ = !inQ;
-    } else if (c === ',' && !inQ) { result.push(cur); cur = ''; }
-    else { cur += c; }
+// Lee el CSV completo respetando comillas: un salto de línea dentro de un valor entre comillas
+// (p. ej. un sf__Error de dos renglones) ya no parte la fila en dos. Ignora las líneas vacías.
+function parseCsvRecords(text) {
+  const rows = [];
+  let row = [], cur = '', inQ = false;
+  const cerrarFila = () => {
+    row.push(cur); cur = '';
+    if (row.length > 1 || row[0].trim()) rows.push(row);
+    row = [];
+  };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"' && text[i+1] === '"') { cur += '"'; i++; }
+      else if (c === '"') inQ = false;
+      else cur += c;
+    } else if (c === '"') inQ = true;
+    else if (c === ',') { row.push(cur); cur = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i+1] === '\n') i++;
+      cerrarFila();
+    } else cur += c;
   }
-  result.push(cur);
-  return result;
+  cerrarFila();
+  return rows;
 }
 
 function renderImportResult(rows) {
