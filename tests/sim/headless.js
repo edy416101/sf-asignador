@@ -114,8 +114,9 @@ async function correr(indexHtml) {
     out('\n' + (c.length - fallas) + ' de ' + c.length + ' checks del simulador pasaron');
     return { ok: fallas === 0, salida: lineas.join('\n') };
   } catch (e) {
+    // Falla de arranque (Chrome o la página no levantaron), no de un check: se puede reintentar.
     out('✗ ' + e.message);
-    return { ok: false, salida: lineas.join('\n') };
+    return { ok: false, arranque: true, salida: lineas.join('\n') };
   } finally {
     cerrar();
   }
