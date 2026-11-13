@@ -32,23 +32,23 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Instrument+Sans:wght@400..700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
   <style>
-    /* ══ v19 · "COBRE FACETADO" ══
+    /* ══ v19 · "FACETADO" (v19.1: acento azul de la suite en vez de cobre) ══
        La identidad sale del zorro low-poly del logo: fondo pizarra tinta, UN acento cobre
        (con texto oscuro encima) y teal solo para información y progreso. La firma es el
        degradado facetado (cortes duros, como el low-poly) y solo va en la acción principal,
        la barra de progreso y el login. Todo lo demás, callado.
-       Nota: la extensión Cat-alyst SID Grabber todavía usa la paleta v13 (azul/morado). */
+       Nota: el azul es de la misma familia que la extensión Cat-alyst SID Grabber. */
     :root {
       --bg: #0e1419; --surface: #151d24; --sf2: #1c2630; --border: #26323d; --line-soft: rgba(38,50,61,.6);
       --void: #0a0f13;                       /* consola de log: bajo el fondo */
       --text: #e9eef1; --muted: #8696a4;
-      --accent: #ee8a43; --accent-rgb: 238,138,67;   /* cobre del zorro */
-      --accent-ink: #1d1007;                 /* texto sobre cobre */
+      --accent: #5b8def; --accent-rgb: 91,141,239;   /* v19.1: azul de la suite (el naranja no gustó) */
+      --accent-ink: #ffffff;                 /* texto sobre el acento */
       --ac2: #4fb6ae; --ac2-rgb: 79,182,174; /* teal: info y progreso */
-      --ac3: #e2a93b;                        /* ámbar: avisos de pendiente */
+      --ac3: #e3c04e;                        /* dorado: avisos de pendiente */
       --ok: #4cc38a; --err: #f0616d; --warn: #e8c547;
-      --facet: linear-gradient(116deg, #f5a05a 0 33%, #ee8a43 33% 62%, #e07a36 62% 100%);
-      --facet-hover: linear-gradient(116deg, #f8ad6b 0 33%, #f39652 33% 62%, #e88640 62% 100%);
+      --facet: linear-gradient(116deg, #6a98f2 0 33%, #4f81e6 33% 62%, #4271d6 62% 100%);
+      --facet-hover: linear-gradient(116deg, #7aa4f5 0 33%, #5b8def 33% 62%, #4d7ce0 62% 100%);
       --r-sm: 7px; --r: 10px; --r-lg: 14px;
       --shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 10px 30px -18px rgba(0,0,0,.7);
       --mono: 'JetBrains Mono', ui-monospace, monospace;
@@ -193,6 +193,7 @@
     .btn-icon:disabled { opacity: .38; cursor: not-allowed; }
     .btn-icon.btn-prim, .btn-go-import { background: var(--facet); color: var(--accent-ink); border: 1px solid transparent; }
     .btn-icon.btn-prim:not(:disabled):hover, .btn-go-import:not(:disabled):hover { background: var(--facet-hover); border-color: transparent; }
+    .btn-icon.btn-prim:disabled { background: var(--sf2); color: var(--muted); border-color: var(--border); }
     .btn-icon.btn-aviso:not(:disabled) { color: var(--warn); border-color: rgba(232,197,71,.4); background: rgba(232,197,71,.07); }
     .btn-go-import { border-radius: var(--r-sm); padding: 7px 14px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
     .btn-go-import:disabled { background: var(--sf2); color: var(--muted); border-color: var(--border); opacity: .55; cursor: not-allowed; }
@@ -247,7 +248,8 @@
     .source-badge .sb-val { font-size: 13px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 8px; }
     .source-badge .sb-count { font-size: 11.5px; color: var(--muted); }
     .sb-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex-shrink: 0; box-shadow: 0 0 0 3px rgba(76,195,138,.18); }
-    .sb-dot.empty { background: var(--err); box-shadow: 0 0 0 3px rgba(240,97,109,.18); }
+    /* "empty" también es la clase del recuadro vacío de las tablas: aquí no lleva su relleno */
+    .sb-dot.empty { background: var(--err); box-shadow: 0 0 0 3px rgba(240,97,109,.18); padding: 0; text-align: initial; }
     .isec .slabel { margin-bottom: 11px; }
     .cfg-grid { display: flex; flex-direction: column; gap: 12px; }
     #extIdField { display: none; }
@@ -366,7 +368,8 @@
     .export-links .el-ownership.err { color: var(--warn); }
 
     ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+    input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
     ::-webkit-scrollbar-thumb:hover { background-color: #34434f; }
 
@@ -426,7 +429,7 @@
     .joblive-hint { font-size: 11px; color: var(--muted); margin-left: auto; }
 
     /* ── Aviso de import pendiente ── */
-    .jobpend { display: none; align-items: center; gap: 11px; background: rgba(226,169,59,.09); border-bottom: 1px solid rgba(226,169,59,.3); padding: 10px 24px; font-size: 13px; flex-shrink: 0; }
+    .jobpend { display: none; align-items: center; gap: 11px; background: rgba(232,197,71,.09); border-bottom: 1px solid rgba(232,197,71,.3); padding: 10px 24px; font-size: 13px; flex-shrink: 0; }
     .jobpend.visible { display: flex; }
     .jobpend-ico { font-size: 14px; }
     .jobpend-txt { color: var(--text); }
@@ -1051,7 +1054,7 @@
     <div class="modal-body">
 
       <!-- SECCIÓN 1: Campos base (fuente pre-template vs SF) -->
-      <div style="background:rgba(6,182,212,0.06); border-left:3px solid #06b6d4; border-radius:6px; padding:10px 12px; font-size:11.5px; color:var(--text); line-height:1.55;">
+      <div style="background:rgba(var(--ac2-rgb),0.06); border-left:3px solid var(--ac2); border-radius:6px; padding:10px 12px; font-size:11.5px; color:var(--text); line-height:1.55;">
         <strong>📋 Campos base del pre-template.</strong> Por defecto usan valores hardcodeados (el dropdown de la UI, "DOCTOR", "Mexico", etc). Puedes cambiar cualquiera para que <strong>traiga el valor real del Contact desde Salesforce</strong>. Útil cuando te especifican "usa el ContactTypeSegment y FacilitySize que ya tiene el Contact". La validación verifica que el campo exista en el objeto Contact antes de aceptar.
       </div>
 
@@ -1070,8 +1073,8 @@
       <!-- SECCIÓN 2: Custom fields (columnas adicionales) -->
       <div style="background:rgba(var(--ac2-rgb),0.06); border-left:3px solid var(--ac2); border-radius:6px; padding:10px 12px; font-size:11.5px; color:var(--text); line-height:1.55;">
         <strong>➕ Campos custom adicionales.</strong> Agregan columnas nuevas al pre-template. Elige la <strong>fuente del valor</strong>:
-        <br>· <span style="color:#67E8F9;">☁ Desde SF</span> — trae el valor del Contact real (útil para <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Phone</code>, <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">MobilePhone</code>, etc).
-        <br>· <span style="color:#FFB020;">✎ Manual</span> — tú escribes el valor, se estampa idéntico en todos los registros (útil para <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Suffix</code>, campaign codes, códigos de tracking, etc).
+        <br>· <span style="color:var(--ac2);">☁ Desde SF</span> — trae el valor del Contact real (útil para <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Phone</code>, <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">MobilePhone</code>, etc).
+        <br>· <span style="color:var(--warn);">✎ Manual</span> — tú escribes el valor, se estampa idéntico en todos los registros (útil para <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">Suffix</code>, campaign codes, códigos de tracking, etc).
       </div>
 
       <div class="modal-field">
@@ -1126,7 +1129,7 @@
     </div>
     <div class="modal-body">
       <div style="background:rgba(var(--accent-rgb),0.06); border-left:3px solid var(--accent); border-radius:6px; padding:10px 12px; font-size:11.5px; color:var(--text); line-height:1.55;">
-        <strong>Los headers deben ser los API Field Names exactos de Salesforce.</strong> El orden es libre. Los headers reconocidos se mapean a las columnas del pre-template. Los headers que <em>no</em> matchean con las columnas base (13 campos) pero tienen sintaxis válida se agregan automáticamente como <strong style="color:#C4B5FD;">custom fields</strong> y aparecerán en el Field Mapping. Columnas con nombre inválido (espacios, puntos) o que empiezan con <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">__</code> se ignoran.
+        <strong>Los headers deben ser los API Field Names exactos de Salesforce.</strong> El orden es libre. Los headers reconocidos se mapean a las columnas del pre-template. Los headers que <em>no</em> matchean con las columnas base (13 campos) pero tienen sintaxis válida se agregan automáticamente como <strong style="color:var(--accent);">custom fields</strong> y aparecerán en el Field Mapping. Columnas con nombre inválido (espacios, puntos) o que empiezan con <code style="background:var(--sf2); padding:1px 5px; border-radius:3px; font-size:10.5px;">__</code> se ignoran.
       </div>
 
       <div class="modal-field">
@@ -1204,7 +1207,7 @@
     <div class="modal-footer">
       <button class="btn-modal-cancel" onclick="cerrarModalRetry()">Cancelar</button>
       <button class="btn-modal-cancel" onclick="descargarFallidosCSV()">⬇ Descargar CSV</button>
-      <button class="btn-modal-primary" id="btnRetryConfirm" onclick="ejecutarRetry()" style="background: linear-gradient(135deg, var(--warn), #f97316);">🔁 Reintentar ahora</button>
+      <button class="btn-modal-primary" id="btnRetryConfirm" onclick="ejecutarRetry()">🔁 Reintentar ahora</button>
     </div>
   </div>
 </div>
@@ -2321,10 +2324,10 @@ function renderPreTemplate(headers, rows, conservarPagina) {
       if (modo === 'manual') {
         badges += ' <span style="background:rgba(251,191,36,.25); color:var(--warn); border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">✎ MANUAL</span>';
       } else {
-        badges += ' <span style="background:rgba(6,182,212,.25); color:#67E8F9; border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">☁ SF</span>';
+        badges += ' <span style="background:rgba(var(--ac2-rgb),.25); color:var(--ac2); border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">☁ SF</span>';
       }
     }
-    if (esFromSF) badges += ' <span style="background:rgba(6,182,212,.25); color:#67E8F9; border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">☁ SF</span>';
+    if (esFromSF) badges += ' <span style="background:rgba(var(--ac2-rgb),.25); color:var(--ac2); border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">☁ SF</span>';
     if (esManualFijo) badges += ' <span style="background:rgba(251,191,36,.25); color:var(--warn); border-radius:100px; padding:0 6px; font-size:8px; font-weight:700; margin-left:4px;">✎ MANUAL</span>';
     html += `<th title="${esc(h)}">${esc(h)}${badges}</th>`;
   });
@@ -2346,19 +2349,19 @@ function renderPreTemplate(headers, rows, conservarPagina) {
       }
       else if (headerName === 'BusinessLine__c') {
         // BusinessLine__c: badge distinto si viene de SF o es manual
-        if (esFromSF) html += `<td title="${esc(v)} (desde SF)"><span class="bl-chip" style="background:rgba(6,182,212,.15); border-color:rgba(6,182,212,.4); color:#67E8F9;">☁ ${esc(v)}</span></td>`;
+        if (esFromSF) html += `<td title="${esc(v)} (desde SF)"><span class="bl-chip" style="background:rgba(var(--ac2-rgb),.15); border-color:rgba(var(--ac2-rgb),.4); color:var(--ac2);">☁ ${esc(v)}</span></td>`;
         else if (esManualFijo) html += `<td title="${esc(v)} (manual)"><span class="bl-chip" style="background:rgba(251,191,36,.15); border-color:rgba(251,191,36,.4); color:var(--warn);">✎ ${esc(v)}</span></td>`;
         else html += `<td title="${esc(v)}"><span class="bl-chip">${esc(v)}</span></td>`;
       }
       else if (CAMPOS_FIJOS_HARDCODED.has(headerName)) {
         // 6 fijos: color según fuente (SF cyan, manual naranja, default normal)
-        if (esFromSF) html += `<td class="fixed" style="color:#67E8F9;" title="${esc(v)} (desde SF)">☁ ${esc(v)}</td>`;
-        else if (esManualFijo) html += `<td class="fixed" style="color:#FFB020;" title="${esc(v)} (manual · estampado idéntico en todas las filas)">✎ ${esc(v) || '(vacío)'}</td>`;
+        if (esFromSF) html += `<td class="fixed" style="color:var(--ac2);" title="${esc(v)} (desde SF)">☁ ${esc(v)}</td>`;
+        else if (esManualFijo) html += `<td class="fixed" style="color:var(--warn);" title="${esc(v)} (manual · estampado idéntico en todas las filas)">✎ ${esc(v) || '(vacío)'}</td>`;
         else html += `<td class="fixed" title="${esc(v)}">${esc(v)}</td>`;
       }
       else if (esCustom && modoCustom === 'manual') {
         // Custom manual: color warn tenue
-        html += `<td style="color:#FFB020;" title="${esc(v)} (manual · estampado idéntico en todas las filas)">${esc(v) || '<span style="color:var(--muted); font-style:italic;">(vacío)</span>'}</td>`;
+        html += `<td style="color:var(--warn);" title="${esc(v)} (manual · estampado idéntico en todas las filas)">${esc(v) || '<span style="color:var(--muted); font-style:italic;">(vacío)</span>'}</td>`;
       }
       else {
         // Base (Contact__c, LastSourceAt__c, Company, LastName, Email) o custom SF
@@ -3056,7 +3059,7 @@ function renderCustomFieldsList() {
     const isManual = cf.mode === 'manual';
     const badgeStyle = isManual
       ? 'background:rgba(251,191,36,.15); color:var(--warn); border:1px solid rgba(251,191,36,.4);'
-      : 'background:rgba(6,182,212,.15); color:#67E8F9; border:1px solid rgba(6,182,212,.4);';
+      : 'background:rgba(var(--ac2-rgb),.15); color:var(--ac2); border:1px solid rgba(var(--ac2-rgb),.4);';
     const badgeText = isManual ? '✎ Manual' : '☁ Desde SF';
     const fuente = isManual
       ? (cf.value ? `Valor: <strong style="color:var(--text); font-family:var(--mono);">"${esc(cf.value)}"</strong>` : `<em style="color:var(--muted);">valor vacío</em>`)
