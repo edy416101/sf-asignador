@@ -152,6 +152,13 @@ try {
   prueba('las pruebas v17 del backend pudieron correr', () => { throw e; });
 }
 
+// ── v17 · Tiempo simulado: el Salesforce falso tarda como el real ──
+try {
+  require('./tiempo-v17')(html, prueba, g => { grupo = g; });
+} catch (e) {
+  prueba('las pruebas de tiempo pudieron correr', () => { throw e; });
+}
+
 // ── v17.1 · El repo es público: nada privado en los archivos de git ──
 grupo = 'v17.1 · Sin datos privados en el repo';
 prueba('Code.gs no define correos, admins, carpeta ni Sheet (viven en config.local.gs)', () => {
