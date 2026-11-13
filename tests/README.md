@@ -70,6 +70,12 @@ Imprime ✓/✗ por prueba y termina con código 1 si algo falla. Cubre:
   rechazos por minuto sin llenar la auditoría. En la página: token vencido → recuadro para
   volver a entrar con la misma cuenta y la petición sigue, nunca se cierra la sesión sola con
   filas o resultados, respuesta que no es JSON, aviso al cerrar la pestaña y Salir que limpia todo.
+- **v18.3 · Asignación y exportes** (`v18-asignacion.js` y el simulador): 24 reps con correos
+  largos (la query de Users va en bloques), campos custom largos (los IDs por query se calculan
+  con el largo del SELECT), Username antes que Email y Email con 2 usuarios, `jobState` sin
+  terminar, conteos sin doble reintento, carpeta de Drive del usuario, auditoría por nombre de
+  hoja, `sanitizarPayload`, tipos de entrada, listas en minúsculas, IDs separados por comas o
+  tabs, y en la página: un solo Sheet aunque haya doble clic y la pestaña abierta con el clic.
 - **v17 · Tiempo simulado** (`tiempo-v17.js`): la Bulk API falsa tarda como Salesforce
   (~1.15 s por Lead, transacciones de 200 en serie dentro de cada job, jobs distintos a la vez).
   El reloj es simulado, así que la prueba tarda milisegundos. Se calibró con el job real de 500

@@ -91,6 +91,7 @@
     document.getElementById('businessLine').value = 'Agenda Premium';
     document.getElementById('repsBody').innerHTML = '';
     Object.keys(SFFalso.USUARIOS).forEach(email => addRep(email, 50));
+    addRep('sin.numero@test.local', '');   // v18.3: un rep sin número se avisa
     const area = document.getElementById('idsArea');
     area.value = SFFalso.idsDeReporte();
     area.dispatchEvent(new Event('input'));
@@ -101,6 +102,7 @@
     await ejecutar();
     const log = document.getElementById('logBox').innerText;
     check('El log de ejecución avisa los duplicados', /duplicados descartados/.test(log));
+    check('Un rep con email pero sin número se avisa en el log', /sin número/.test(log));
     const iC = PT_HEADERS.indexOf('Contact__c');
     const cuenta = {};
     preTemplateRows.forEach(r => { const k = String(r[iC]).slice(0, 15); cuenta[k] = (cuenta[k] || 0) + 1; });
@@ -191,6 +193,28 @@
     return checks;
   };
 
+  async function exportes(check) {
+    const abiertas = [];
+    const abrirReal = window.open;
+    window.open = url => {
+      const v = { closed: false, document: { write() {} }, location: { href: url || '' }, close() { this.closed = true; } };
+      abiertas.push(v);
+      return v;
+    };
+    abrirModalExport();
+    setMode('new');
+    document.getElementById('exportFileName').value = 'COE-PRUEBA';
+    const antes = SIM.google.spreadsheets.size;
+    await Promise.all([ejecutarExport(), ejecutarExport()]);   // doble clic
+    await ejecutarExport();                                     // y otro clic después de terminar
+    const creados = SIM.google.spreadsheets.size - antes;
+    window.open = abrirReal;
+    cerrarModalExport();
+    check('Guardar en Sheets: doble clic y un clic después de terminar crean UN solo Sheet', creados === 1, creados + ' Sheet(s)');
+    check('La pestaña del Sheet se abre con el clic (sin bloqueo de popups) y recibe el link',
+      abiertas.length === 1 && /docs\.google\.com\/spreadsheets/.test(abiertas[0].location.href), abiertas.map(v => v.location.href || '(vacía)').join(' · '));
+  }
+
   async function sesionYRobustez(check) {
     const espera = ms => new Promise(r => st(r, ms));
     const modalAbierto = () => !!document.getElementById('reloginModal') && document.getElementById('reloginModal').classList.contains('open');
@@ -241,6 +265,9 @@
     check('Cerrar la pestaña con resultados sin guardar avisa; después de guardarlos, no', avisaSinGuardar && !intentarCerrar(),
       'antes: ' + avisaSinGuardar + ' · después: ' + intentarCerrar());
     check('El log dice cuántos jobs y de cuántas filas', /job\(s\) de ~\d+ filas/.test(document.getElementById('importLog').innerText));
+
+    // v18.3 · Guardar en Sheets: un solo Sheet y la pestaña se abre con el clic
+    await exportes(check);
 
     // e) Salir limpia todo (IDs, reps, filas) aunque se vuelva a entrar con otra persona
     document.getElementById('idsArea').value = '003TEST00000001';

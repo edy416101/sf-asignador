@@ -1901,6 +1901,14 @@ function onLeadTypeChange() {
   }
 }
 
+// v18.3: reps con email pero sin número (no se les asigna nada: se avisa)
+function repsSinCuota() {
+  return Array.from(document.querySelectorAll('#repsBody tr')).map(tr => {
+    const [eInp, nInp] = tr.querySelectorAll('input');
+    return { email: eInp.value.trim(), cuota: parseInt(nInp.value) };
+  }).filter(r => r.email && !(r.cuota > 0)).map(r => r.email);
+}
+
 function getReps() {
   return Array.from(document.querySelectorAll('#repsBody tr')).reduce((acc, tr) => {
     const [eInp, nInp] = tr.querySelectorAll('input');
@@ -1917,7 +1925,8 @@ function getReps() {
 function dedupIds(texto) {
   const vistos = new Set();
   const ids = [], duplicados = [];
-  texto.split('\n').forEach(l => {
+  // v18.3: también separados por comas, punto y coma o tabs (copiados de una fila de Excel)
+  String(texto).split(/[\n,;\t]+/).forEach(l => {
     const id = l.trim().replace(/^["']+|["']+$/g, '').trim();
     if (!id) return;
     if (id.length !== 15 && id.length !== 18) { ids.push(id); return; }
@@ -2005,6 +2014,8 @@ function limpiarAsignacion() {
 
 async function ejecutar() {
   if (bloqueadoPorImport()) return;
+  const sinCuota = repsSinCuota();
+  if (sinCuota.length) toast(`⚠ ${sinCuota.length} rep(s) sin número: no se les asigna nada.`, 'bad');
   const sid = document.getElementById('sid').value.trim();
   const diasInput = document.getElementById('dias').value.trim();
   const dias = diasInput === '' ? 0 : parseInt(diasInput);
@@ -2043,6 +2054,7 @@ async function ejecutar() {
 
   setStatus('Conectando con Salesforce…', 'run');
   log('Iniciando proceso de asignación…', 'info');
+  if (sinCuota.length) log(`⚠ ${sinCuota.length} rep(s) con email pero sin número: no se les asigna nada (${sinCuota.join(', ')}).`, 'warn');
   if (dias > 0) log(`Reps: ${reps.length} | IDs: ${ids.length} | Días: ${dias}`, 'info');
   else log(`Reps: ${reps.length} | IDs: ${ids.length} | Días: 0 (solo excluye actividad de hoy)`, 'info');
   if (duplicados.length > 0) {
@@ -5298,7 +5310,7 @@ function abrirModalExport() {
   setSubmode('link');
   document.getElementById('exportLinks').classList.remove('visible');
   const btn = document.getElementById('btnExportPrimary');
-  btn.disabled = false; btn.textContent = '📊 Crear Sheet';
+  btn.disabled = false; btn.textContent = '📊 Crear Sheet'; btn.dataset.listo = '';
 
   document.getElementById('exportModal').classList.add('open');
   setTimeout(() => document.getElementById('exportFileName').focus(), 100);
@@ -5376,10 +5388,20 @@ async function fileToBase64(file) {
   });
 }
 
+let exportEnCurso = false;
 async function ejecutarExport() {
   const btn = document.getElementById('btnExportPrimary');
+  // v18.3: un segundo clic no crea otro Sheet (ni mientras se crea, ni después)
+  if (exportEnCurso || btn.dataset.listo === '1') return;
+  exportEnCurso = true;
   const originalText = btn.textContent;
   btn.disabled = true; btn.textContent = '⏳ Procesando…';
+  // v18.3: la pestaña se abre YA (con el clic), así el navegador no la bloquea; luego se le pone el link
+  let ventana = null;
+  if (currentMode !== 'csv') {
+    try { ventana = window.open('', '_blank'); if (ventana) ventana.document.write('<p style="font-family:sans-serif">Creando el Sheet…</p>'); } catch (e) { ventana = null; }
+  }
+  let listo = false;
 
   try {
     // === MODO CSV: descarga local, sin backend ===
@@ -5396,6 +5418,7 @@ async function ejecutarExport() {
       document.getElementById('exportOwnership').className = 'el-ownership';
       linksDiv.classList.add('visible');
       btn.textContent = '✓ Listo';
+      listo = true;
       return;
     }
 
@@ -5511,16 +5534,20 @@ async function ejecutarExport() {
 
     linksDiv.classList.add('visible');
     resultadosSinGuardar = false;
-    window.open(data.url, '_blank');
-    toast('✅ Guardado correctamente. Abriendo…', 'ok');
+    if (ventana && !ventana.closed) ventana.location.href = data.url;
+    toast(ventana ? '✅ Guardado correctamente. Abriendo…' : '✅ Guardado correctamente. Abre el link de arriba.', 'ok');
     btn.textContent = '✓ Listo';
+    listo = true;
 
   } catch (err) {
     console.error(err);
+    if (ventana && !ventana.closed) ventana.close();
     toast('❌ ' + err.message, 'bad');
     btn.textContent = originalText;
   } finally {
-    btn.disabled = false;
+    exportEnCurso = false;
+    btn.dataset.listo = listo ? '1' : '';
+    btn.disabled = listo;   // tras crear el Sheet el botón queda apagado hasta volver a abrir el modal
   }
 }
 
