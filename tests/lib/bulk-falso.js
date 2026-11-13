@@ -9,6 +9,11 @@
 //   sondeosParaTerminar→ cuántos GET de estado antes de pasar a JobComplete (default 0)
 //   lock(fila)         → true si esa fila choca por bloqueo la PRIMERA vez que se procesa
 //   rechazo(fila)      → texto de error de validación para esa fila, o '' si pasa
+//   reloj              → { msPorLead, filasPorTransaccion }: los jobs tardan como en Salesforce.
+//                        Cada job procesa sus filas en transacciones de 200, una tras otra, a
+//                        ~1.15 s por Lead (medido en el job real de 500 que tardó 10.5 min).
+//                        Los jobs distintos corren a la vez. El tiempo es simulado: b.avanzar(ms)
+//                        lo mueve y b.ahora lo dice; nunca se espera de verdad.
 (function (raiz) {
   function parsearCsv(texto) {
     const filas = []; let fila = [], cur = '', q = false;
@@ -28,7 +33,21 @@
   const csv = (hdr, filas) => [hdr.map(q).join(',')].concat(filas.map(f => f.map(q).join(','))).join('\n') + '\n';
 
   function crearBulkFalso(opciones = {}) {
-    const b = { jobs: [], llamadas: [], creados: [], lockVistos: new Set(), opciones };
+    const b = { jobs: [], llamadas: [], creados: [], lockVistos: new Set(), opciones, ahora: 0 };
+    const reloj = opciones.reloj ? Object.assign({ msPorLead: 1150, filasPorTransaccion: 200 }, opciones.reloj) : null;
+    b.avanzar = ms => { b.ahora += ms; return b.ahora; };
+    // Con reloj: cuántas filas lleva el job en este momento (Salesforce las cuenta por transacción terminada)
+    const filasHechas = j => {
+      const n = j.ok.length + j.fail.length;
+      if (!reloj) return n;
+      let hechas = 0, t = j.inicio;
+      for (let k = 0; k < n; k += reloj.filasPorTransaccion) {
+        const tam = Math.min(reloj.filasPorTransaccion, n - k);
+        t += tam * reloj.msPorLead;
+        if (t <= b.ahora) hechas += tam; else break;
+      }
+      return hechas;
+    };
     let seqLead = 0;
     const resp = (code, body) => ({ getResponseCode: () => code, getContentText: () => (typeof body === 'string' ? body : JSON.stringify(body)) });
     const job = id => b.jobs.find(j => j.id === id);
@@ -80,18 +99,23 @@
         if (!j) return resp(404, 'no existe');
         const nuevo = JSON.parse(o.payload).state;
         if (nuevo === 'Aborted') { j.state = 'Aborted'; return resp(200, { id: j.id, state: 'Aborted' }); }
-        if (nuevo === 'UploadComplete') { j.state = 'UploadComplete'; procesar(j); return resp(200, { id: j.id, state: j.state }); }
+        if (nuevo === 'UploadComplete') { j.state = 'UploadComplete'; j.inicio = b.ahora; procesar(j); return resp(200, { id: j.id, state: j.state }); }
         return resp(400, 'estado no válido');
       }
       if ((m = ruta.match(/^\/jobs\/ingest\/(750\w+)$/)) && metodo === 'get') {
         const j = job(m[1]);
         if (!j) return resp(404, [{ errorCode: 'NOT_FOUND' }]);
-        if (j.state === 'UploadComplete' && ++j.sondeos > (opciones.sondeosParaTerminar || 0)) j.state = 'JobComplete';
+        if (reloj && (j.state === 'UploadComplete' || j.state === 'InProgress')) {
+          const n = j.ok.length + j.fail.length;
+          j.state = filasHechas(j) >= n ? 'JobComplete' : 'InProgress';
+          if (j.state === 'JobComplete' && j.fin == null) j.fin = j.inicio + n * reloj.msPorLead;
+        } else if (!reloj && j.state === 'UploadComplete' && ++j.sondeos > (opciones.sondeosParaTerminar || 0)) j.state = 'JobComplete';
         const terminado = j.state === 'JobComplete';
+        const hechas = reloj && j.ok ? filasHechas(j) : (terminado ? j.ok.length + j.fail.length : 0);
         return resp(200, {
           id: j.id, state: j.state, object: j.cuerpo.object, operation: j.cuerpo.operation,
           externalIdFieldName: j.cuerpo.externalIdFieldName,
-          numberRecordsProcessed: terminado ? j.ok.length + j.fail.length : 0,
+          numberRecordsProcessed: hechas,
           numberRecordsFailed: terminado ? j.fail.length : 0,
           retries: 0, apexProcessingTime: terminado ? 1000 * (j.ok.length + j.fail.length) : 0,
           totalProcessingTime: terminado ? 1100 * (j.ok.length + j.fail.length) : 0,

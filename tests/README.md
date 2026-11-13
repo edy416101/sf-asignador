@@ -45,6 +45,11 @@ Imprime ✓/✗ por prueba y termina con código 1 si algo falla. Cubre:
   `clientRequestId`, estado sumado, CSV unidos, reintento por `UNABLE_TO_LOCK_ROW`, fallos al
   iniciar (abort), `resultsError`, y seguridad de `doPost` (token falso con la misma cola,
   `action` con `=`, `instanceUrl` ajeno, `operation` fuera de lista, token basura, baja de usuario).
+- **v17 · Tiempo simulado** (`tiempo-v17.js`): la Bulk API falsa tarda como Salesforce
+  (~1.15 s por Lead, transacciones de 200 en serie dentro de cada job, jobs distintos a la vez).
+  El reloj es simulado, así que la prueba tarda milisegundos. Se calibró con el job real de 500
+  Leads del 12-nov-2026, que tardó 10.5 min: un solo job da 9.8 min. Con v17 y 10 reps da 1.9 min.
+  No mide los bloqueos entre jobs ni si Salesforce corre todos los jobs a la vez.
 
 Para comparar contra otra versión (por ejemplo, la de `main` antes de un arreglo):
 
@@ -78,11 +83,11 @@ que pasó.
 | Archivo | Qué es |
 |---|---|
 | `todo.js` | El comando único: Node + simulador, con candado de red |
-| `run.js` | Las pruebas de Node (incluye `frontend-v17.js` y `backend-v17.js`) |
+| `run.js` | Las pruebas de Node (incluye `frontend-v17.js`, `backend-v17.js` y `tiempo-v17.js`) |
 | `lib/candado-red.js` | Corta cualquier salida a internet desde Node |
 | `sim/headless.js` | Corre el simulador en Chrome headless y corta la red desde Chrome |
 | `lib/sf-falso.js` | Salesforce falso para la asignación (lo usan Node y el navegador) |
-| `lib/bulk-falso.js` | Bulk API 2.0 falsa: jobs, rechazos, bloqueos, fallos y 401 a pedido |
+| `lib/bulk-falso.js` | Bulk API 2.0 falsa: jobs, rechazos, bloqueos, fallos y 401 a pedido; con `reloj`, tarda como Salesforce |
 | `lib/cargar.js` | Carga funciones de `index.html`, corre `Code.gs` aislado y servicios de Google falsos |
 | `lib/config-prueba.gs` | Correos e IDs falsos que reemplazan a `backend/config.local.gs` (que no está en git) |
 | `sim/serve.js` | Servidor local del simulador |
