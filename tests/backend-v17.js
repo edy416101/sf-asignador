@@ -346,6 +346,7 @@ module.exports = function (prueba, setGrupo) {
       const original = sf2.UrlFetchApp.fetch;
       sf2.UrlFetchApp.fetch = (url, o) => (/FROM\+Contact|FROM%20Contact/.test(url)
         ? { getResponseCode: () => 500, getContentText: () => '[{"errorCode":"QUERY_TIMEOUT"}]' } : original(url, o));
+      sf2.UrlFetchApp.fetchAll = reqs => reqs.map(r => sf2.UrlFetchApp.fetch(r.url, r));
       const ctx2 = cargarBackend(sf2.UrlFetchApp);
       const r = ctx2.procesarAsignacion(Object.assign({}, base, { reps: [{ email: 'rep.a@test.local', cuota: 5 }], ids: ['003TEST00000001'] }));
       assert.strictEqual(r.bloquesFallidos, 1);

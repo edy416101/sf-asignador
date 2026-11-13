@@ -1,7 +1,8 @@
 // Simulador de Cat-alyst en el navegador SIN tocar nada real (lo inyecta tests/sim/serve.js).
-// - Toda llamada al backend de Apps Script se responde aquí con backend/Code.gs REAL:
-//   la Asignación contra el Salesforce falso (tests/lib/sf-falso.js) y el import contra la
-//   Bulk API falsa (tests/lib/bulk-falso.js), con servicios de Google falsos en memoria.
+// - Toda llamada al backend de Apps Script entra por doPost de backend/Code.gs REAL (token,
+//   whitelist, rate limit, auditoría y ruteo): la Asignación y el describe van contra el
+//   Salesforce falso (tests/lib/sf-falso.js), el import contra la Bulk API falsa
+//   (tests/lib/bulk-falso.js) y Google contra tests/lib/google-falso.js.
 // - Cualquier otra petición de red de la app (fetch) se BLOQUEA y queda anotada.
 // - El botón "▶ Correr simulación" recorre Asignación → Import (varios jobs, un rechazo de
 //   dos renglones, un bloqueo que se reintenta solo, doble clic) → Retry → Recuperar por lote.
@@ -14,7 +15,7 @@
   const st = window.setTimeout;
   window.setTimeout = (f, ms, ...a) => st(f, ms >= 1000 ? 20 : ms, ...a);
 
-  // ── Salesforce y Bulk API falsos ──
+  // ── Salesforce, Bulk API y Google falsos ──
   const ERROR_DOS_RENGLONES = 'FIELD_CUSTOM_VALIDATION_EXCEPTION:Este contacto ya tiene un Lead abierto.\nRevisa el Lead existente antes de crear otro.:--';
   const sf = SFFalso.crearSalesforceFalso();
   const bulk = BulkFalso.crearBulkFalso({
@@ -23,82 +24,58 @@
     lock: f => f.LastName === 'Doc5',
     sondeosParaTerminar: 1
   });
-  SIM.bulk = bulk;
+  const google = GoogleFalso.crearGoogleFalso();
+  SIM.bulk = bulk; SIM.sf = sf; SIM.google = google;
+  SIM.auditoria = google.auditoria;
+  const googleFetch = GoogleFalso.urlFetchFiel(google.google);
+  const destino = url => (/googleapis\.com/.test(url) ? googleFetch : /\/jobs\/ingest/.test(url) ? bulk.UrlFetchApp : sf.UrlFetchApp);
   const UrlFetchApp = {
-    fetch: (url, o) => (/\/jobs\/ingest/.test(url) ? bulk.UrlFetchApp.fetch(url, o) : sf.UrlFetchApp.fetch(url, o)),
-    fetchAll: reqs => reqs.map(r => UrlFetchApp.fetch(r.url, r))
+    fetch: (url, o) => destino(url).fetch(url, o),
+    fetchAll(reqs) {
+      let error = null;
+      const out = reqs.map(r => { try { return destino(r.url).fetch(r.url, r); } catch (e) { error = error || e; return null; } });
+      if (error) throw error;
+      return out;
+    }
   };
 
-  // ── Servicios de Google falsos (navegador) ──
-  const cache = new Map();
-  SIM.auditoria = [];
-  const hoja = { getLastRow: () => SIM.auditoria.length, appendRow: f => SIM.auditoria.push(f),
-    getRange: (fila, col, n, ncols) => ({ setFontWeight() { return this; }, setBackground() { return this; }, setFontColor() { return this; },
-      getValues: () => SIM.auditoria.slice(fila - 1, fila - 1 + n).map(f => f.slice(col - 1, col - 1 + (ncols || 1))) }),
-    setFrozenRows() {}, setColumnWidth() {} };
-  const GOOGLE = {
-    Logger: { log() {} },
-    Utilities: {
-      DigestAlgorithm: { SHA_256: 'sha256' }, Charset: { UTF_8: 'utf8' },
-      // Hash simple (FNV): en el simulador solo sirve como llave de caché
-      computeDigest: (alg, s) => {
-        const out = []; let h = 2166136261;
-        for (let k = 0; k < 32; k++) { for (const ch of String(s) + k) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } out.push((h & 255) - 128); }
-        return out;
-      },
-      base64EncodeWebSafe: bytes => btoa(String.fromCharCode(...bytes.map(b => b & 255))).replace(/\+/g, '-').replace(/\//g, '_'),
-      getUuid: () => crypto.randomUUID()
-    },
-    CacheService: { getScriptCache: () => ({ get: k => (cache.has(k) ? cache.get(k) : null), put: (k, v) => { cache.set(k, String(v)); }, remove: k => { cache.delete(k); } }) },
-    LockService: { getScriptLock: () => ({ tryLock: () => true, waitLock() {}, releaseLock() {} }) },
-    SpreadsheetApp: { openById: () => ({ getSheets: () => [hoja], getSheetByName: () => null }) }
-  };
-
-  // ── Backend: Code.gs real ──
+  // ── Backend: Code.gs real, con doPost de punta a punta ──
   const realFetch = window.fetch.bind(window);
   let backend = null;
   async function cargarBackend() {
     if (backend) return backend;
     const config = await (await realFetch('/tests/lib/config-prueba.gs')).text();   // v17.1: la config real no está en git
     const code = config + '\n' + (await (await realFetch('/backend/Code.gs')).text()).replace(/^﻿/, '');
-    const nombres = ['UrlFetchApp', ...Object.keys(GOOGLE)];
-    backend = new Function(...nombres, code + '\n;return { procesarAsignacion, iniciarImportBulk, consultarEstadoJob, recuperarResultadoJob, validarParametrosSf, normalizarAccion };')
-      (UrlFetchApp, ...Object.keys(GOOGLE).map(k => GOOGLE[k]));
+    const nombres = ['UrlFetchApp', ...Object.keys(google.globales)];
+    backend = new Function(...nombres, code + '\n;return { doPost, doGet, normalizarAccion, GOOGLE_CLIENT_ID, VERSION_BACKEND };')
+      (UrlFetchApp, ...Object.keys(google.globales).map(k => google.globales[k]));
     return backend;
   }
-  const CAMPOS_LEAD = ['Contact__c', 'LastSourceAt__c', 'Company', 'LastName', 'Email', 'OwnerId', 'BusinessLine__c', 'Lead_Type__c',
-    'ContactTypeSegment__c', 'Country__c', 'Leadassist__Use_Round_Robin__c', 'Status', 'FacilitySize__c'];
 
   window.fetch = async (url, opts) => {
     const u = String(url);
     if (u.startsWith(location.origin) || !/^https?:/i.test(u)) return realFetch(url, opts);   // archivos del propio simulador
     if (!u.includes('script.google.com')) { SIM.bloqueadas.push(u); throw new Error('Bloqueado por la simulación: ' + u); }
-    const p = JSON.parse(opts.body);
     const b = await cargarBackend();
-    const action = b.normalizarAccion(p.action);
-    SIM.llamadas.push(action);
-    p.userEmail = 'simulacion@docplanner.com';
-    let data;
-    try {
-      if (['asignacion', 'describe', 'importStart', 'jobStatus', 'recuperarJob'].includes(action)) b.validarParametrosSf(p, action);
-      if (action === 'asignacion') data = b.procesarAsignacion(p);
-      else if (action === 'describe') data = { fields: CAMPOS_LEAD, fieldsMetadata: {} };
-      else if (action === 'importStart') data = b.iniciarImportBulk(p);
-      else if (action === 'jobStatus') data = b.consultarEstadoJob(p);
-      else if (action === 'recuperarJob') data = b.recuperarResultadoJob(p);
-      else data = { error: 'Acción no simulada: ' + action };
-    } catch (e) {
-      data = { error: e.message, sfSessionExpired: e.sfSesionExpirada === true };
-    }
+    let accion = '(sin cuerpo)';
+    try { accion = b.normalizarAccion(JSON.parse(opts.body).action); } catch (e) {}
+    SIM.llamadas.push(accion);
+    const salida = b.doPost({ postData: { contents: String(opts && opts.body || '') } });
     // Una vuelta al event loop, como una petición real
     await new Promise(r => st(r, 5));
-    return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    return new Response(salida.getContent(), { status: 200, headers: { 'Content-Type': 'application/json' } });
   };
 
-  // Login falso local: no habla con Google, solo muestra la app
-  function login() {
+  // Login falso local: no habla con Google. El token queda registrado en el tokeninfo falso,
+  // así que doPost lo valida igual que en producción (aud, dominio, exp y whitelist).
+  SIM.EMAIL = 'simulacion@docplanner.com';
+  async function login() {
+    const b = await cargarBackend();
     const b64 = s => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    onSignIn({ credential: b64('{"alg":"none"}') + '.' + b64(JSON.stringify({ email: 'simulacion@docplanner.com', given_name: 'Simón' })) + '.sim' });
+    const exp = Math.floor(Date.now() / 1000) + 3600;
+    const token = b64('{"alg":"RS256"}') + '.' + b64(JSON.stringify({ email: SIM.EMAIL, given_name: 'Simón', exp, hd: 'docplanner.com' })) + '.firmaSimulada';
+    google.registrarToken(token, { aud: b.GOOGLE_CLIENT_ID, hd: 'docplanner.com', email_verified: 'true', exp: String(exp), email: SIM.EMAIL });
+    onSignIn({ credential: token });
   }
 
   // ── Escenario completo ──
@@ -107,7 +84,7 @@
     const check = (nombre, ok, detalle) => checks.push({ nombre, ok: !!ok, detalle: detalle || '' });
     SIM.llamadas.length = 0; SIM.bloqueadas.length = 0;
 
-    if (document.getElementById('mainApp').style.display !== 'flex') login();
+    if (document.getElementById('mainApp').style.display !== 'flex') await login();
     const bienvenida = document.getElementById('toast').textContent;
     check('El nombre con acento del login se lee bien (JWT en UTF-8)', /Simón/.test(bienvenida), bienvenida);
     document.getElementById('sid').value = 'SID-FALSO';
@@ -171,6 +148,12 @@
     check('Al recuperar, la fila que se reintentó por bloqueo sale OK (un Retry no la duplicaría)',
       doc5 && doc5.__Status === 'Succeeded' && importResultRows.filter(r => r.__Status === 'Failed').length === 2,
       doc5 ? doc5.__Status + ' · fallidas: ' + importResultRows.filter(r => r.__Status === 'Failed').length : 'no está');
+
+    // 5. Todo pasó por doPost real: auditoría, y un token que Google no conoce se rechaza
+    check('La auditoría registró el import y su lote (doPost real)',
+      SIM.auditoria.some(f => f[2] === 'import' && f[3] === 'iniciado' && /lote=lote_/.test(f[4])), SIM.auditoria.length + ' filas de auditoría');
+    const ajeno = await (await fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ idToken: 'aaa.bbb.ccc', action: 'describe' }) })).json();
+    check('Un token que Google no reconoce se rechaza en el backend', ajeno.authError === true, JSON.stringify(ajeno));
 
     check('Ninguna llamada salió a sistemas reales', !SIM.bloqueadas.length, SIM.bloqueadas.join(', ') || 'backend simulado: ' + [...new Set(SIM.llamadas)].join(' → '));
 
