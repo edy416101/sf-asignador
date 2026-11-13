@@ -13,7 +13,7 @@ const PORT = Number(process.env.PORT) || 8733;
 const TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.gs': 'text/plain; charset=utf-8',
   '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json' };
 const GSI = '<script src="https://accounts.google.com/gsi/client" async></script>';
-const MOCK = '<script src="/tests/lib/sf-falso.js"></script><script src="/tests/lib/bulk-falso.js"></script><script src="/tests/sim/sim-mock.js"></script>';
+const MOCK = '<script src="/tests/lib/google-falso.js"></script><script src="/tests/lib/sf-falso.js"></script><script src="/tests/lib/bulk-falso.js"></script><script src="/tests/sim/sim-mock.js"></script>';
 
 http.createServer((req, res) => {
   const ruta = decodeURIComponent(req.url.split('?')[0]);

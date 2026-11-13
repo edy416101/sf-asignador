@@ -152,6 +152,13 @@ try {
   prueba('las pruebas v17 del backend pudieron correr', () => { throw e; });
 }
 
+// ── v18 · Falsos fieles, doGet, rate limit, login, exportes y admin ──
+try {
+  require('./v18-falsos')(prueba, g => { grupo = g; });
+} catch (e) {
+  prueba('las pruebas v18 de los falsos pudieron correr', () => { throw e; });
+}
+
 // ── v17 · Tiempo simulado: el Salesforce falso tarda como el real ──
 try {
   require('./tiempo-v17')(html, prueba, g => { grupo = g; });

@@ -45,6 +45,11 @@ Imprime ✓/✗ por prueba y termina con código 1 si algo falla. Cubre:
   `clientRequestId`, estado sumado, CSV unidos, reintento por `UNABLE_TO_LOCK_ROW`, fallos al
   iniciar (abort), `resultsError`, y seguridad de `doPost` (token falso con la misma cola,
   `action` con `=`, `instanceUrl` ajeno, `operation` fuera de lista, token basura, baja de usuario).
+- **v18 · Falsos fieles** (`v18-falsos.js`): los falsos se portan como los reales donde se
+  pueden perder datos o duplicar Leads (ver la tabla de abajo), y pruebas de lo que no tenía
+  ninguna: `doGet`, rate limit por usuario, cada rama del login de Google (`validarIdToken`),
+  exportes a Sheets (nuevo, adjunto, desde CSV y desde Excel) y el panel admin (altas, bajas,
+  métricas y huérfanos). Todo entra por `doPost` real.
 - **v17 · Tiempo simulado** (`tiempo-v17.js`): la Bulk API falsa tarda como Salesforce
   (~1.15 s por Lead, transacciones de 200 en serie dentro de cada job, jobs distintos a la vez).
   El reloj es simulado, así que la prueba tarda milisegundos. Se calibró con el job real de 500
@@ -73,8 +78,8 @@ en varios jobs; Salesforce rechaza dos filas, una con un error de dos renglones,
 que se reintenta sola) → Retry de las fallidas → Recuperar por Lote. Muestra un panel con lo
 que pasó.
 
-- Toda llamada al backend la responde `tests/sim/sim-mock.js` con el `Code.gs` real: la
-  Asignación contra el Salesforce falso y el import contra la Bulk API falsa.
+- Toda llamada al backend entra por `doPost` del `Code.gs` real (token, whitelist, rate limit,
+  auditoría y ruteo), con los mismos falsos de Salesforce, Bulk API y Google que usa Node.
 - Cualquier otra petición de red (`fetch`) se **bloquea** y aparece en el panel.
 - También acepta otra versión: `node tests/sim/serve.js ruta/a/index.html`.
 - Sin abrir el navegador: `node tests/sim/headless.js` corre lo mismo en Chrome headless.
@@ -84,12 +89,13 @@ que pasó.
 | Archivo | Qué es |
 |---|---|
 | `todo.js` | El comando único: Node + simulador, con candado de red |
-| `run.js` | Las pruebas de Node (incluye `frontend-v17.js`, `backend-v17.js` y `tiempo-v17.js`) |
+| `run.js` | Las pruebas de Node (incluye `frontend-v17.js`, `backend-v17.js`, `v18-*.js` y `tiempo-v17.js`) |
 | `lib/candado-red.js` | Corta cualquier salida a internet desde Node |
 | `sim/headless.js` | Corre el simulador en Chrome headless y corta la red desde Chrome |
-| `lib/sf-falso.js` | Salesforce falso para la asignación (lo usan Node y el navegador) |
-| `lib/bulk-falso.js` | Bulk API 2.0 falsa: jobs, rechazos, bloqueos, fallos y 401 a pedido; con `reloj`, tarda como Salesforce |
-| `lib/cargar.js` | Carga funciones de `index.html`, corre `Code.gs` aislado y servicios de Google falsos |
+| `lib/google-falso.js` | Google falso (Node y navegador): CacheService con TTL y límites de 100 KB / 250 caracteres, LockService que puede estar ocupado, Sheets y Drive con hojas por nombre, carpetas y permisos, tokeninfo, y `urlFetchFiel` (truena con URLs de más de 2048 caracteres y con 4xx/5xx sin `muteHttpExceptions`) |
+| `lib/sf-falso.js` | Salesforce falso: queries de la asignación, `describe` de Lead y Contact con tipos y picklists, 401 y `done:false` a pedido |
+| `lib/bulk-falso.js` | Bulk API 2.0 falsa: IDs de 18, rechazos, bloqueos (también envueltos en otro error), jobs `Failed` con `errorMessage` y `unprocessedrecords`, cerrar dos veces → 400, abortar no deshace, caídas de red antes o después de que Salesforce procese, upsert; con `reloj`, tarda como Salesforce |
+| `lib/cargar.js` | Carga funciones de `index.html` y corre `Code.gs` aislado con los servicios de Google falsos |
 | `lib/config-prueba.gs` | Correos e IDs falsos que reemplazan a `backend/config.local.gs` (que no está en git) |
 | `sim/serve.js` | Servidor local del simulador |
 | `sim/sim-mock.js` | Backend simulado, bloqueo de red y botón de simulación |

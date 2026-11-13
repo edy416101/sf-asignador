@@ -7,7 +7,8 @@ var DEFAULT_DRIVE_FOLDER_ID = "carpeta_prueba";
 // El día a día se administra desde el panel de la tool.
 var ALLOWED_EMAILS = [
   "usuario.prueba@docplanner.com",
-  "admin.prueba@docplanner.com"
+  "admin.prueba@docplanner.com",
+  "simulacion@docplanner.com"   // el usuario del simulador del navegador
 ];
 
 // Administradores (pueden editar el panel). Fijos aquí a propósito: si fueran editables,
