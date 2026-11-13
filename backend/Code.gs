@@ -1,5 +1,5 @@
 ﻿// ══════════════════════════════════════════════════════════════════════════
-//  SF ASIGNADOR · BACKEND — Google Apps Script  v18.2
+//  SF ASIGNADOR · BACKEND — Google Apps Script  v18.3
 //
 //  Operaciones (lista cerrada en ACCIONES_PERMITIDAS):
 //    · "asignacion" (default) → procesarAsignacion
@@ -10,6 +10,17 @@
 //    · "exportSheet"        → exportarResultadoASheet
 //    · "exportSheetFromFile"→ exportarSheetDesdeArchivo (CSV/Excel local)
 //    · "adminData" / "adminAddUser" / "adminRemoveUser" → panel admin
+//
+//  v18.3: asignación y backend más firmes.
+//    · Los reps se buscan en bloques de 10 (con ~24 reps la URL pasaba de 2 kB y tronaba).
+//      El OwnerId sale primero por Username y después por Email; un Email con 2 usuarios
+//      activos no se asigna (se avisa).
+//    · Los IDs por query se calculan con el largo del SELECT (con campos custom, 40 no cabían).
+//    · consultarEstadoJob: jobState correcto si nada está InProgress, y al recuperar con el
+//      reintento por bloqueo, sus filas no cuentan doble.
+//    · Exportes: el usuario debe ser editor de la carpeta que pide. Auditoría por nombre de
+//      hoja; sanitizarPayload nunca loguea filas; tipos de entrada validados; whitelist y
+//      admins siempre en minúsculas.
 //
 //  v18.2: login más firme. Antes de preguntar a Google, el token debe traer aud (esta app) e
 //    iss de Google. Si Google no responde (5xx, 429 o red), no es authError (authTemporal):
@@ -81,7 +92,7 @@
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════════════
 var SF_API_VERSION          = "v62.0";  // ← Versión de la API de Salesforce (un solo lugar para subirla)
-var VERSION_BACKEND         = "18.2";
+var VERSION_BACKEND         = "18.3";
 var GOOGLE_CLIENT_ID        = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 var ALLOWED_DOMAIN          = "docplanner.com";
 
@@ -141,12 +152,16 @@ var IMPORT_IDEMP_SEG       = 21600;  // 6 h: un clientRequestId repetido devuelv
 var ERROR_LOCK             = "UNABLE_TO_LOCK_ROW";
 
 // ── v17 · ASIGNACIÓN ──
-var IDS_POR_QUERY          = 40;     // UrlFetchApp corta las URLs de más de 2 kB: 40 IDs caben con el query
+var IDS_POR_QUERY          = 40;     // máximo de IDs por query (v18.3: menos si el SELECT es largo)
+var URL_MAX_CARACTERES     = 2000;   // UrlFetchApp corta las URLs de más de 2 kB
+var REPS_POR_QUERY         = 10;     // v18.3: reps por query de Users
 var QUERIES_EN_PARALELO    = 10;     // bloques que van juntos en un fetchAll
 var ASIGNACION_CORTE_MS    = 270000; // 4.5 min: se corta con aviso antes del límite de 6 min de Apps Script
 
 // ── SEGURIDAD: campos que NUNCA se logean (sanitización) ──
 var CAMPOS_SENSIBLES = ["sid", "idToken", "fileContent", "access_token", "accessToken", "password"];
+// v18.3: datos de contactos y reps: en el log solo va cuántos son (antes, con 3 o menos, iban completos)
+var CAMPOS_CON_FILAS = ["rows", "ids", "reps", "preTemplateRows", "importResultRows", "filasNoEnviadas", "email"];
 
 
 
@@ -212,6 +227,9 @@ function doPost(e) {
     }
 
     if (operation === "(desconocida)") throw new Error("Acción no válida.");
+
+    // ── v18.3: cada campo conocido con su tipo (antes un número en fileName tronaba con "trim") ──
+    validarTiposEntrada(payload);
 
     // ── CAPA 3 · v17: el SID solo viaja a Salesforce, con objeto y operación conocidos ──
     if (ACCIONES_CON_SID.indexOf(operation) !== -1) validarParametrosSf(payload, operation);
@@ -308,6 +326,31 @@ function validarParametrosSf(p, operation) {
       throw new Error("Upsert necesita un External ID Field válido.");
     }
   }
+}
+
+// v18.3: tipos de los campos que se leen del payload. Un campo ausente (o null) pasa.
+var TIPOS_ENTRADA = {
+  texto: ["sid", "instanceUrl", "object", "operation", "externalId", "clientRequestId", "loteId", "jobId", "fileName",
+          "folderId", "targetSheetUrl", "renombrarAttached", "fileContent", "fileMimeType", "origFileName",
+          "businessLine", "leadType", "email"],
+  lista: ["rows", "headers", "ids", "reps", "jobIds", "extraFields", "fieldsFromSF", "camposFijosOcultos",
+          "preTemplateHeaders", "preTemplateRows", "importResultHeaders", "importResultRows"],
+  objeto: ["summary", "fieldsManualValues"],
+  booleano: ["reintentarLock", "cierreAutomatico", "esReintentoLock", "moverAttached"]
+};
+function validarTiposEntrada(p) {
+  var malo = function(campo, tipo) { throw new Error("Dato no válido: " + campo + " debe ser " + tipo + "."); };
+  TIPOS_ENTRADA.texto.forEach(function(c) { if (p[c] != null && typeof p[c] !== "string") malo(c, "texto"); });
+  TIPOS_ENTRADA.lista.forEach(function(c) { if (p[c] != null && !Array.isArray(p[c])) malo(c, "una lista"); });
+  TIPOS_ENTRADA.objeto.forEach(function(c) { if (p[c] != null && (typeof p[c] !== "object" || Array.isArray(p[c]))) malo(c, "un objeto"); });
+  TIPOS_ENTRADA.booleano.forEach(function(c) { if (p[c] != null && typeof p[c] !== "boolean") malo(c, "true o false"); });
+  ["rows", "preTemplateRows", "importResultRows"].forEach(function(c) {
+    if (Array.isArray(p[c]) && !p[c].every(function(f) { return Array.isArray(f) && f.every(function(v) { return v == null || typeof v !== "object"; }); })) {
+      malo(c, "una lista de filas con valores simples");
+    }
+  });
+  if (p.dias != null && p.dias !== "" && typeof p.dias !== "number" && typeof p.dias !== "string") malo("dias", "un número");
+  ["filasPorJob", "jobsALaVez"].forEach(function(c) { if (p[c] != null && p[c] !== "" && typeof p[c] !== "number" && typeof p[c] !== "string") malo(c, "un número"); });
 }
 
 // v17: error que el frontend reconoce como "pega un SID nuevo" (401 de Salesforce).
@@ -484,6 +527,8 @@ function sanitizarPayload(payload) {
     if (CAMPOS_SENSIBLES.indexOf(key) !== -1) {
       // Redactar completamente los campos sensibles
       copia[key] = "[REDACTED]";
+    } else if (CAMPOS_CON_FILAS.indexOf(key) !== -1) {
+      copia[key] = Array.isArray(val) ? "[" + val.length + " elementos]" : "[oculto]";
     } else if (Array.isArray(val)) {
       // Arrays grandes: solo mostrar tamaño para no llenar logs
       copia[key] = val.length > 3
@@ -553,8 +598,7 @@ function registrarAuditoria(userEmail, operation, status, details) {
     return { logged: false, reason: "AUDIT_SHEET_ID vacío" };
   }
   try {
-    var ss = SpreadsheetApp.openById(AUDIT_SHEET_ID);
-    var sheet = ss.getSheets()[0];
+    var sheet = hojaAuditoria();   // v18.3: por nombre, nunca la pestaña Usuarios
 
     // Auto-crear headers si el sheet está vacío
     if (sheet.getLastRow() === 0) {
@@ -968,22 +1012,41 @@ function procesarAsignacion(params) {
   };
 
   // v17: solo usuarios activos, y se revisa el código HTTP (401 = SID vencido).
-  var emailsList = reps.map(function(r) { return "'" + escapeSoql(r.email) + "'"; });
-  var soqlUsers = "SELECT Id, Email, Username FROM User WHERE (Email IN (" + emailsList.join(",") + ") OR Username IN (" + emailsList.join(",") + ")) AND IsActive = true";
-  var urlUsers  = instanceUrl + "/services/data/" + SF_API_VERSION + "/query/?q=" + encodeURIComponent(soqlUsers);
-  var resUsers  = UrlFetchApp.fetch(urlUsers, opciones);
-  var codeUsers = resUsers.getResponseCode();
-  if (codeUsers === 401) throw errorSesionSf("al buscar los reps");
-  var jsonUsers;
-  try { jsonUsers = JSON.parse(resUsers.getContentText()); } catch (e) { jsonUsers = {}; }
-  if (codeUsers !== 200 || !jsonUsers.records) {
-    throw new Error("Salesforce no devolvió los usuarios (HTTP " + codeUsers + "). Verifica el SID. " + JSON.stringify(jsonUsers).slice(0, 300));
+  // v18.3: en bloques de REPS_POR_QUERY (cada email va dos veces en la URL: con ~24 reps
+  // pasaba de 2 kB y UrlFetchApp tronaba).
+  var bloquesUsers = [];
+  for (var bu = 0; bu < reps.length; bu += REPS_POR_QUERY) {
+    var lista = reps.slice(bu, bu + REPS_POR_QUERY).map(function(r) { return "'" + escapeSoql(r.email) + "'"; }).join(",");
+    var soqlUsers = "SELECT Id, Email, Username FROM User WHERE (Email IN (" + lista + ") OR Username IN (" + lista + ")) AND IsActive = true";
+    bloquesUsers.push({ url: instanceUrl + "/services/data/" + SF_API_VERSION + "/query/?q=" + encodeURIComponent(soqlUsers), method: "get", headers: opciones.headers });
   }
+  var usuariosSf = [];
+  sfFetchAll(bloquesUsers).forEach(function(r) {
+    if (r.code === 401) throw errorSesionSf("al buscar los reps");
+    var jsonUsers;
+    try { jsonUsers = JSON.parse(r.text); } catch (e) { jsonUsers = {}; }
+    if (r.code !== 200 || !jsonUsers.records) {
+      throw new Error("Salesforce no devolvió los usuarios (HTTP " + r.code + "). Verifica el SID. " + JSON.stringify(jsonUsers).slice(0, 300));
+    }
+    usuariosSf = usuariosSf.concat(jsonUsers.records);
+  });
 
-  var mapUserIds = {};
-  jsonUsers.records.forEach(function(u) {
-    if (u.Email)    mapUserIds[u.Email.toLowerCase().trim()]    = u.Id;
-    if (u.Username) mapUserIds[u.Username.toLowerCase().trim()] = u.Id;
+  // v18.3: el Username es único en Salesforce y manda; el Email solo si da UN usuario activo.
+  var porUsername = {}, porEmail = {};
+  usuariosSf.forEach(function(u) {
+    if (u.Username) porUsername[String(u.Username).toLowerCase().trim()] = u.Id;
+    if (u.Email) {
+      var k = String(u.Email).toLowerCase().trim();
+      if (!porEmail[k]) porEmail[k] = [];
+      if (porEmail[k].indexOf(u.Id) === -1) porEmail[k].push(u.Id);
+    }
+  });
+  var mapUserIds = {}, repsAmbiguos = [];
+  reps.forEach(function(r) {
+    var k = r.email.toLowerCase().trim();
+    if (porUsername[k]) mapUserIds[k] = porUsername[k];
+    else if (porEmail[k] && porEmail[k].length === 1) mapUserIds[k] = porEmail[k][0];
+    else if (porEmail[k] && porEmail[k].length > 1) repsAmbiguos.push({ email: r.email, ids: porEmail[k] });
   });
 
   var cuotasReps = {};
@@ -1009,12 +1072,12 @@ function procesarAsignacion(params) {
   }
   var selectClause = selectFields.join(", ");
 
-  // Un bloque = IDS_POR_QUERY IDs (UrlFetchApp corta URLs de más de 2 kB).
+  // Un bloque = hasta IDS_POR_QUERY IDs (UrlFetchApp corta URLs de más de 2 kB).
   // v17: los bloques van de QUERIES_EN_PARALELO en QUERIES_EN_PARALELO con fetchAll.
-  var bloques = [];
-  for (var i = 0; i < idsContactos.length; i += IDS_POR_QUERY) {
-    var bloque = idsContactos.slice(i, i + IDS_POR_QUERY);
-    var idsFormateados = bloque.map(function(id) { return "'" + escapeSoql(String(id).trim()) + "'"; }).join(",");
+  // v18.3: cuántos IDs caben se calcula con el largo real del SELECT (con campos custom,
+  // 40 IDs ya no cabían y el bloque entero fallaba).
+  var urlContactos = function(ids) {
+    var idsFormateados = ids.map(function(id) { return "'" + escapeSoql(String(id).trim()) + "'"; }).join(",");
     var soqlContactos =
       "SELECT " + selectClause + " " +
       "FROM Contact WHERE Id IN (" + idsFormateados + ") " +
@@ -1029,7 +1092,14 @@ function procesarAsignacion(params) {
         "AND IsConverted = false " +
         "AND (Status IN ('New','Assigned','Qualifying') OR lead_closed_date__c = LAST_N_DAYS:" + diasFinal + ")" +
       ")";
-    bloques.push({ n: bloque.length, url: instanceUrl + "/services/data/" + SF_API_VERSION + "/query/?q=" + encodeURIComponent(soqlContactos) });
+    return instanceUrl + "/services/data/" + SF_API_VERSION + "/query/?q=" + encodeURIComponent(soqlContactos);
+  };
+  var idsPorQuery = idsQueCaben(urlContactos);
+  if (idsPorQuery < 1) throw new Error("La consulta de contactos no cabe en una URL: quita campos custom o campos desde SF.");
+  var bloques = [];
+  for (var i = 0; i < idsContactos.length; i += idsPorQuery) {
+    var bloque = idsContactos.slice(i, i + idsPorQuery);
+    bloques.push({ n: bloque.length, url: urlContactos(bloque) });
   }
 
   for (var g = 0; g < bloques.length; g += QUERIES_EN_PARALELO) {
@@ -1109,7 +1179,7 @@ function procesarAsignacion(params) {
     var assigned = 0;
 
     if (!ownerId) {
-      // No se encontró Owner en Salesforce — se registra y NO se le asignan leads
+      // No se encontró Owner en Salesforce (o el Email da 2 usuarios) — se registra y NO se le asignan leads
       ownersNotFound.push(rep.email);
       leadsPorOwner[email] = { email: rep.email, ownerId: "NOT_FOUND", count: 0, notFound: true };
       return;
@@ -1200,6 +1270,10 @@ function procesarAsignacion(params) {
     mensaje += " ⚠ OJO: " + bloquesFallidos + " bloque(s) de contactos fallaron en la query y NO entraron al pool. Revisa el log de Apps Script o reintenta." +
                (erroresBloques.length ? " Detalle: " + erroresBloques[0] : "");
   }
+  if (repsAmbiguos.length > 0) {
+    mensaje += " ⚠ " + repsAmbiguos.length + " email(s) tienen 2 o más usuarios activos en Salesforce y NO se les asignó nada: " +
+      repsAmbiguos.map(function(a) { return a.email; }).join(", ") + ". Usa su Username.";
+  }
   if (idsSinConsultar > 0) {
     mensaje += " ⚠ CORTE POR TIEMPO: " + idsSinConsultar + " ID(s) no alcanzaron a consultarse. Pártelos y vuelve a correr la asignación con ellos.";
   }
@@ -1224,6 +1298,7 @@ function procesarAsignacion(params) {
     repsRepetidos: repsRepetidos,
     mensaje: mensaje, ownerStats: ownerStats,
     ownersNotFound: ownersNotFound,
+    repsAmbiguos: repsAmbiguos,
     leadTypeUsed: leadTypeVal,
     extraFieldsUsados: extraFields,
     extraFieldsRechazados: extraFieldsRechazados,
@@ -1233,6 +1308,17 @@ function procesarAsignacion(params) {
   };
 }
 
+
+// v18.3: cuántos IDs de 18 caracteres caben en la URL de la consulta (máximo IDS_POR_QUERY)
+function idsQueCaben(armarUrl) {
+  var muestra = "003000000000000AAA";
+  for (var n = IDS_POR_QUERY; n >= 1; n--) {
+    var ids = [];
+    for (var k = 0; k < n; k++) ids.push(muestra);
+    if (armarUrl(ids).length <= URL_MAX_CARACTERES) return n;
+  }
+  return 0;
+}
 
 // ══════════════════════════════════════════════════════════════════════════
 //  Helper para serializar valores de campos SF (fechas, números, objetos)
@@ -1793,9 +1879,10 @@ function buscarJobsDeLote(loteId) {
 // v18: la hoja del log de auditoría es la primera que NO es "Usuarios" (si alguien mueve
 // las pestañas, el log no se mezcla con la whitelist).
 function hojaAuditoria() {
-  var hojas = SpreadsheetApp.openById(AUDIT_SHEET_ID).getSheets();
+  var ss = SpreadsheetApp.openById(AUDIT_SHEET_ID);
+  var hojas = ss.getSheets();
   for (var i = 0; i < hojas.length; i++) if (hojas[i].getName() !== USUARIOS_SHEET_NAME) return hojas[i];
-  return hojas[0];
+  return ss.insertSheet("Auditoría");   // v18.3: solo existe Usuarios: el log va aparte
 }
 
 var ESTADOS_FINALES = { JobComplete: 1, Failed: 1, Aborted: 1 };
@@ -1855,7 +1942,10 @@ function consultarEstadoJob(params) {
 
   var terminado = jobs.every(function(j) { return ESTADOS_FINALES[j.state]; });
   var jobState;
-  if (!terminado) jobState = jobs.some(function(j) { return j.state === "InProgress"; }) ? "InProgress" : jobs[0].state;
+  // v18.3: sin terminar, nunca dice un estado final (antes, si el primer job ya había
+  // terminado y ninguno estaba InProgress, decía "JobComplete" sin haber terminado)
+  var hay = function(st) { return jobs.some(function(j) { return j.state === st; }); };
+  if (!terminado) jobState = hay("InProgress") ? "InProgress" : hay("UploadComplete") ? "UploadComplete" : hay("Open") ? "Open" : "InProgress";
   else if (jobs.every(function(j) { return j.state === "JobComplete"; })) jobState = "JobComplete";
   else if (jobs.some(function(j) { return j.state === "Failed"; })) jobState = "Failed";
   else jobState = "Aborted";
@@ -1926,7 +2016,13 @@ function recuperarResultadoJob(params) {
     else partes[t].push(r.text);
   });
   var fallidasPrincipales = unirCsv(partes[1]);
-  if (salida.incluyeReintentoLock) fallidasPrincipales = separarFilasLock(fallidasPrincipales).restoCsv;
+  if (salida.incluyeReintentoLock) {
+    // v18.3: las filas bloqueadas se procesaron dos veces (en su job y en el reintento): cuentan una
+    var sep = separarFilasLock(fallidasPrincipales);
+    fallidasPrincipales = sep.restoCsv;
+    salida.processed = Math.max(0, (salida.processed || 0) - sep.rows.length);
+    salida.failed = Math.max(0, (salida.failed || 0) - sep.rows.length);
+  }
   salida.successCsv = unirCsv(partes[0].concat(partesLock[0]));
   salida.failedCsv = unirCsv([fallidasPrincipales].concat(partesLock[1]));
   salida.unprocessedCsv = unirCsv(partes[2].concat(partesLock[2]));
@@ -1942,6 +2038,7 @@ function recuperarResultadoJob(params) {
       var r = lanzarReintentoLock(sid, instanceUrl, est, ids, lock, params.userEmail || "", params.loteId || "");
       if (r.jobId) {
         salida.failedCsv = lock.restoCsv;
+        salida.failed = Math.max(0, (salida.failed || 0) - lock.rows.length);   // v18.3: ya no son fallidas
         salida.reintentoLock = { jobId: r.jobId, filas: lock.rows.length };
       } else if (r.enCurso) {
         // v18: otra petición lo está lanzando. Esas filas NO salen como fallidas (un Retry
@@ -2112,6 +2209,7 @@ function exportarResultadoASheet(params) {
   // Aceptar link completo de carpeta o solo el ID
   var folderId = folderIdRaw ? extraerIdDeCarpeta(folderIdRaw) : DEFAULT_DRIVE_FOLDER_ID;
   if (!folderId) folderId = DEFAULT_DRIVE_FOLDER_ID;  // fallback si el link no se parseó
+  revisarCarpetaDelUsuario(folderId, userEmail);    // v18.3
 
   var summary             = params.summary || {};
   var preTemplateHeaders  = params.preTemplateHeaders  || [];
@@ -2270,6 +2368,7 @@ function exportarSheetDesdeArchivo(params) {
   var folderIdRaw  = (params.folderId || "").trim();
   var folderId     = folderIdRaw ? extraerIdDeCarpeta(folderIdRaw) : DEFAULT_DRIVE_FOLDER_ID;
   if (!folderId) folderId = DEFAULT_DRIVE_FOLDER_ID;
+  revisarCarpetaDelUsuario(folderId, userEmail);    // v18.3
   var fileContent  = params.fileContent || "";      // base64
   var fileMimeType = params.fileMimeType || "";      // ej. text/csv o application/vnd.openxmlformats-...
   var origFileName = params.origFileName || "uploaded";
@@ -2441,6 +2540,17 @@ function llenarTresHojas(ss, summary, preTemplateHeaders, preTemplateRows, impor
   else preTemplateSheet.getRange(1,1).setValue("Sin datos de Pre Template.");
   if (importResultHeaders.length && importResultRows.length) llenarHojaConDatos(importResultSheet, importResultHeaders, importResultRows);
   else importResultSheet.getRange(1,1).setValue("Sin resultado de import.");
+}
+
+// v18.3: la cuenta del script ve carpetas que el usuario no. Si pide otra carpeta que la COE,
+// debe ser dueño o editor de ella (si no, el Sheet quedaría donde el usuario no tiene acceso).
+function revisarCarpetaDelUsuario(folderId, userEmail) {
+  if (!folderId || folderId === DEFAULT_DRIVE_FOLDER_ID) return;
+  var carpeta;
+  try { carpeta = DriveApp.getFolderById(folderId); } catch (e) { carpeta = null; }
+  if (!carpeta || !usuarioPuedeEditar(carpeta, userEmail)) {
+    throw new Error("No tienes permiso de editor en esa carpeta de Drive (o no existe). Usa una carpeta tuya o deja el campo vacío para la carpeta COE.");
+  }
 }
 
 // v17: el usuario (no la cuenta del script) debe ser dueño o editor del archivo.
@@ -2636,8 +2746,12 @@ function testCarpetaCOE() {
 //    cosmético: cualquiera puede forzarlos desde la consola del navegador.
 // ══════════════════════════════════════════════════════════════════════════
 
+// v18.3: las listas de config.local.gs se comparan siempre en minúsculas
+function enMinusculas(lista) {
+  return (lista || []).map(function(e) { return String(e || "").toLowerCase().trim(); }).filter(Boolean);
+}
 function esAdmin(email) {
-  return ADMIN_EMAILS.indexOf(String(email || "").toLowerCase().trim()) !== -1;
+  return enMinusculas(ADMIN_EMAILS).indexOf(String(email || "").toLowerCase().trim()) !== -1;
 }
 
 // Devuelve la pestaña "Usuarios", creándola y sembrándola si no existe.
@@ -2650,8 +2764,9 @@ function obtenerHojaUsuarios() {
     sh.getRange(1, 1, 1, 3).setFontWeight("bold").setBackground("#1e2235").setFontColor("#ffffff");
     sh.setFrozenRows(1);
     sh.setColumnWidth(1, 280); sh.setColumnWidth(2, 240); sh.setColumnWidth(3, 160);
-    for (var i = 0; i < ALLOWED_EMAILS.length; i++) {
-      sh.appendRow([ALLOWED_EMAILS[i], "sistema (migración v15)", new Date()]);
+    var semilla = enMinusculas(ALLOWED_EMAILS);
+    for (var i = 0; i < semilla.length; i++) {
+      sh.appendRow([semilla[i], "sistema (migración v15)", new Date()]);
     }
     Logger.log("[USUARIOS] Pestaña creada y sembrada con " + ALLOWED_EMAILS.length + " usuarios.");
   }
@@ -2678,8 +2793,9 @@ function obtenerWhitelist() {
       }
     }
     // Los admins SIEMPRE están dentro, aunque alguien los borrara del Sheet
-    for (var a = 0; a < ADMIN_EMAILS.length; a++) {
-      if (emails.indexOf(ADMIN_EMAILS[a]) === -1) emails.push(ADMIN_EMAILS[a]);
+    var admins = enMinusculas(ADMIN_EMAILS);
+    for (var a = 0; a < admins.length; a++) {
+      if (emails.indexOf(admins[a]) === -1) emails.push(admins[a]);
     }
     if (emails.length > 0) {
       cache.put(WHITELIST_CACHE_KEY, JSON.stringify(emails), WHITELIST_CACHE_SEG);
@@ -2688,7 +2804,7 @@ function obtenerWhitelist() {
   } catch (err) {
     Logger.log("[WHITELIST FALLBACK] " + err.message + " — usando lista hardcodeada.");
   }
-  return ALLOWED_EMAILS;
+  return enMinusculas(ALLOWED_EMAILS).concat(enMinusculas(ADMIN_EMAILS));
 }
 
 // v17: alta y baja bajo candado (dos admins a la vez podían duplicar o borrar la fila equivocada).
@@ -2749,8 +2865,7 @@ function adminEliminarUsuario(userEmail, payload) {
 function obtenerDatosAdmin(userEmail) {
   if (!AUDIT_SHEET_ID) throw new Error("La auditoría no está configurada (AUDIT_SHEET_ID vacío): el panel no tiene datos que mostrar.");
 
-  var ss = SpreadsheetApp.openById(AUDIT_SHEET_ID);
-  var audit = ss.getSheets()[0];
+  var audit = hojaAuditoria();   // v18.3: por nombre, nunca la pestaña Usuarios
   var last = audit.getLastRow();
   var rows = (last >= 2) ? audit.getRange(2, 1, last - 1, 5).getValues() : [];
 
@@ -2887,7 +3002,7 @@ function obtenerDatosAdmin(userEmail) {
 
   return {
     esAdmin: esAdmin(userEmail),
-    admins: ADMIN_EMAILS,
+    admins: enMinusculas(ADMIN_EMAILS),
     usuarios: usuarios,
     log: logRows.slice(0, 300),
     totalFilasLog: logRows.length,

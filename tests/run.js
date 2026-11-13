@@ -176,6 +176,13 @@ try {
   prueba('las pruebas v18 de sesión pudieron correr', () => { throw e; });
 }
 
+// ── v18.3 · Asignación, exportes y backend P2 ──
+try {
+  require('./v18-asignacion')(html, prueba, g => { grupo = g; });
+} catch (e) {
+  prueba('las pruebas v18.3 pudieron correr', () => { throw e; });
+}
+
 // ── v17 · Tiempo simulado: el Salesforce falso tarda como el real ──
 try {
   require('./tiempo-v17')(html, prueba, g => { grupo = g; });
