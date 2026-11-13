@@ -78,7 +78,7 @@ debería quedar entre 2 y 3 min. Falta confirmarlo con una carga real.
   El alta y la baja de usuarios tampoco.
 - Exportes: el Summary hace decenas de `setValue`. El export desde CSV no neutraliza fórmulas,
   tampoco las descargas CSV. Un error a la mitad deja archivos huérfanos en Drive.
-- `SF_API_VERSION` es v57.0. `appsscript.json` no declara `oauthScopes`.
+- `SF_API_VERSION` es v57.0.
 - Retry: el merge usa `Contact__c` como llave y se rompe si esa columna se omite o se repite.
   Se puede lanzar un segundo retry encima del primero. No maneja `stillProcessing`.
 - Las tablas pintan todas las filas.
@@ -103,9 +103,9 @@ simulador del navegador (15/15). Decisiones que cambian lo que se planeó:
 
 ### Despliegue (con Edgar)
 
-1. Apps Script: pegar `Code.gs` y `appsscript.json`, y publicar una **versión nueva** del mismo
-   deployment (la URL no cambia). Como ahora se declaran `oauthScopes`, correr una vez
-   `testAutorizarScopes()` desde el editor.
+1. Apps Script: pegar `Code.gs` y publicar una **versión nueva** del mismo deployment (la URL no
+   cambia). No hace falta autorizar nada: la v17 usa los mismos servicios de Google que la v16 y
+   `appsscript.json` no declara `oauthScopes`, así que los permisos no cambian.
 2. Probar con una carga real que ya haga falta, de unas 500 filas. Comparar contra los 10.5 min
    y revisar en el log `retries`, `Apex` y el tiempo total.
 3. PR de `mejoras/v17` a `main` (publica Pages).
