@@ -50,6 +50,15 @@ Imprime ✓/✗ por prueba y termina con código 1 si algo falla. Cubre:
   ninguna: `doGet`, rate limit por usuario, cada rama del login de Google (`validarIdToken`),
   exportes a Sheets (nuevo, adjunto, desde CSV y desde Excel) y el panel admin (altas, bajas,
   métricas y huérfanos). Todo entra por `doPost` real.
+- **v18 · Sin Leads duplicados** (`v18-duplicados.js`): cada camino por el que v17 podía crear
+  el mismo Lead dos veces (resultado de más de 100 KB, respuesta del cierre perdida, cierre que
+  responde 500 pero sí cerró, reintento por bloqueo lanzado dos veces o no encontrado al
+  recuperar parte del lote, lote con jobs abortados) y una **prueba de estrés** con 320
+  escenarios aleatorios (filas, reps, caídas de red antes y después de que Salesforce procese,
+  bloqueos, rechazos, Retry y Recuperar). Invariante: cada `Contact__c` se crea una sola vez y
+  lo que el cliente cree fallido no existe en Salesforce. `ESTRES=2000 node tests/run.js` corre
+  más escenarios. También las funciones del navegador: `clientRequestId` estable, lista de
+  pendientes y filas "En proceso".
 - **v17 · Tiempo simulado** (`tiempo-v17.js`): la Bulk API falsa tarda como Salesforce
   (~1.15 s por Lead, transacciones de 200 en serie dentro de cada job, jobs distintos a la vez).
   El reloj es simulado, así que la prueba tarda milisegundos. Se calibró con el job real de 500

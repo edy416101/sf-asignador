@@ -140,7 +140,7 @@ module.exports = function (html, prueba, setGrupo) {
   });
   prueba('importStart siempre manda clientRequestId', () => {
     const a = html.indexOf("action: 'importStart'");
-    assert.ok(a > 0 && /clientRequestId: nuevoRequestId\(\)/.test(html.slice(a, a + 300)));
+    assert.ok(a > 0 && /clientRequestId: (nuevoRequestId\(\)|requestIdPara\()/.test(html.slice(a, a + 300)));
   });
 
   // ── Resultados y retry ────────────────────────────────────────

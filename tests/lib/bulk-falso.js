@@ -8,7 +8,8 @@
 //   sesionVencida      → todo responde 401
 //   falloCrear: [i]    → la creación del job número i (0, 1, …) responde 500
 //   falloSubida: [i]   → la subida del CSV del job i responde 500
-//   falloCierre: [i]   → cerrar (UploadComplete) el job i responde 500 sin cerrarlo
+//   falloCierre: [i]   → cerrar (UploadComplete) el job i responde 500 sin cerrarlo (solo la 1a vez)
+//   cierreMiente: [i]  → cerrar el job i SÍ lo cierra (y se procesa), pero responde 500
 //   falloDescarga      → 'successfulResults' | 'failedResults' | 'unprocessedrecords' responde 500
 //   falloJob(j)        → texto (o { mensaje, procesadas }) para que el job termine en Failed con
 //                        ese errorMessage; sus filas sin procesar salen en unprocessedrecords
@@ -108,7 +109,8 @@
         if ((opciones.falloCrear || []).includes(i)) return resp(500, [{ errorCode: 'UNKNOWN_EXCEPTION', message: 'error al crear' }]);
         const cuerpo = JSON.parse(o.payload);
         const id = to18('750FAKE' + String(i + 1).padStart(8, '0'));
-        b.jobs.push({ id, i, state: 'Open', cuerpo, sondeos: 0, ok: [], fail: [], sinProcesar: [] });
+        b.jobs.push({ id, i, state: 'Open', cuerpo, sondeos: 0, ok: [], fail: [], sinProcesar: [],
+          createdDate: new Date(Date.now() + b.ahora).toISOString().replace('Z', '+0000') });
         return resp(200, { id, state: 'Open', object: cuerpo.object, operation: cuerpo.operation });
       }
       if ((m = ruta.match(/^\/jobs\/ingest\/(750\w+)\/batches$/)) && metodo === 'put') {
@@ -135,10 +137,11 @@
         }
         if (nuevo === 'UploadComplete') {
           if (j.state !== 'Open') return resp(400, estadoInvalido(j, nuevo));
-          if ((opciones.falloCierre || []).includes(j.i)) return resp(500, [{ errorCode: 'UNKNOWN_EXCEPTION', message: 'error al cerrar' }]);
+          if ((opciones.falloCierre || []).includes(j.i) && !j.cierreFallado) { j.cierreFallado = true; return resp(500, [{ errorCode: 'UNKNOWN_EXCEPTION', message: 'error al cerrar' }]); }
           if (!j.csv) return resp(400, [{ errorCode: 'INVALIDJOBSTATE', message: 'No data uploaded' }]);
           j.state = 'UploadComplete'; j.inicio = b.ahora; procesar(j);
           if (j.errorMessage) j.state = 'Failed';
+          if ((opciones.cierreMiente || []).includes(j.i)) return resp(500, [{ errorCode: 'UNKNOWN_EXCEPTION', message: 'timeout interno' }]);
           return resp(200, { id: j.id, state: 'UploadComplete' });
         }
         return resp(400, estadoInvalido(j, nuevo));
@@ -160,7 +163,7 @@
           numberRecordsFailed: procesado ? j.fail.length : 0,
           retries: 0, apexProcessingTime: procesado ? 1000 * hechas : 0,
           totalProcessingTime: procesado ? 1100 * hechas : 0,
-          createdDate: '2026-11-12T21:24:36.000+0000'
+          createdDate: j.createdDate
         };
         if (j.state === 'Failed') d.errorMessage = j.errorMessage;
         return resp(200, d);
