@@ -77,6 +77,8 @@ function serviciosGoogleFalsos() {
 function cargarBackend(UrlFetchApp, ruta, extras) {
   const code = fs.readFileSync(ruta || path.join(RAIZ, 'backend', 'Code.gs'), 'utf8').replace(/^﻿/, '');
   const ctx = vm.createContext(Object.assign({ UrlFetchApp, Logger: { log() {} } }, extras || {}));
+  // v17.1: la configuración privada vive fuera de git; las pruebas usan una falsa.
+  vm.runInContext(fs.readFileSync(path.join(RAIZ, 'tests', 'lib', 'config-prueba.gs'), 'utf8'), ctx);
   vm.runInContext(code, ctx);
   return ctx;
 }

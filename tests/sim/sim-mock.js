@@ -59,7 +59,8 @@
   let backend = null;
   async function cargarBackend() {
     if (backend) return backend;
-    const code = (await (await realFetch('/backend/Code.gs')).text()).replace(/^﻿/, '');
+    const config = await (await realFetch('/tests/lib/config-prueba.gs')).text();   // v17.1: la config real no está en git
+    const code = config + '\n' + (await (await realFetch('/backend/Code.gs')).text()).replace(/^﻿/, '');
     const nombres = ['UrlFetchApp', ...Object.keys(GOOGLE)];
     backend = new Function(...nombres, code + '\n;return { procesarAsignacion, iniciarImportBulk, consultarEstadoJob, recuperarResultadoJob, validarParametrosSf, normalizarAccion };')
       (UrlFetchApp, ...Object.keys(GOOGLE).map(k => GOOGLE[k]));

@@ -44,7 +44,7 @@ module.exports = function (prueba, setGrupo) {
     const { bulk, ctx, g } = montar();
     const rows = filas(500, i => OWNERS[i % 5]);
     const r = ctx.iniciarImportBulk({ clientRequestId: 'req_prueba_' + (++nReq), sid: 'SID', instanceUrl: INSTANCIA, object: 'Lead', operation: 'insert',
-      headers: HEADERS, rows, userEmail: 'edgar.martinez@docplanner.com', clientRequestId: 'req_prueba_0001' });
+      headers: HEADERS, rows, userEmail: 'usuario.prueba@docplanner.com', clientRequestId: 'req_prueba_0001' });
 
     prueba('500 filas → 5 jobs de 100', () => {
       assert.strictEqual(r.jobIds.length, 5);
@@ -70,7 +70,7 @@ module.exports = function (prueba, setGrupo) {
     });
     prueba('doble clic: el mismo clientRequestId no crea otro job', () => {
       const otra = ctx.iniciarImportBulk({ clientRequestId: 'req_prueba_' + (++nReq), sid: 'SID', instanceUrl: INSTANCIA, object: 'Lead', operation: 'insert',
-        headers: HEADERS, rows, userEmail: 'edgar.martinez@docplanner.com', clientRequestId: 'req_prueba_0001' });
+        headers: HEADERS, rows, userEmail: 'usuario.prueba@docplanner.com', clientRequestId: 'req_prueba_0001' });
       assert.strictEqual(bulk.jobs.length, 5, 'se crearon ' + bulk.jobs.length + ' jobs');
       assert.deepStrictEqual(otra.jobIds, r.jobIds);
       assert.strictEqual(otra.repetido, true);
@@ -217,7 +217,7 @@ module.exports = function (prueba, setGrupo) {
   // ── Seguridad (doPost) ────────────────────────────────────────
   setGrupo('v17 · Seguridad del backend (doPost)');
   const ahora = Math.floor(Date.now() / 1000);
-  const claims = { email: 'edgar.martinez@docplanner.com', hd: 'docplanner.com', exp: ahora + 3000 };
+  const claims = { email: 'usuario.prueba@docplanner.com', hd: 'docplanner.com', exp: ahora + 3000 };
   const tokenBueno = jwt(claims);
   function googleQueSoloAcepta(token, ctxRef) {
     return url => {
@@ -277,7 +277,7 @@ module.exports = function (prueba, setGrupo) {
       assert.strictEqual(r.sfSessionExpired, true, JSON.stringify(r));
     });
     prueba('baja de usuario: su token cacheado deja de servir', () => {
-      m.g.cache.set('whitelist_v15', JSON.stringify(['guilherme.foppa@docplanner.com']));
+      m.g.cache.set('whitelist_v15', JSON.stringify(['admin.prueba@docplanner.com']));
       const r = post(m.ctx, { idToken: tokenBueno, action: 'jobStatus', sid: 'SID', instanceUrl: INSTANCIA, jobId: '750FAKE00000001' });
       assert.strictEqual(r.notAuthorized, true, JSON.stringify(r));
       m.g.cache.delete('whitelist_v15');

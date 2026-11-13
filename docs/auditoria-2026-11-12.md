@@ -103,12 +103,12 @@ simulador del navegador (15/15). Decisiones que cambian lo que se planeó:
 
 ### Despliegue (con Edgar)
 
-1. Apps Script: pegar `Code.gs` y publicar una **versión nueva** del mismo deployment (la URL no
-   cambia). No hace falta autorizar nada: la v17 usa los mismos servicios de Google que la v16 y
-   `appsscript.json` no declara `oauthScopes`, así que los permisos no cambian.
-2. Probar con una carga real que ya haga falta, de unas 500 filas. Comparar contra los 10.5 min
+1. PR a `main` (publica Pages). Hecho: PR #8 y #9.
+2. Backend: `bash scripts/publicar-backend.sh` (v17.1). Sube `Code.gs`, `appsscript.json` y
+   `config.local.gs` con clasp y publica una versión nueva del mismo deployment. No hay que
+   autorizar permisos: son los mismos servicios de Google que la v16.
+3. Probar con una carga real que ya haga falta, de unas 500 filas. Comparar contra los 10.5 min
    y revisar en el log `retries`, `Apex` y el tiempo total.
-3. PR de `mejoras/v17` a `main` (publica Pages).
 
 ## 4. Fuera de la tool
 
