@@ -1,17 +1,25 @@
 ﻿// ══════════════════════════════════════════════════════════════════════════
-//  SF ASIGNADOR · BACKEND — Google Apps Script  v16.2
+//  SF ASIGNADOR · BACKEND — Google Apps Script  v17.0
 //
-//  Operaciones:
-//    · default              → procesarAsignacion
+//  Operaciones (lista cerrada en ACCIONES_PERMITIDAS):
+//    · "asignacion" (default) → procesarAsignacion
 //    · "describe"           → describirObjeto
-//    · "importStart"        → iniciarImportBulk     ← v14: devuelve el jobId ya
-//    · "jobStatus"          → consultarEstadoJob    ← v14: consulta corta (~1s)
-//    · "recuperarJob"       → recuperarResultadoJob
-//    · "import"             → ejecutarImportBulk    (legacy síncrono; se conserva
-//                              como respaldo si un navegador tiene el front viejo
-//                              en caché. El flujo nuevo NO lo usa.)
+//    · "importStart"        → iniciarImportBulk     ← v17: N jobs en paralelo, loteId
+//    · "jobStatus"          → consultarEstadoJob    ← v17: acepta jobIds[]
+//    · "recuperarJob"       → recuperarResultadoJob ← v17: jobIds[], loteId o jobId
 //    · "exportSheet"        → exportarResultadoASheet
 //    · "exportSheetFromFile"→ exportarSheetDesdeArchivo (CSV/Excel local)
+//    · "adminData" / "adminAddUser" / "adminRemoveUser" → panel admin
+//
+//  CAMBIO CLAVE v17.0 — la carga se parte en varios jobs:
+//    Bulk API 2.0 procesa un job en transacciones de 200, una tras otra, y
+//    cada Lead cuesta ~1 s por la automatización de Salesforce. Un job de 500
+//    tardó 10.5 min. Ahora se crean hasta MAX_JOBS_PARALELO jobs de ~FILAS_POR_JOB
+//    filas, agrupadas por OwnerId, y Salesforce los corre a la vez. Crear, subir
+//    y cerrar van en 3 rondas de UrlFetchApp.fetchAll.
+//    Además: caché de tokens por SHA-256, auditoría neutralizada, listas
+//    permitidas para instanceUrl/object/operation, idempotencia por
+//    clientRequestId y reintento automático de filas con UNABLE_TO_LOCK_ROW.
 //
 //  CAMBIO CLAVE v14.0 — el backend ya no se queda esperando:
 //    Antes, "import" hacía crear+subir+cerrar+ESPERAR+descargar en una sola
@@ -45,7 +53,8 @@
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════════════
 var DEFAULT_DRIVE_FOLDER_ID = "17Ah_wvZiEdxT3PQOqumR343dyeV17f25";  // ← Carpeta COE (hardcodeada)
-var SF_API_VERSION          = "v57.0";  // ← Versión de la API de Salesforce (un solo lugar para subirla)
+var SF_API_VERSION          = "v62.0";  // ← Versión de la API de Salesforce (un solo lugar para subirla)
+var VERSION_BACKEND         = "17.0";
 var GOOGLE_CLIENT_ID        = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 var ALLOWED_DOMAIN          = "docplanner.com";
 
@@ -87,10 +96,38 @@ var WHITELIST_CACHE_SEG  = 300;  // 5 min: un alta/baja tarda máx esto en propa
 // Protege contra bugs, bucles accidentales, y abuso.
 var RATE_LIMIT_MAX_POR_HORA  = 100;
 // NOTA v14: "jobStatus" queda FUERA a propósito. Es una consulta de ~1s que el
-// frontend repite cada 10s mientras dura un import; con el tope de 100/hora un
+// frontend repite cada 5-15s mientras dura un import; con el tope de 100/hora un
 // import largo agotaría el límite del propio usuario. No hay riesgo de abuso:
 // requiere id_token válido + un jobId existente, y no descarga datos.
-var RATE_LIMIT_OPERACIONES   = ["asignacion", "import", "importStart", "exportSheet", "exportSheetFromFile", "recuperarJob"];
+// v17: también cuentan describe, adminData y cualquier acción desconocida.
+var RATE_LIMIT_OPERACIONES   = ["asignacion", "importStart", "exportSheet", "exportSheetFromFile", "recuperarJob",
+                                "describe", "adminData", "adminAddUser", "adminRemoveUser", "(desconocida)"];
+
+// ── v17 · LISTAS PERMITIDAS ──
+// Solo estas acciones existen. Cualquier otra se rechaza (antes caía en la asignación).
+var ACCIONES_PERMITIDAS = ["asignacion", "describe", "importStart", "jobStatus", "recuperarJob",
+                           "exportSheet", "exportSheetFromFile", "adminData", "adminAddUser", "adminRemoveUser"];
+// Acciones que mandan el SID a Salesforce: su instanceUrl debe ser de Salesforce.
+var ACCIONES_CON_SID    = ["asignacion", "describe", "importStart", "jobStatus", "recuperarJob"];
+var INSTANCE_URL_REGEX  = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.my\.salesforce\.com$/i;
+var OBJECT_REGEX        = /^[A-Za-z0-9_]+$/;
+var OPERACIONES_IMPORT  = ["insert", "upsert"];
+var JOB_ID_REGEX        = /^750[a-zA-Z0-9]{12}([a-zA-Z0-9]{3})?$/;
+var LOTE_ID_REGEX       = /^lote_[a-f0-9]{16}$/;
+var JWT_REGEX           = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+
+// ── v17 · IMPORT EN PARALELO ──
+// Bulk API 2.0 procesa cada job en serie (transacciones de 200). Para que corra en
+// paralelo hay que crear varios jobs. 500 filas → 5 jobs de 100.
+var FILAS_POR_JOB          = 100;
+var MAX_JOBS_PARALELO      = 10;
+var IMPORT_IDEMP_SEG       = 21600;  // 6 h: un clientRequestId repetido devuelve los mismos jobs
+var ERROR_LOCK             = "UNABLE_TO_LOCK_ROW";
+
+// ── v17 · ASIGNACIÓN ──
+var IDS_POR_QUERY          = 40;     // UrlFetchApp corta las URLs de más de 2 kB: 40 IDs caben con el query
+var QUERIES_EN_PARALELO    = 10;     // bloques que van juntos en un fetchAll
+var ASIGNACION_CORTE_MS    = 270000; // 4.5 min: se corta con aviso antes del límite de 6 min de Apps Script
 
 // ── SEGURIDAD: campos que NUNCA se logean (sanitización) ──
 var CAMPOS_SENSIBLES = ["sid", "idToken", "fileContent", "access_token", "accessToken", "password"];
@@ -110,18 +147,24 @@ function doPost(e) {
 
   try {
     payload = JSON.parse(e.postData.contents);
-    operation = payload.action || "asignacion";
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("Petición inválida.");
+    // v17: solo acciones conocidas. Lo demás queda como "(desconocida)" (nunca el texto
+    // que mandó el cliente: el web app es anónimo y ese texto acabaría en el Sheet).
+    operation = normalizarAccion(payload.action);
 
     // ── CAPA 1: validar id_token de Google (dominio + whitelist) ──
     var tokenValidation = validarIdToken(payload.idToken);
     if (!tokenValidation.valid) {
-      // Registrar rechazo — útil para detectar intentos de acceso no autorizado
-      registrarAuditoria(
-        tokenValidation.email || "(desconocido)",
-        operation,
-        tokenValidation.notAuthorized ? "no_autorizado" : "auth_rechazado",
-        tokenValidation.error
-      );
+      // v17: un token que ni siquiera tiene forma de JWT se rechaza sin fetch y sin
+      // auditoría (sería ruido de bots). Los demás rechazos sí se registran.
+      if (!tokenValidation.basura) {
+        registrarAuditoria(
+          tokenValidation.email || "(desconocido)",
+          operation,
+          tokenValidation.notAuthorized ? "no_autorizado" : "auth_rechazado",
+          tokenValidation.error
+        );
+      }
       output.setContent(JSON.stringify({
         error: tokenValidation.error,
         authError: true,
@@ -133,7 +176,7 @@ function doPost(e) {
     // Sobreescribir el userEmail del payload con el verificado por Google
     payload.userEmail = userEmail;
 
-    // ── CAPA 2: rate limiting solo para operaciones costosas ──
+    // ── CAPA 2: rate limiting para operaciones costosas (y acciones desconocidas) ──
     if (RATE_LIMIT_OPERACIONES.indexOf(operation) !== -1) {
       var rl = verificarRateLimit(userEmail);
       if (!rl.permitido) {
@@ -149,24 +192,19 @@ function doPost(e) {
       }
     }
 
+    if (operation === "(desconocida)") throw new Error("Acción no válida.");
+
+    // ── CAPA 3 · v17: el SID solo viaja a Salesforce, con objeto y operación conocidos ──
+    if (ACCIONES_CON_SID.indexOf(operation) !== -1) validarParametrosSf(payload, operation);
+
     // ── EJECUTAR OPERACIÓN ──
     var resultado;
-    if (operation === "import") {
-      resultado = ejecutarImportBulk(payload);
-      // AUDITORÍA solo de imports (según solicitud del usuario)
-      var auditDetails = "jobId=" + (resultado.jobId || "N/A") +
-                         "; state=" + (resultado.jobState || "N/A") +
-                         "; processed=" + (resultado.processed || 0) +
-                         "; failed=" + (resultado.failed || 0) +
-                         "; rows=" + (payload.rows ? payload.rows.length : 0);
-      registrarAuditoria(userEmail, operation, "success", auditDetails);
-    } else if (operation === "importStart") {
-      // v14: arranca el job y devuelve el jobId de inmediato.
-      // La auditoría "iniciado" se escribe DENTRO, en cuanto Salesforce
-      // asigna el jobId, para que nunca se pierda el rastro.
+    if (operation === "importStart") {
+      // v17: crea N jobs en paralelo y devuelve jobIds + loteId de inmediato.
+      // La auditoría "iniciado" se escribe DENTRO, en cuanto Salesforce asigna los jobs.
       resultado = iniciarImportBulk(payload);
     } else if (operation === "jobStatus") {
-      // v14: consulta corta que el frontend repite. Sin auditoría (sería ruido).
+      // Consulta corta que el frontend repite. Sin auditoría (sería ruido).
       resultado = consultarEstadoJob(payload);
     } else if (operation === "adminData") {
       // v15: panel admin. TODOS los usuarios de la whitelist pueden VER;
@@ -180,16 +218,13 @@ function doPost(e) {
       resultado = describirObjeto(payload);
     } else if (operation === "recuperarJob") {
       resultado = recuperarResultadoJob(payload);
-      // v16.2 · El flujo asíncrono usa esta misma operación para traer los
-      // resultados cuando el job termina. Eso NO es una recuperación manual:
-      // es el cierre normal del import. Si se auditara como "recuperarJob",
-      // (a) el log mentiría y (b) las métricas del panel — que cuentan
-      // op="import" + estado="success" — no verían NINGÚN import.
-      // El frontend marca cierreAutomatico para distinguir ambos casos.
-      var opAudit = (payload.cierreAutomatico === true) ? "import" : "recuperarJob";
-      registrarAuditoria(userEmail, opAudit, "success",
-        "jobId=" + (resultado.jobId || "N/A") + "; state=" + (resultado.jobState || "N/A") +
-        "; processed=" + (resultado.processed || 0) + "; failed=" + (resultado.failed || 0));
+      // El flujo normal usa esta misma operación para traer los resultados al final
+      // (cierreAutomatico): se audita como "import" para que las métricas lo cuenten.
+      // El reintento por bloqueo va aparte para no contar dos veces las mismas filas.
+      // v17: el estado es el real, no siempre "success".
+      var opAudit = (payload.esReintentoLock === true) ? "reintentoLock"
+                  : (payload.cierreAutomatico === true) ? "import" : "recuperarJob";
+      registrarAuditoria(userEmail, opAudit, estadoAuditoriaRecuperar(resultado), detalleAuditoriaJobs(resultado));
     } else if (operation === "exportSheet") {
       resultado = exportarResultadoASheet(payload);
     } else if (operation === "exportSheetFromFile") {
@@ -207,13 +242,14 @@ function doPost(e) {
                " payload=" + JSON.stringify(payloadSaneado).slice(0, 800));
 
     // NO devolver stack trace al cliente (info leak)
-    output.setContent(JSON.stringify({
-      error: err.message
-    }));
+    var respuesta = { error: err.message };
+    // v17: el SID venció. El frontend para el sondeo y conserva el trabajo.
+    if (err.sfSesionExpirada) respuesta.sfSessionExpired = true;
+    output.setContent(JSON.stringify(respuesta));
 
-    // Auditoría solo si es import (fallido)
-    if (operation === "import") {
-      registrarAuditoria(userEmail, operation, "error", String(err.message).slice(0, 300));
+    if ((operation === "importStart" || (operation === "recuperarJob" && payload && payload.cierreAutomatico === true)) &&
+        !err.yaAuditado) {
+      registrarAuditoria(userEmail, "import", "error", String(err.message).slice(0, 300));
     }
   }
 
@@ -222,27 +258,79 @@ function doPost(e) {
 
 function doGet(e) {
   return ContentService
-    .createTextOutput(JSON.stringify({ status: "OK", version: "16.2" }))
+    .createTextOutput(JSON.stringify({ status: "OK", version: VERSION_BACKEND }))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// v17: nombre de acción seguro para auditar y despachar.
+function normalizarAccion(action) {
+  if (action === undefined || action === null || action === "") return "asignacion";
+  if (typeof action === "string" && ACCIONES_PERMITIDAS.indexOf(action) !== -1) return action;
+  return "(desconocida)";
+}
+
+// v17: instanceUrl solo de Salesforce, object con caracteres de API Name, operation conocida.
+// Sin esto, el SID del usuario se podía mandar a cualquier host.
+function validarParametrosSf(p, operation) {
+  var url = String(p.instanceUrl || "").replace(/\/+$/, "");
+  if (!INSTANCE_URL_REGEX.test(url)) throw new Error("instanceUrl no permitido. Debe ser https://<org>.my.salesforce.com");
+  p.instanceUrl = url;
+  if (typeof p.sid !== "string" || !p.sid.trim()) throw new Error("Falta el Session ID (SID).");
+  if (operation === "describe" || operation === "importStart") {
+    if (p.object === undefined || p.object === null || p.object === "") p.object = "Lead";
+    if (typeof p.object !== "string" || !OBJECT_REGEX.test(p.object)) throw new Error("Objeto no válido.");
+  }
+  if (operation === "importStart") {
+    if (!p.operation) p.operation = "insert";
+    if (OPERACIONES_IMPORT.indexOf(p.operation) === -1) {
+      throw new Error("Operación no permitida: solo " + OPERACIONES_IMPORT.join(" y ") + ".");
+    }
+    if (p.operation === "upsert" && !OBJECT_REGEX.test(String(p.externalId || ""))) {
+      throw new Error("Upsert necesita un External ID Field válido.");
+    }
+  }
+}
+
+// v17: error que el frontend reconoce como "pega un SID nuevo" (401 de Salesforce).
+function errorSesionSf(contexto) {
+  var e = new Error("Tu sesión de Salesforce expiró (" + contexto + "). Pega un SID nuevo. " +
+                    "Si había un import corriendo, sigue en Salesforce: recupéralo con su Job ID o Lote.");
+  e.sfSesionExpirada = true;
+  return e;
 }
 
 
 // ══════════════════════════════════════════════════════════════════════════
 //  VALIDACIÓN DE id_token DE GOOGLE
 //  Verifica el JWT contra el endpoint oficial de Google (tokeninfo).
-//  Cachea tokens válidos por 5 min para reducir llamadas.
+//  v17: caché por SHA-256 del token completo, nunca más allá de su exp, y
+//  revalidando la whitelist en cada uso (una baja corta el acceso al momento).
 // ══════════════════════════════════════════════════════════════════════════
 function validarIdToken(idToken) {
   if (!idToken || typeof idToken !== "string") {
-    return { valid: false, error: "No se envió id_token" };
+    return { valid: false, error: "No se envió id_token", basura: true };
+  }
+  if (idToken.length > 4096 || !JWT_REGEX.test(idToken)) {
+    return { valid: false, error: "Token con formato inválido", basura: true };
+  }
+  var claims = leerClaimsJwt(idToken);
+  if (!claims || !claims.exp) {
+    return { valid: false, error: "Token con formato inválido", basura: true };
+  }
+  var ahora = Math.floor(Date.now() / 1000);
+  if (Number(claims.exp) < ahora) {
+    return { valid: false, error: "Sesión expirada. Vuelve a iniciar sesión." };
   }
 
   var cache = CacheService.getScriptCache();
-  var cacheKey = "tok_" + idToken.slice(-32);  // últimos 32 chars como key
+  var cacheKey = "tok_" + hashTexto(idToken);
   var cached = cache.get(cacheKey);
   if (cached) {
-    var cachedObj = JSON.parse(cached);
-    return { valid: true, email: cachedObj.email };
+    try {
+      var c = JSON.parse(cached);
+      if (c.exp > ahora && obtenerWhitelist().indexOf(c.email) !== -1) return { valid: true, email: c.email };
+    } catch (e) {}
+    cache.remove(cacheKey);  // vencido o dado de baja: se verifica de nuevo abajo
   }
 
   try {
@@ -273,8 +361,8 @@ function validarIdToken(idToken) {
     }
 
     // Verificar expiración
-    var now = Math.floor(Date.now() / 1000);
-    if (parseInt(info.exp) < now) {
+    var exp = parseInt(info.exp, 10);
+    if (!(exp >= ahora)) {
       return { valid: false, error: "Sesión expirada. Vuelve a iniciar sesión." };
     }
 
@@ -292,13 +380,32 @@ function validarIdToken(idToken) {
       };
     }
 
-    // Cachear por 5 minutos
-    cache.put(cacheKey, JSON.stringify({ email: emailLower }), 300);
+    // Cachear hasta 5 min, nunca más allá del exp del token
+    var ttl = Math.min(300, exp - ahora);
+    if (ttl >= 1) cache.put(cacheKey, JSON.stringify({ email: emailLower, exp: exp }), ttl);
 
     return { valid: true, email: emailLower };
   } catch (err) {
     return { valid: false, error: "Excepción validando token: " + err.message };
   }
+}
+
+// Lee el payload del JWT (sin verificar la firma: eso lo hace Google en tokeninfo).
+function leerClaimsJwt(token) {
+  try {
+    var parte = token.split(".")[1];
+    while (parte.length % 4) parte += "=";
+    var bytes = Utilities.base64DecodeWebSafe(parte);
+    var obj = JSON.parse(Utilities.newBlob(bytes).getDataAsString("UTF-8"));
+    return (obj && typeof obj === "object") ? obj : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function hashTexto(s) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, s, Utilities.Charset.UTF_8);
+  return Utilities.base64EncodeWebSafe(bytes).replace(/=+$/, "");
 }
 
 
@@ -347,22 +454,31 @@ function verificarRateLimit(email) {
   var hourBucket = Math.floor(now / 3600000);
   var key = "rate_" + email + "_" + hourBucket;
 
-  var actual = parseInt(cache.get(key) || "0", 10);
-  if (actual >= RATE_LIMIT_MAX_POR_HORA) {
-    var msRestantes = 3600000 - (now % 3600000);
+  // v17: leer y sumar bajo candado. Sin esto, dos peticiones a la vez leían el
+  // mismo contador y el tope se podía pasar.
+  var lock = LockService.getScriptLock();
+  var conCandado = false;
+  try { conCandado = lock.tryLock(5000); } catch (e) {}
+  try {
+    var actual = parseInt(cache.get(key) || "0", 10);
+    if (actual >= RATE_LIMIT_MAX_POR_HORA) {
+      var msRestantes = 3600000 - (now % 3600000);
+      return {
+        permitido: false,
+        actual: actual,
+        max: RATE_LIMIT_MAX_POR_HORA,
+        resetEnMinutos: Math.ceil(msRestantes / 60000)
+      };
+    }
+    cache.put(key, String(actual + 1), 3600);  // TTL 1 hora
     return {
-      permitido: false,
-      actual: actual,
-      max: RATE_LIMIT_MAX_POR_HORA,
-      resetEnMinutos: Math.ceil(msRestantes / 60000)
+      permitido: true,
+      actual: actual + 1,
+      max: RATE_LIMIT_MAX_POR_HORA
     };
+  } finally {
+    if (conCandado) lock.releaseLock();
   }
-  cache.put(key, String(actual + 1), 3600);  // TTL 1 hora
-  return {
-    permitido: true,
-    actual: actual + 1,
-    max: RATE_LIMIT_MAX_POR_HORA
-  };
 }
 
 
@@ -398,12 +514,14 @@ function registrarAuditoria(userEmail, operation, status, details) {
       sheet.setColumnWidth(5, 500);
     }
 
+    // v17: todo pasa por neutralizarValorSheet. El web app es anónimo: un email,
+    // operación o detalle que empiece con "=" se escribía como fórmula.
     sheet.appendRow([
       new Date(),
-      userEmail || "(vacío)",
-      operation || "(vacío)",
-      status || "(vacío)",
-      String(details || "").slice(0, 500)
+      neutralizarValorSheet(String(userEmail || "(vacío)").slice(0, 200)),
+      neutralizarValorSheet(String(operation || "(vacío)").slice(0, 60)),
+      neutralizarValorSheet(String(status || "(vacío)").slice(0, 60)),
+      neutralizarValorSheet(String(details || "").slice(0, 500))
     ]);
     Logger.log("[AUDIT OK] " + operation + " · " + status + " · " + userEmail);
     return { logged: true };
@@ -610,6 +728,7 @@ function describirObjeto(params) {
     });
     var code = res.getResponseCode();
     var text = res.getContentText();
+    if (code === 401) return { error: errorSesionSf("describe").message, sfSessionExpired: true, httpCode: 401 };
     if (code !== 200) return { error: "Salesforce devolvió HTTP " + code + ": " + text.slice(0, 400), httpCode: code };
     var data;
     try { data = JSON.parse(text); } catch (e) { return { error: "Respuesta no es JSON válido: " + text.slice(0, 300) }; }
@@ -626,6 +745,7 @@ function describirObjeto(params) {
         nillable: f.nillable === true,
         updateable: f.updateable === true,
         createable: f.createable === true,
+        defaultedOnCreate: f.defaultedOnCreate === true,
         picklistValues: (f.picklistValues || [])
           .filter(function(pv) { return pv.active !== false; })
           .map(function(pv) { return pv.value; })
@@ -649,15 +769,47 @@ function describirObjeto(params) {
 function procesarAsignacion(params) {
   var sessionId    = params.sid;
   var instanceUrl  = params.instanceUrl;
-  var dias         = params.dias;
   var businessLine = params.businessLine;
-  var reps         = params.reps;
-  var idsRaw       = params.ids || [];
+  var repsRaw      = Array.isArray(params.reps) ? params.reps : [];
+  var idsRaw       = Array.isArray(params.ids) ? params.ids : [];
   var extraFieldsRaw  = params.extraFields   || [];  // Campos custom del Contact (columnas adicionales)
   var fieldsFromSFRaw = params.fieldsFromSF  || [];  // Campos base cuyo valor debe venir de SF en vez del hardcoded
+  var inicioMs     = Date.now();
 
-  var idsContactos = idsRaw.filter(function(id) { return id && String(id).trim().length > 0; });
-  if (!idsContactos.length) throw new Error("No hay IDs de contactos válidos.");
+  // v17: IDs válidos (15/18 alfanuméricos) y sin repetir (15 primeros caracteres,
+  // respetando mayúsculas). Antes un ID mal pegado hacía fallar su bloque de 40 entero.
+  var idsContactos = [], idsInvalidos = [], idsRepetidos = 0, vistosIds = {};
+  idsRaw.forEach(function(id) {
+    var s = String(id === null || id === undefined ? "" : id).trim();
+    if (!s) return;
+    if (!/^[a-zA-Z0-9]{15}([a-zA-Z0-9]{3})?$/.test(s)) { idsInvalidos.push(s.slice(0, 40)); return; }
+    var k = s.slice(0, 15);
+    if (vistosIds[k]) { idsRepetidos++; return; }
+    vistosIds[k] = true;
+    idsContactos.push(s);
+  });
+  if (!idsContactos.length) throw new Error("No hay IDs de contactos válidos." +
+    (idsInvalidos.length ? " Inválidos: " + idsInvalidos.slice(0, 5).join(", ") : ""));
+
+  // v17: reps sin repetir (gana la primera aparición) y con cuota entera >= 0.
+  var reps = [], repsRepetidos = [], vistosReps = {};
+  repsRaw.forEach(function(r) {
+    if (!r) return;
+    var em = String(r.email || "").trim().toLowerCase();
+    if (!em) return;
+    if (vistosReps[em]) { repsRepetidos.push(em); return; }
+    vistosReps[em] = true;
+    var cuota = parseInt(r.cuota, 10);
+    reps.push({ email: String(r.email).trim(), cuota: (cuota > 0 && cuota <= 100000) ? cuota : 0 });
+  });
+  if (!reps.length) throw new Error("No hay representantes válidos.");
+
+  // v17: días entero entre 0 y 3650.
+  var dias = params.dias;
+  if (dias !== "" && dias !== null && dias !== undefined) {
+    var dn = Number(dias);
+    if (!isFinite(dn) || dn < 0 || dn > 3650 || Math.floor(dn) !== dn) throw new Error("Días debe ser un número entero entre 0 y 3650.");
+  }
 
   // ── Validación de campos custom (SF o Manual) ──
   // extraFields puede ser array de strings (legacy) o array de objetos {name, mode, value?}
@@ -757,13 +909,18 @@ function procesarAsignacion(params) {
     "muteHttpExceptions": true
   };
 
+  // v17: solo usuarios activos, y se revisa el código HTTP (401 = SID vencido).
   var emailsList = reps.map(function(r) { return "'" + escapeSoql(r.email) + "'"; });
-  var soqlUsers = "SELECT Id, Email, Username FROM User WHERE Email IN (" + emailsList.join(",") + ") OR Username IN (" + emailsList.join(",") + ")";
+  var soqlUsers = "SELECT Id, Email, Username FROM User WHERE (Email IN (" + emailsList.join(",") + ") OR Username IN (" + emailsList.join(",") + ")) AND IsActive = true";
   var urlUsers  = instanceUrl + "/services/data/" + SF_API_VERSION + "/query/?q=" + encodeURIComponent(soqlUsers);
   var resUsers  = UrlFetchApp.fetch(urlUsers, opciones);
-  var jsonUsers = JSON.parse(resUsers.getContentText());
-
-  if (!jsonUsers.records) throw new Error("Salesforce no devolvió registros. Verifica el SID. " + JSON.stringify(jsonUsers).slice(0, 300));
+  var codeUsers = resUsers.getResponseCode();
+  if (codeUsers === 401) throw errorSesionSf("al buscar los reps");
+  var jsonUsers;
+  try { jsonUsers = JSON.parse(resUsers.getContentText()); } catch (e) { jsonUsers = {}; }
+  if (codeUsers !== 200 || !jsonUsers.records) {
+    throw new Error("Salesforce no devolvió los usuarios (HTTP " + codeUsers + "). Verifica el SID. " + JSON.stringify(jsonUsers).slice(0, 300));
+  }
 
   var mapUserIds = {};
   jsonUsers.records.forEach(function(u) {
@@ -776,27 +933,30 @@ function procesarAsignacion(params) {
 
   // El valor de días se usa tal cual: puede ser 0, 30, 60, 90, etc.
   // Si el usuario deja el campo vacío, se toma como 0 (query se ejecuta con LAST_N_DAYS:0).
-  var diasFinal = (dias === "" || dias === null || dias === undefined) ? 0 : parseInt(dias) || 0;
+  var diasFinal = (dias === "" || dias === null || dias === undefined) ? 0 : Number(dias);
   var poolContactos = [];
-  var tamanoBloque = 40;
   var bloquesFallidos = 0;  // v12.0: bloques de query que fallaron (antes se perdían en silencio)
+  var erroresBloques = [];
+  var idsSinConsultar = 0;  // v17: IDs que no alcanzaron a consultarse por el corte de tiempo
 
-  for (var i = 0; i < idsContactos.length; i += tamanoBloque) {
-    var bloque = idsContactos.slice(i, i + tamanoBloque);
+  // ÚNICA query de asignación: siempre usa la exclusión con LAST_N_DAYS.
+  // Excluye contactos con Opportunities abiertas o cerradas en los últimos N días,
+  // y contactos con Leads NO convertidos en estados activos o cerrados en los últimos N días.
+  // Construir SELECT dinámico: 5 campos base + extraFieldsSF (columnas custom desde Contact) + fieldsFromSF (sobrescriben hardcodeados)
+  // Los custom manuales NO van al SELECT porque su valor es fijo y no depende del Contact
+  var selectFields = ["Id", "LastSourceAt__c", "Account.Name", "LastName", "Email"];
+  for (var ef0 = 0; ef0 < extraFieldsSF.length; ef0++) selectFields.push(extraFieldsSF[ef0].name);
+  for (var fi0 = 0; fi0 < fieldsFromSF.length; fi0++) {
+    if (selectFields.indexOf(fieldsFromSF[fi0]) === -1) selectFields.push(fieldsFromSF[fi0]);
+  }
+  var selectClause = selectFields.join(", ");
+
+  // Un bloque = IDS_POR_QUERY IDs (UrlFetchApp corta URLs de más de 2 kB).
+  // v17: los bloques van de QUERIES_EN_PARALELO en QUERIES_EN_PARALELO con fetchAll.
+  var bloques = [];
+  for (var i = 0; i < idsContactos.length; i += IDS_POR_QUERY) {
+    var bloque = idsContactos.slice(i, i + IDS_POR_QUERY);
     var idsFormateados = bloque.map(function(id) { return "'" + escapeSoql(String(id).trim()) + "'"; }).join(",");
-
-    // ÚNICA query de asignación: siempre usa la exclusión con LAST_N_DAYS.
-    // Excluye contactos con Opportunities abiertas o cerradas en los últimos N días,
-    // y contactos con Leads NO convertidos en estados activos o cerrados en los últimos N días.
-    // Construir SELECT dinámico: 5 campos base + extraFieldsSF (columnas custom desde Contact) + fieldsFromSF (sobrescriben hardcodeados)
-    // Los custom manuales NO van al SELECT porque su valor es fijo y no depende del Contact
-    var selectFields = ["Id", "LastSourceAt__c", "Account.Name", "LastName", "Email"];
-    for (var ef = 0; ef < extraFieldsSF.length; ef++) selectFields.push(extraFieldsSF[ef].name);
-    for (var fi = 0; fi < fieldsFromSF.length; fi++) {
-      if (selectFields.indexOf(fieldsFromSF[fi]) === -1) selectFields.push(fieldsFromSF[fi]);
-    }
-    var selectClause = selectFields.join(", ");
-
     var soqlContactos =
       "SELECT " + selectClause + " " +
       "FROM Contact WHERE Id IN (" + idsFormateados + ") " +
@@ -811,32 +971,53 @@ function procesarAsignacion(params) {
         "AND IsConverted = false " +
         "AND (Status IN ('New','Assigned','Qualifying') OR lead_closed_date__c = LAST_N_DAYS:" + diasFinal + ")" +
       ")";
+    bloques.push({ n: bloque.length, url: instanceUrl + "/services/data/" + SF_API_VERSION + "/query/?q=" + encodeURIComponent(soqlContactos) });
+  }
 
-    var urlContactos = instanceUrl + "/services/data/" + SF_API_VERSION + "/query/?q=" + encodeURIComponent(soqlContactos);
+  for (var g = 0; g < bloques.length; g += QUERIES_EN_PARALELO) {
+    // Corte claro antes del límite de 6 min de Apps Script
+    if (Date.now() - inicioMs > ASIGNACION_CORTE_MS) {
+      for (var rest = g; rest < bloques.length; rest++) idsSinConsultar += bloques[rest].n;
+      break;
+    }
+    var grupo = bloques.slice(g, g + QUERIES_EN_PARALELO);
+    var respuestas;
     try {
-      var resContactos  = UrlFetchApp.fetch(urlContactos, opciones);
-      var jsonContactos = JSON.parse(resContactos.getContentText());
-      if (jsonContactos.records) {
-        jsonContactos.records.forEach(function(c) {
-          var filaPool = [
-            c.Id,
-            serializarValor(c.LastSourceAt__c),
-            c.Account && c.Account.Name ? c.Account.Name : "",
-            serializarValor(c.LastName),
-            serializarValor(c.Email)
-          ];
-          // Añadir valores de los custom fields en modo SF (los manuales se estampan al armar la fila)
-          for (var ef = 0; ef < extraFieldsSF.length; ef++) {
-            filaPool.push(serializarValor(c[extraFieldsSF[ef].name]));
-          }
-          // Añadir valores de los fields traídos de SF (para sobreescribir hardcodeados)
-          for (var fi = 0; fi < fieldsFromSF.length; fi++) {
-            filaPool.push(serializarValor(c[fieldsFromSF[fi]]));
-          }
-          poolContactos.push(filaPool);
-        });
+      respuestas = sfFetchAll(grupo.map(function(b) { return { url: b.url, method: "get", headers: opciones.headers }; }));
+    } catch (err) {
+      bloquesFallidos += grupo.length;
+      erroresBloques.push("Excepción: " + err.message);
+      continue;
+    }
+    for (var k = 0; k < respuestas.length; k++) {
+      var r = respuestas[k];
+      if (r.code === 401) throw errorSesionSf("al consultar los contactos");
+      var jsonContactos = null;
+      try { jsonContactos = JSON.parse(r.text); } catch (e) {}
+      if (r.code !== 200 || !jsonContactos || !jsonContactos.records) {
+        bloquesFallidos++;
+        if (erroresBloques.length < 3) erroresBloques.push("HTTP " + r.code + ": " + String(r.text).slice(0, 200));
+        continue;
       }
-    } catch (err) { bloquesFallidos++; Logger.log("Error bloque " + i + ": " + err.message); }
+      jsonContactos.records.forEach(function(c) {
+        var filaPool = [
+          c.Id,
+          serializarValor(c.LastSourceAt__c),
+          c.Account && c.Account.Name ? c.Account.Name : "",
+          serializarValor(c.LastName),
+          serializarValor(c.Email)
+        ];
+        // Añadir valores de los custom fields en modo SF (los manuales se estampan al armar la fila)
+        for (var ef = 0; ef < extraFieldsSF.length; ef++) {
+          filaPool.push(serializarValor(c[extraFieldsSF[ef].name]));
+        }
+        // Añadir valores de los fields traídos de SF (para sobreescribir hardcodeados)
+        for (var fi = 0; fi < fieldsFromSF.length; fi++) {
+          filaPool.push(serializarValor(c[fieldsFromSF[fi]]));
+        }
+        poolContactos.push(filaPool);
+      });
+    }
   }
 
   var matrizPreTemplate = [];
@@ -958,7 +1139,11 @@ function procesarAsignacion(params) {
     ? "¡Asignación Completada! Total filas generadas: " + matrizPreTemplate.length
     : "Salesforce no devolvió ningún registro.";
   if (bloquesFallidos > 0) {
-    mensaje += " ⚠ OJO: " + bloquesFallidos + " bloque(s) de contactos fallaron en la query y NO entraron al pool. Revisa el log de Apps Script o reintenta.";
+    mensaje += " ⚠ OJO: " + bloquesFallidos + " bloque(s) de contactos fallaron en la query y NO entraron al pool. Revisa el log de Apps Script o reintenta." +
+               (erroresBloques.length ? " Detalle: " + erroresBloques[0] : "");
+  }
+  if (idsSinConsultar > 0) {
+    mensaje += " ⚠ CORTE POR TIEMPO: " + idsSinConsultar + " ID(s) no alcanzaron a consultarse. Pártelos y vuelve a correr la asignación con ellos.";
   }
 
   var ownerStats = [];
@@ -974,6 +1159,11 @@ function procesarAsignacion(params) {
     headers: titulos, rows: matrizPreTemplate,
     poolTotal: poolContactos.length, assigned: matrizPreTemplate.length,
     bloquesFallidos: bloquesFallidos,
+    erroresBloques: erroresBloques,
+    idsSinConsultar: idsSinConsultar,
+    idsInvalidos: idsInvalidos,
+    idsRepetidos: idsRepetidos,
+    repsRepetidos: repsRepetidos,
     mensaje: mensaje, ownerStats: ownerStats,
     ownersNotFound: ownersNotFound,
     leadTypeUsed: leadTypeVal,
@@ -1022,280 +1212,616 @@ function neutralizarValorSheet(v) {
 
 
 // ══════════════════════════════════════════════════════════════════════════
-//  BULK IMPORT (sin cambios)
+//  v17.0 · IMPORT EN PARALELO — iniciarImportBulk + consultarEstadoJob +
+//  recuperarResultadoJob
+//
+//  POR QUÉ: Bulk API 2.0 procesa un job en transacciones de 200, en serie, y
+//  cada Lead cuesta ~1 s por la automatización de Salesforce. Un job de 500
+//  tardó 10.5 min (750Tt00000mJwvvIAC). La única forma de paralelizar es crear
+//  varios jobs. Se agrupan por OwnerId para que un mismo owner no compita
+//  consigo mismo por bloqueos en dos jobs a la vez.
+//
+//  FLUJO (ninguna petición se acerca al límite de 6 min de Apps Script):
+//    · iniciarImportBulk     → crea/sube/cierra N jobs en 3 rondas de fetchAll
+//                              y devuelve jobIds[] + loteId
+//    · consultarEstadoJob    → suma el estado de todos los jobs (~1 s)
+//    · recuperarResultadoJob → baja y une los CSV de todos los jobs; las filas
+//                              con UNABLE_TO_LOCK_ROW se reintentan solas una vez
 // ══════════════════════════════════════════════════════════════════════════
-function ejecutarImportBulk(params) {
-  var sid = params.sid, instanceUrl = params.instanceUrl;
-  var object = params.object || "Lead", operation = params.operation || "insert";
-  var externalId = params.externalId || "", headers = params.headers, rows = params.rows;
 
-  if (!rows || !rows.length) throw new Error("No se recibieron filas.");
-  if (!headers || !headers.length) throw new Error("No se recibieron headers.");
-
-  var csvLines = [];
-  csvLines.push(headers.map(function(h){ return '"' + String(h).replace(/"/g,'""') + '"'; }).join(","));
+// Arma el CSV que recibe Bulk API 2.0 (todo entre comillas, LF).
+function construirCsv(headers, rows) {
+  var q = function(v) {
+    if (v === null || v === undefined) v = "";
+    return '"' + String(v).replace(/"/g, '""') + '"';
+  };
+  var lineas = [headers.map(q).join(",")];
   for (var i = 0; i < rows.length; i++) {
     var row = rows[i] || [], cells = [];
-    for (var j = 0; j < headers.length; j++) {
-      var v = row[j];
-      if (v === null || v === undefined) v = "";
-      v = String(v).replace(/"/g, '""');
-      cells.push('"' + v + '"');
-    }
-    csvLines.push(cells.join(","));
+    for (var j = 0; j < headers.length; j++) cells.push(q(row[j]));
+    lineas.push(cells.join(","));
   }
-
-  var csvContent = csvLines.join("\n");
-  var base = instanceUrl + "/services/data/" + SF_API_VERSION;
-  var jsonHeaders = { "Authorization": "Bearer " + sid, "Content-Type": "application/json", "Accept": "application/json" };
-
-  var jobBody = { object: object, operation: operation, contentType: "CSV", lineEnding: "LF" };
-  if (operation === "upsert" && externalId) jobBody.externalIdFieldName = externalId;
-
-  var jobRes = UrlFetchApp.fetch(base + "/jobs/ingest", { method: "post", headers: jsonHeaders, payload: JSON.stringify(jobBody), muteHttpExceptions: true });
-  if (jobRes.getResponseCode() < 200 || jobRes.getResponseCode() >= 300) throw new Error("Error creando Job: " + jobRes.getContentText().slice(0, 400));
-  var jobId = JSON.parse(jobRes.getContentText()).id;
-
-  var uploadRes = UrlFetchApp.fetch(base + "/jobs/ingest/" + jobId + "/batches", {
-    method: "put",
-    headers: { "Authorization": "Bearer " + sid, "Content-Type": "text/csv", "Accept": "application/json" },
-    payload: csvContent, muteHttpExceptions: true
-  });
-  if (uploadRes.getResponseCode() < 200 || uploadRes.getResponseCode() >= 300) throw new Error("Error subiendo CSV: " + uploadRes.getContentText().slice(0, 400));
-
-  var closeRes = UrlFetchApp.fetch(base + "/jobs/ingest/" + jobId, { method: "patch", headers: jsonHeaders, payload: JSON.stringify({ state: "UploadComplete" }), muteHttpExceptions: true });
-  if (closeRes.getResponseCode() < 200 || closeRes.getResponseCode() >= 300) throw new Error("Error cerrando Job: " + closeRes.getContentText().slice(0, 400));
-
-  // POLLING: Apps Script tiene un límite duro de 6 min de ejecución total.
-  // Ya se gastaron ~15-20s en crear job + subir CSV + cerrar. Reservamos margen.
-  // 110 intentos × 3s = 5.5 min de espera máxima (antes: 75 × 4s = 5 min).
-  // Si el job sigue InProgress al agotar el polling, devolvemos el estado parcial
-  // con el jobId para que el frontend pueda recuperar el resultado después.
-  var MAX_POLL_ATTEMPTS = 110;
-  var POLL_INTERVAL_MS  = 3000;
-  var jobState = "UploadComplete", pollData = {}, attempts = 0;
-  while (jobState !== "JobComplete" && jobState !== "Failed" && jobState !== "Aborted" && attempts < MAX_POLL_ATTEMPTS) {
-    Utilities.sleep(POLL_INTERVAL_MS);
-    attempts++;
-    var pollRes = UrlFetchApp.fetch(base + "/jobs/ingest/" + jobId, { method: "get", headers: jsonHeaders, muteHttpExceptions: true });
-    if (pollRes.getResponseCode() === 200) {
-      pollData = JSON.parse(pollRes.getContentText());
-      jobState = pollData.state || jobState;
-    }
-  }
-
-  // Flag: el job no terminó dentro de la ventana de polling (sigue procesando en Salesforce)
-  var timedOut = (jobState !== "JobComplete" && jobState !== "Failed" && jobState !== "Aborted");
-
-  var okCsv = "", failCsv = "";
-  try { var okRes = UrlFetchApp.fetch(base + "/jobs/ingest/" + jobId + "/successfulResults", { method: "get", headers: { "Authorization": "Bearer " + sid, "Accept": "text/csv" }, muteHttpExceptions: true }); if (okRes.getResponseCode() === 200) okCsv = okRes.getContentText(); } catch (e) {}
-  try { var failRes = UrlFetchApp.fetch(base + "/jobs/ingest/" + jobId + "/failedResults", { method: "get", headers: { "Authorization": "Bearer " + sid, "Accept": "text/csv" }, muteHttpExceptions: true }); if (failRes.getResponseCode() === 200) failCsv = failRes.getContentText(); } catch (e) {}
-
-  var errorMessage = "";
-  if (jobState === "Failed" || jobState === "Aborted") errorMessage = pollData.errorMessage || "Sin mensaje de error";
-
-  return {
-    jobId: jobId, jobState: jobState,
-    successCsv: okCsv, failedCsv: failCsv,
-    processed: pollData.numberRecordsProcessed || 0,
-    failed: pollData.numberRecordsFailed || 0,
-    errorMessage: errorMessage,
-    timedOut: timedOut
-  };
+  return lineas.join("\n");
 }
 
+// Lee un CSV completo respetando comillas (un salto de línea dentro de un valor
+// no parte la fila). Devuelve una matriz; ignora líneas vacías.
+function parsearCsv(texto) {
+  var filas = [], fila = [], cur = "", enComillas = false;
+  var cerrarFila = function() {
+    fila.push(cur); cur = "";
+    if (fila.length > 1 || fila[0] !== "") filas.push(fila);
+    fila = [];
+  };
+  for (var i = 0; i < texto.length; i++) {
+    var c = texto.charAt(i);
+    if (enComillas) {
+      if (c === '"' && texto.charAt(i + 1) === '"') { cur += '"'; i++; }
+      else if (c === '"') enComillas = false;
+      else cur += c;
+    } else if (c === '"') enComillas = true;
+    else if (c === ",") { fila.push(cur); cur = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && texto.charAt(i + 1) === "\n") i++;
+      cerrarFila();
+    } else cur += c;
+  }
+  if (cur !== "" || fila.length) cerrarFila();
+  return filas;
+}
 
-// ══════════════════════════════════════════════════════════════════════════
-//  RECUPERAR RESULTADO DE UN JOB EXISTENTE (por Job ID)
-//  Se usa cuando el import original excedió la ventana de polling y quedó
-//  InProgress en la UI, pero Salesforce ya terminó de procesarlo.
-//  Consulta el estado actual del job + descarga sus CSVs de resultado.
-// ══════════════════════════════════════════════════════════════════════════
+// Une varios CSV de resultado con un solo header (todos los jobs traen las mismas columnas).
+function unirCsv(lista) {
+  var conDatos = lista.filter(function(t) { return t && String(t).trim(); });
+  if (!conDatos.length) return "";
+  var salida = "";
+  conDatos.forEach(function(t, i) {
+    t = String(t);
+    if (i > 0) {
+      var nl = t.indexOf("\n");
+      t = nl >= 0 ? t.slice(nl + 1) : "";
+    }
+    if (t && t.charAt(t.length - 1) !== "\n") t += "\n";
+    salida += t;
+  });
+  return salida;
+}
 
-// ══════════════════════════════════════════════════════════════════════════
-//  v14.0 · IMPORT ASÍNCRONO — iniciarImportBulk + consultarEstadoJob
-//
-//  POR QUÉ EXISTEN:
-//  ejecutarImportBulk() hace crear+subir+cerrar+ESPERAR+descargar dentro de
-//  una sola petición. Ese "esperar" (Utilities.sleep en bucle, hasta 5.5 min)
-//  choca contra el límite duro de 6 min de Apps Script: con volúmenes altos la
-//  ejecución muere y se pierde el jobId, aunque Salesforce sí haya terminado.
-//
-//  LA SOLUCIÓN NO ES PARTIR LOS DATOS (eso traicionaría a Bulk API 2.0, que
-//  está diseñada para un solo job), sino PARTIR LA ESPERA:
-//    · iniciarImportBulk  → crea/sube/cierra y devuelve el jobId  (~20s)
-//    · consultarEstadoJob → una pregunta corta, la repite el frontend (~1s)
-//    · recuperarResultadoJob (ya existía) → resultados, una sola vez al final
-//  Ninguna petición se acerca al límite, sin importar el volumen.
-// ══════════════════════════════════════════════════════════════════════════
+// Hace varias peticiones a la vez y devuelve [{code, text}] en el mismo orden.
+function sfFetchAll(peticiones) {
+  if (!peticiones.length) return [];
+  var reqs = peticiones.map(function(p) {
+    var r = { url: p.url, method: p.method || "get", headers: p.headers, muteHttpExceptions: true };
+    if (p.payload !== undefined) r.payload = p.payload;
+    if (p.contentType) r.contentType = p.contentType;
+    return r;
+  });
+  return UrlFetchApp.fetchAll(reqs).map(function(r) {
+    return { code: r.getResponseCode(), text: r.getContentText() };
+  });
+}
+
+function cabecerasSfJson(sid) {
+  return { "Authorization": "Bearer " + sid, "Content-Type": "application/json", "Accept": "application/json" };
+}
+
+function ok2xx(code) { return code >= 200 && code < 300; }
+
+// Reparte las filas en jobs. Mismo OwnerId → mismo job. Los owners se acomodan
+// del más grande al más chico en el job con menos filas, para que queden parejos.
+// Sin columna OwnerId se parte en bloques seguidos.
+function repartirEnJobs(headers, rows) {
+  var n = rows.length;
+  var numJobs = Math.max(1, Math.min(MAX_JOBS_PARALELO, Math.ceil(n / FILAS_POR_JOB)));
+  var iOwner = headers.indexOf("OwnerId");
+
+  if (iOwner < 0) {
+    var tam = Math.ceil(n / numJobs), partes = [];
+    for (var i = 0; i < n; i += tam) partes.push({ rows: rows.slice(i, i + tam) });
+    return partes;
+  }
+
+  var grupos = [], porOwner = {};
+  rows.forEach(function(r) {
+    var k = String((r && r[iOwner]) || "").trim().slice(0, 15);
+    if (!porOwner.hasOwnProperty(k)) { porOwner[k] = grupos.length; grupos.push({ owner: k, rows: [] }); }
+    grupos[porOwner[k]].rows.push(r);
+  });
+  // Del grupo más grande al más chico (estable: a igual tamaño, el que apareció primero)
+  var orden = grupos.map(function(g, i) { return i; })
+    .sort(function(a, b) { return (grupos[b].rows.length - grupos[a].rows.length) || (a - b); });
+  var bins = [];
+  for (var b = 0; b < Math.min(numJobs, grupos.length); b++) bins.push({ rows: [], owners: [] });
+  orden.forEach(function(gi) {
+    var menor = 0;
+    for (var x = 1; x < bins.length; x++) if (bins[x].rows.length < bins[menor].rows.length) menor = x;
+    bins[menor].rows = bins[menor].rows.concat(grupos[gi].rows);
+    bins[menor].owners.push(grupos[gi].owner);
+  });
+  return bins.filter(function(bn) { return bn.rows.length > 0; });
+}
+
+// Aborta jobs (best effort). Devuelve los que Salesforce aceptó abortar.
+function abortarJobs(base, sid, jobIds) {
+  var ids = jobIds.filter(Boolean);
+  if (!ids.length) return [];
+  try {
+    var res = sfFetchAll(ids.map(function(id) {
+      return { url: base + "/jobs/ingest/" + id, method: "patch", headers: cabecerasSfJson(sid),
+               contentType: "application/json", payload: JSON.stringify({ state: "Aborted" }) };
+    }));
+    return ids.filter(function(id, i) { return ok2xx(res[i].code); });
+  } catch (e) {
+    Logger.log("[ABORT FAIL] " + e.message);
+    return [];
+  }
+}
+
+function nuevoLoteId() {
+  return "lote_" + Utilities.getUuid().replace(/-/g, "").toLowerCase().slice(0, 16);
+}
+
 function iniciarImportBulk(params) {
   var sid = params.sid, instanceUrl = params.instanceUrl;
   var object = params.object || "Lead", operation = params.operation || "insert";
   var externalId = params.externalId || "", headers = params.headers, rows = params.rows;
   var userEmail = params.userEmail || "";
 
-  if (!rows || !rows.length) throw new Error("No se recibieron filas.");
-  if (!headers || !headers.length) throw new Error("No se recibieron headers.");
-
-  // CSV: mismo formato exacto que ejecutarImportBulk (no cambia el dato enviado)
-  var csvLines = [];
-  csvLines.push(headers.map(function(h){ return '"' + String(h).replace(/"/g,'""') + '"'; }).join(","));
-  for (var i = 0; i < rows.length; i++) {
-    var row = rows[i] || [], cells = [];
-    for (var j = 0; j < headers.length; j++) {
-      var v = row[j];
-      if (v === null || v === undefined) v = "";
-      v = String(v).replace(/"/g, '""');
-      cells.push('"' + v + '"');
+  if (!Array.isArray(rows) || !rows.length) throw new Error("No se recibieron filas.");
+  if (!Array.isArray(headers) || !headers.length) throw new Error("No se recibieron headers.");
+  for (var h = 0; h < headers.length; h++) {
+    if (typeof headers[h] !== "string" || !/^[A-Za-z0-9_.:]+$/.test(headers[h])) {
+      throw new Error("Header no válido: " + String(headers[h]).slice(0, 60));
     }
-    csvLines.push(cells.join(","));
   }
-  var csvContent = csvLines.join("\n");
+  if (!rows.every(function(r) { return Array.isArray(r); })) throw new Error("Filas con formato inválido.");
 
+  // ── Idempotencia: el mismo clientRequestId nunca crea jobs dos veces ──
+  // Si la respuesta de un importStart se pierde y el navegador reintenta, se
+  // devuelven los jobs que ya existen en vez de crear Leads duplicados.
+  var clientRequestId = String(params.clientRequestId || "");
+  if (clientRequestId && !/^[A-Za-z0-9_-]{8,64}$/.test(clientRequestId)) throw new Error("clientRequestId no válido.");
+  var cache = CacheService.getScriptCache();
+  var idemKey = clientRequestId ? "imp_" + hashTexto(userEmail + "|" + clientRequestId) : "";
+  if (idemKey) {
+    var lock = LockService.getScriptLock();
+    if (!lock.tryLock(10000)) throw new Error("El servidor está ocupado. Espera unos segundos y vuelve a intentar.");
+    try {
+      var previo = cache.get(idemKey);
+      if (previo) {
+        var p = JSON.parse(previo);
+        if (p.estado === "creando") {
+          throw new Error("Este import ya se está creando. Espera unos segundos y revisa el log o usa Recuperar.");
+        }
+        p.repetido = true;
+        return p;
+      }
+      cache.put(idemKey, JSON.stringify({ estado: "creando" }), 600);
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  try {
+    var resultado = crearJobsEnParalelo(sid, instanceUrl, object, operation, externalId, headers, rows, userEmail, clientRequestId);
+    if (idemKey) cache.put(idemKey, JSON.stringify(resultado), IMPORT_IDEMP_SEG);
+    return resultado;
+  } catch (err) {
+    if (idemKey) cache.remove(idemKey);  // todo se abortó: un reintento puede crear de nuevo
+    throw err;
+  }
+}
+
+function crearJobsEnParalelo(sid, instanceUrl, object, operation, externalId, headers, rows, userEmail, clientRequestId) {
   var base = instanceUrl + "/services/data/" + SF_API_VERSION;
-  var jsonHeaders = { "Authorization": "Bearer " + sid, "Content-Type": "application/json", "Accept": "application/json" };
+  // Compatibilidad: el frontend v16 (sin clientRequestId) solo sigue un jobId, así que
+  // para él se crea un solo job, como antes. El v17 manda clientRequestId y recibe N jobs.
+  var partes = clientRequestId ? repartirEnJobs(headers, rows) : [{ rows: rows }];
 
-  // ── PASO 1: crear el job ──
   var jobBody = { object: object, operation: operation, contentType: "CSV", lineEnding: "LF" };
   if (operation === "upsert" && externalId) jobBody.externalIdFieldName = externalId;
 
-  var jobRes = UrlFetchApp.fetch(base + "/jobs/ingest", {
-    method: "post", headers: jsonHeaders, payload: JSON.stringify(jobBody), muteHttpExceptions: true
+  // ── RONDA 1: crear los jobs ──
+  var r1 = sfFetchAll(partes.map(function() {
+    return { url: base + "/jobs/ingest", method: "post", headers: cabecerasSfJson(sid),
+             contentType: "application/json", payload: JSON.stringify(jobBody) };
+  }));
+  var jobIds = [], erroresCrear = [], sesionVencida = false;
+  r1.forEach(function(r, i) {
+    if (r.code === 401) sesionVencida = true;
+    if (ok2xx(r.code)) {
+      try { jobIds[i] = JSON.parse(r.text).id; } catch (e) { jobIds[i] = null; }
+    }
+    if (!jobIds[i]) erroresCrear.push("HTTP " + r.code + ": " + String(r.text).slice(0, 200));
   });
-  if (jobRes.getResponseCode() < 200 || jobRes.getResponseCode() >= 300) {
-    throw new Error("Error creando Job: " + jobRes.getContentText().slice(0, 400));
+  if (erroresCrear.length) {
+    abortarJobs(base, sid, jobIds);
+    if (sesionVencida) throw errorSesionSf("al crear el job");
+    throw new Error("Error creando Job: " + erroresCrear[0]);
   }
-  var jobId = JSON.parse(jobRes.getContentText()).id;
 
-  // ── AUDITORÍA AL NACER ──
-  // Se escribe AQUÍ, no al final: aunque todo lo demás falle, el jobId ya
-  // quedó registrado y el import siempre se puede recuperar.
+  var loteId = nuevoLoteId();
+  // ── AUDITORÍA AL NACER ── aunque todo lo demás falle, los jobIds quedan registrados.
   registrarAuditoria(userEmail, "import", "iniciado",
-    "jobId=" + jobId + "; object=" + object + "; op=" + operation + "; rows=" + rows.length);
+    "jobId=" + jobIds[0] + "; lote=" + loteId + "; jobIds=" + jobIds.join(",") +
+    "; object=" + object + "; op=" + operation + "; rows=" + rows.length +
+    (clientRequestId ? "; req=" + clientRequestId : ""));
 
-  // ── PASOS 2 y 3: subir el CSV y cerrar el job ──
-  // Si algo falla aquí, se audita CON el jobId para no perder el rastro.
+  var vivos = partes.map(function(p, i) { return i; });   // índices de jobs que siguen en pie
+  var motivoCaida = {};
+  var marcarCaidos = function(resps, paso) {
+    resps.forEach(function(r, k) {
+      var i = vivos[k];
+      if (r.code === 401) sesionVencida = true;
+      if (!ok2xx(r.code)) motivoCaida[i] = paso + " (HTTP " + r.code + "): " + String(r.text).slice(0, 200);
+    });
+    vivos = vivos.filter(function(i) { return !motivoCaida[i]; });
+  };
+
   try {
-    var uploadRes = UrlFetchApp.fetch(base + "/jobs/ingest/" + jobId + "/batches", {
-      method: "put",
-      headers: { "Authorization": "Bearer " + sid, "Content-Type": "text/csv", "Accept": "application/json" },
-      payload: csvContent, muteHttpExceptions: true
-    });
-    if (uploadRes.getResponseCode() < 200 || uploadRes.getResponseCode() >= 300) {
-      throw new Error("Error subiendo CSV: " + uploadRes.getContentText().slice(0, 400));
-    }
+    // ── RONDA 2: subir el CSV de cada job ──
+    marcarCaidos(sfFetchAll(vivos.map(function(i) {
+      return { url: base + "/jobs/ingest/" + jobIds[i] + "/batches", method: "put",
+               headers: { "Authorization": "Bearer " + sid, "Content-Type": "text/csv", "Accept": "application/json" },
+               contentType: "text/csv", payload: construirCsv(headers, partes[i].rows) };
+    })), "Error subiendo CSV");
 
-    var closeRes = UrlFetchApp.fetch(base + "/jobs/ingest/" + jobId, {
-      method: "patch", headers: jsonHeaders,
-      payload: JSON.stringify({ state: "UploadComplete" }), muteHttpExceptions: true
-    });
-    if (closeRes.getResponseCode() < 200 || closeRes.getResponseCode() >= 300) {
-      throw new Error("Error cerrando Job: " + closeRes.getContentText().slice(0, 400));
+    // ── RONDA 3: cerrar los jobs (UploadComplete → Salesforce empieza a procesar) ──
+    var cerrar = function(indices) {
+      return sfFetchAll(indices.map(function(i) {
+        return { url: base + "/jobs/ingest/" + jobIds[i], method: "patch", headers: cabecerasSfJson(sid),
+                 contentType: "application/json", payload: JSON.stringify({ state: "UploadComplete" }) };
+      }));
+    };
+    var antes = vivos.slice();
+    var rc = cerrar(vivos);
+    var pendientes = vivos.filter(function(i, k) { return !ok2xx(rc[k].code); });
+    if (pendientes.length && !rc.some(function(r) { return r.code === 401; })) {
+      // Un segundo intento solo para los que no cerraron
+      var rc2 = cerrar(pendientes);
+      pendientes = pendientes.filter(function(i, k) {
+        if (!ok2xx(rc2[k].code)) { motivoCaida[i] = "Error cerrando Job (HTTP " + rc2[k].code + "): " + String(rc2[k].text).slice(0, 200); return true; }
+        return false;
+      });
+    } else {
+      pendientes.forEach(function(i) {
+        var k = antes.indexOf(i);
+        if (rc[k].code === 401) sesionVencida = true;
+        motivoCaida[i] = "Error cerrando Job (HTTP " + rc[k].code + "): " + String(rc[k].text).slice(0, 200);
+      });
     }
+    vivos = vivos.filter(function(i) { return !motivoCaida[i]; });
   } catch (err) {
-    registrarAuditoria(userEmail, "import", "error_al_iniciar",
-      "jobId=" + jobId + "; " + String(err.message).slice(0, 250));
-    throw err;
+    // Excepción de red a mitad: ningún job quedó a medias sin rastro
+    partes.forEach(function(p, i) { if (vivos.indexOf(i) !== -1 && !motivoCaida[i]) motivoCaida[i] = "Excepción: " + err.message; });
+    vivos = [];
   }
 
-  // Devuelve de inmediato: el frontend se encarga de preguntar por el estado.
-  return {
-    jobId: jobId,
+  // Los jobs que no llegaron a cerrar se abortan: sus filas NO se enviaron.
+  var caidos = partes.map(function(p, i) { return i; }).filter(function(i) { return vivos.indexOf(i) === -1; });
+  if (caidos.length) abortarJobs(base, sid, caidos.map(function(i) { return jobIds[i]; }));
+
+  if (!vivos.length) {
+    var primerMotivo = motivoCaida[caidos[0]] || "sin detalle";
+    registrarAuditoria(userEmail, "import", "error_al_iniciar",
+      "jobId=" + jobIds[0] + "; lote=" + loteId + "; " + String(primerMotivo).slice(0, 250));
+    var e = sesionVencida ? errorSesionSf("al subir el import") : new Error(primerMotivo + " (los jobs se abortaron: no se creó ningún registro)");
+    e.yaAuditado = true;
+    throw e;
+  }
+
+  var jobIdsVivos = vivos.map(function(i) { return jobIds[i]; });
+  var filasNoEnviadas = [];
+  caidos.forEach(function(i) { filasNoEnviadas = filasNoEnviadas.concat(partes[i].rows); });
+  if (caidos.length) {
+    registrarAuditoria(userEmail, "import", "jobs_abortados",
+      "lote=" + loteId + "; jobIds=" + caidos.map(function(i) { return jobIds[i]; }).join(",") +
+      "; rows=" + filasNoEnviadas.length + "; " + String(motivoCaida[caidos[0]]).slice(0, 200));
+  }
+
+  var resultado = {
+    loteId: loteId,
+    jobIds: jobIdsVivos,
+    jobId: jobIdsVivos[0],                 // compatibilidad con el frontend v16
     jobState: "UploadComplete",
-    total: rows.length,
+    total: rows.length - filasNoEnviadas.length,
+    totalRecibidas: rows.length,
+    jobs: vivos.map(function(i) { return { jobId: jobIds[i], filas: partes[i].rows.length }; }),
     object: object,
-    operation: operation
+    operation: operation,
+    filasNoEnviadas: filasNoEnviadas,
+    errorNoEnviadas: caidos.length ? String(motivoCaida[caidos[0]]) : ""
   };
+  try {
+    CacheService.getScriptCache().put("lote_" + loteId, JSON.stringify({ jobIds: jobIdsVivos }), IMPORT_IDEMP_SEG);
+  } catch (e) {}
+  return resultado;
 }
 
+// jobIds[] (v17), loteId o jobId suelto (v16). Siempre devuelve una lista válida y sin repetidos.
+function resolverJobIds(params) {
+  var ids = [];
+  if (Array.isArray(params.jobIds) && params.jobIds.length) {
+    ids = params.jobIds.map(function(x) { return String(x || "").trim(); });
+  } else if (params.loteId) {
+    var lote = String(params.loteId).trim();
+    if (!LOTE_ID_REGEX.test(lote)) throw new Error("El Lote no tiene un formato válido (ej. lote_1a2b3c4d5e6f7a8b).");
+    ids = buscarJobsDeLote(lote);
+    if (!ids.length) throw new Error("No encontré los jobs del lote " + lote + ". Usa uno de sus Job ID.");
+  } else if (params.jobId) {
+    ids = [String(params.jobId).trim()];
+  }
+  if (!ids.length) throw new Error("No se recibió un Job ID.");
+  var vistos = {}, limpios = [];
+  ids.forEach(function(id) {
+    if (!JOB_ID_REGEX.test(id)) throw new Error("El Job ID no tiene un formato válido. Debe empezar con '750' (ej. 750Tt00000gk1XBIAY).");
+    if (!vistos[id]) { vistos[id] = true; limpios.push(id); }
+  });
+  if (limpios.length > MAX_JOBS_PARALELO * 2) throw new Error("Demasiados Job IDs en una consulta.");
+  return limpios;
+}
+
+// Los jobs de un lote: primero el caché (6 h), si no, la fila "iniciado" de la auditoría.
+function buscarJobsDeLote(loteId) {
+  try {
+    var c = CacheService.getScriptCache().get("lote_" + loteId);
+    if (c) return JSON.parse(c).jobIds || [];
+  } catch (e) {}
+  if (!AUDIT_SHEET_ID) return [];
+  try {
+    var sh = SpreadsheetApp.openById(AUDIT_SHEET_ID).getSheets()[0];
+    var last = sh.getLastRow();
+    if (last < 2) return [];
+    var desde = Math.max(2, last - 5000);
+    var vals = sh.getRange(desde, 5, last - desde + 1, 1).getValues();
+    for (var i = vals.length - 1; i >= 0; i--) {
+      var det = String(vals[i][0] || "");
+      if (det.indexOf("lote=" + loteId + ";") === -1) continue;
+      var m = det.match(/jobIds=([0-9A-Za-z,]+)/);
+      if (m) return m[1].split(",").filter(function(x) { return JOB_ID_REGEX.test(x); });
+    }
+  } catch (e) {
+    Logger.log("[LOTE] " + e.message);
+  }
+  return [];
+}
+
+var ESTADOS_FINALES = { JobComplete: 1, Failed: 1, Aborted: 1 };
+// Estados de auditoría que cierran un import (para no listarlo como huérfano)
+var ESTADOS_CIERRE_AUDIT = { success: 1, error: 1, job_failed: 1, error_resultados: 1, error_al_iniciar: 1 };
 
 // ══════════════════════════════════════════════════════════════════════════
-//  CONSULTA LIGERA DE ESTADO — la repite el frontend cada pocos segundos.
-//  Solo pregunta el estado del job: NO descarga los CSV de resultado, por eso
-//  tarda ~1s y queda fuera del rate limit (ver RATE_LIMIT_OPERACIONES).
-//  Los contadores vienen de Salesforce, así que la barra de progreso del
-//  frontend puede mostrar avance REAL en vez de una animación estimada.
+//  CONSULTA LIGERA DE ESTADO — la repite el frontend cada 5-15 s.
+//  Solo pregunta el estado de los jobs (fetchAll): NO descarga los CSV.
+//  Suma procesados y fallidos de todos para la barra de progreso, y devuelve
+//  retries / apexProcessingTime / totalProcessingTime para diagnóstico.
 // ══════════════════════════════════════════════════════════════════════════
 function consultarEstadoJob(params) {
   var sid = params.sid, instanceUrl = params.instanceUrl;
-  var jobId = String(params.jobId || "").trim();
+  var ids = resolverJobIds(params);
+  var base = instanceUrl + "/services/data/" + SF_API_VERSION;
 
-  if (!jobId) throw new Error("No se recibió un Job ID.");
-  if (!/^750[a-zA-Z0-9]{12}([a-zA-Z0-9]{3})?$/.test(jobId)) {
-    throw new Error("El Job ID no tiene un formato válido. Debe empezar con '750'.");
-  }
+  var res = sfFetchAll(ids.map(function(id) {
+    return { url: base + "/jobs/ingest/" + id, method: "get",
+             headers: { "Authorization": "Bearer " + sid, "Accept": "application/json" } };
+  }));
 
-  var res = UrlFetchApp.fetch(
-    instanceUrl + "/services/data/" + SF_API_VERSION + "/jobs/ingest/" + jobId,
-    { method: "get", headers: { "Authorization": "Bearer " + sid, "Accept": "application/json" }, muteHttpExceptions: true }
-  );
+  var jobs = [], processed = 0, failed = 0, retries = 0, apex = 0, totalMs = 0, errores = [];
+  var object = "", operation = "", externalIdFieldName = "", createdDate = "";
+  res.forEach(function(r, i) {
+    if (r.code === 401) throw errorSesionSf("al consultar el job");
+    if (r.code === 404) throw new Error("No se encontró el Job " + ids[i] + ". Salesforce conserva los jobs ~7 días.");
+    if (r.code !== 200) throw new Error("Salesforce devolvió HTTP " + r.code + " al consultar el Job " + ids[i] + ".");
+    var d = JSON.parse(r.text);
+    var state = d.state || "Unknown";
+    processed += d.numberRecordsProcessed || 0;
+    failed += d.numberRecordsFailed || 0;
+    retries += d.retries || 0;
+    apex += d.apexProcessingTime || 0;
+    totalMs += d.totalProcessingTime || 0;
+    if (!object) { object = d.object || ""; operation = d.operation || ""; externalIdFieldName = d.externalIdFieldName || ""; }
+    if (!createdDate || (d.createdDate && d.createdDate < createdDate)) createdDate = d.createdDate || createdDate;
+    if ((state === "Failed" || state === "Aborted")) errores.push(ids[i] + ": " + (d.errorMessage || "Sin mensaje de error"));
+    jobs.push({ jobId: ids[i], state: state, processed: d.numberRecordsProcessed || 0, failed: d.numberRecordsFailed || 0 });
+  });
 
-  var code = res.getResponseCode();
-  if (code === 401) throw new Error("Tu sesión de Salesforce expiró. Pega un SID nuevo y vuelve a consultar (el job sigue corriendo en Salesforce).");
-  if (code === 404) throw new Error("No se encontró un Job con ese ID. Salesforce conserva los jobs ~7 días.");
-  if (code !== 200) throw new Error("Salesforce devolvió HTTP " + code + " al consultar el Job.");
-
-  var d = JSON.parse(res.getContentText());
-  var state = d.state || "Unknown";
-  var terminado = (state === "JobComplete" || state === "Failed" || state === "Aborted");
+  var terminado = jobs.every(function(j) { return ESTADOS_FINALES[j.state]; });
+  var jobState;
+  if (!terminado) jobState = jobs.some(function(j) { return j.state === "InProgress"; }) ? "InProgress" : jobs[0].state;
+  else if (jobs.every(function(j) { return j.state === "JobComplete"; })) jobState = "JobComplete";
+  else if (jobs.some(function(j) { return j.state === "Failed"; })) jobState = "Failed";
+  else jobState = "Aborted";
 
   return {
-    jobId: jobId,
-    jobState: state,
-    processed: d.numberRecordsProcessed || 0,
-    failed: d.numberRecordsFailed || 0,
+    jobId: ids[0],
+    jobIds: ids,
+    loteId: params.loteId || "",
+    jobState: jobState,
+    jobs: jobs,
+    processed: processed,
+    failed: failed,
     terminado: terminado,
-    errorMessage: (state === "Failed" || state === "Aborted") ? (d.errorMessage || "Sin mensaje de error") : ""
+    retries: retries,
+    apexProcessingTime: apex,
+    totalProcessingTime: totalMs,
+    errorMessage: errores.join(" | "),
+    object: object,
+    operation: operation,
+    externalIdFieldName: externalIdFieldName,
+    createdDate: createdDate
   };
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+//  RESULTADOS — baja successful/failed/unprocessed de todos los jobs a la vez
+//  y los une con un solo header. Si una descarga falla, lo dice (resultsError):
+//  antes se devolvía un "éxito vacío".
+// ══════════════════════════════════════════════════════════════════════════
 function recuperarResultadoJob(params) {
   var sid = params.sid, instanceUrl = params.instanceUrl;
-  var jobId = String(params.jobId || "").trim();
+  var ids = resolverJobIds(params);
+  var base = instanceUrl + "/services/data/" + SF_API_VERSION;
 
-  if (!jobId) throw new Error("No se recibió un Job ID.");
-  // Validación básica del formato de Job ID (prefijo 750, 15 o 18 chars alfanuméricos)
-  if (!/^750[a-zA-Z0-9]{12}([a-zA-Z0-9]{3})?$/.test(jobId)) {
-    throw new Error("El Job ID no tiene un formato válido. Debe empezar con '750' (ej. 750Tt00000gk1XBIAY).");
+  // Si estos jobs ya tuvieron su reintento por bloqueo, sus filas se resolvieron en
+  // otro job. En una recuperación manual se juntan aquí: si no, esas filas saldrían
+  // como fallidas y un Retry las crearía dos veces.
+  var jobLock = (params.reintentarLock === true) ? "" : buscarReintentoLock(ids);
+  var todos = jobLock && ids.indexOf(jobLock) === -1 ? ids.concat([jobLock]) : ids;
+  var est = consultarEstadoJob({ sid: sid, instanceUrl: instanceUrl, jobIds: todos, loteId: params.loteId || "" });
+
+  var salida = est;
+  salida.successCsv = ""; salida.failedCsv = ""; salida.unprocessedCsv = "";
+  salida.resultsError = ""; salida.reintentoLock = null;
+  salida.incluyeReintentoLock = !!(jobLock && todos.length > ids.length);
+  salida.stillProcessing = !est.terminado;
+  if (salida.stillProcessing) return salida;
+
+  var TIPOS = ["successfulResults", "failedResults", "unprocessedrecords"];
+  var peticiones = [];
+  todos.forEach(function(id) {
+    TIPOS.forEach(function(t) {
+      peticiones.push({ url: base + "/jobs/ingest/" + id + "/" + t, method: "get",
+                        headers: { "Authorization": "Bearer " + sid, "Accept": "text/csv" } });
+    });
+  });
+  var res = sfFetchAll(peticiones);
+  var partes = [[], [], []], partesLock = [[], [], []], errores = [];
+  res.forEach(function(r, k) {
+    var id = todos[Math.floor(k / 3)], t = k % 3;
+    if (r.code === 401) throw errorSesionSf("al descargar los resultados");
+    if (r.code !== 200) errores.push(id + " " + TIPOS[t] + ": HTTP " + r.code);
+    else if (salida.incluyeReintentoLock && id === jobLock) partesLock[t].push(r.text);
+    else partes[t].push(r.text);
+  });
+  var fallidasPrincipales = unirCsv(partes[1]);
+  if (salida.incluyeReintentoLock) fallidasPrincipales = separarFilasLock(fallidasPrincipales).restoCsv;
+  salida.successCsv = unirCsv(partes[0].concat(partesLock[0]));
+  salida.failedCsv = unirCsv([fallidasPrincipales].concat(partesLock[1]));
+  salida.unprocessedCsv = unirCsv(partes[2].concat(partesLock[2]));
+  if (errores.length) {
+    salida.resultsError = "No se pudieron descargar todos los resultados (" + errores.join("; ") +
+      "). Los registros sí se procesaron en Salesforce: vuelve a intentar con Recuperar.";
   }
 
-  var base = instanceUrl + "/services/data/" + SF_API_VERSION;
-  var jsonHeaders = { "Authorization": "Bearer " + sid, "Accept": "application/json" };
-
-  // Consultar el estado actual del job
-  var pollRes = UrlFetchApp.fetch(base + "/jobs/ingest/" + jobId, { method: "get", headers: jsonHeaders, muteHttpExceptions: true });
-  var code = pollRes.getResponseCode();
-  if (code === 404) throw new Error("No se encontró un Job con ese ID. Verifica el Job ID o puede que Salesforce ya lo haya purgado (se conservan ~7 días).");
-  if (code !== 200) throw new Error("Salesforce devolvió HTTP " + code + " al consultar el Job: " + pollRes.getContentText().slice(0, 300));
-
-  var pollData = JSON.parse(pollRes.getContentText());
-  var jobState = pollData.state || "Unknown";
-
-  // Descargar los CSV de resultado (successful y failed)
-  var okCsv = "", failCsv = "";
-  try { var okRes = UrlFetchApp.fetch(base + "/jobs/ingest/" + jobId + "/successfulResults", { method: "get", headers: { "Authorization": "Bearer " + sid, "Accept": "text/csv" }, muteHttpExceptions: true }); if (okRes.getResponseCode() === 200) okCsv = okRes.getContentText(); } catch (e) {}
-  try { var failRes = UrlFetchApp.fetch(base + "/jobs/ingest/" + jobId + "/failedResults", { method: "get", headers: { "Authorization": "Bearer " + sid, "Accept": "text/csv" }, muteHttpExceptions: true }); if (failRes.getResponseCode() === 200) failCsv = failRes.getContentText(); } catch (e) {}
-
-  var errorMessage = "";
-  if (jobState === "Failed" || jobState === "Aborted") errorMessage = pollData.errorMessage || "Sin mensaje de error";
-
-  var stillProcessing = (jobState !== "JobComplete" && jobState !== "Failed" && jobState !== "Aborted");
-
-  return {
-    jobId: jobId,
-    jobState: jobState,
-    successCsv: okCsv,
-    failedCsv: failCsv,
-    processed: pollData.numberRecordsProcessed || 0,
-    failed: pollData.numberRecordsFailed || 0,
-    errorMessage: errorMessage,
-    stillProcessing: stillProcessing,
-    // Metadatos útiles del job
-    object: pollData.object || "",
-    operation: pollData.operation || "",
-    createdDate: pollData.createdDate || ""
-  };
+  // ── Reintento por bloqueo: solo en el cierre automático, una sola vez ──
+  if (params.reintentarLock === true && !salida.resultsError && salida.failedCsv) {
+    var lock = separarFilasLock(salida.failedCsv);
+    if (lock.rows.length) {
+      var r = lanzarReintentoLock(sid, instanceUrl, est, ids, lock, params.userEmail || "", params.loteId || "");
+      if (r.jobId) {
+        salida.failedCsv = lock.restoCsv;
+        salida.reintentoLock = { jobId: r.jobId, filas: lock.rows.length };
+      } else {
+        salida.reintentoLockError = r.error;
+      }
+    }
+  }
+  return salida;
 }
+
+// El job de reintento por bloqueo de estos jobs, si existe: caché (6 h) o la fila
+// "reintentoLock · iniciado" de la auditoría (de=<jobIds originales>).
+function buscarReintentoLock(ids) {
+  var ordenados = ids.slice().sort().join(",");
+  try {
+    var c = CacheService.getScriptCache().get("lock_" + hashTexto(ordenados));
+    if (c) return c;
+  } catch (e) {}
+  if (!AUDIT_SHEET_ID) return "";
+  try {
+    var sh = SpreadsheetApp.openById(AUDIT_SHEET_ID).getSheets()[0];
+    var last = sh.getLastRow();
+    if (last < 2) return "";
+    var desde = Math.max(2, last - 5000);
+    var vals = sh.getRange(desde, 3, last - desde + 1, 3).getValues();   // Operación, Estado, Detalles
+    for (var i = vals.length - 1; i >= 0; i--) {
+      if (String(vals[i][0]) !== "reintentoLock" || String(vals[i][1]) !== "iniciado") continue;
+      var det = String(vals[i][2] || "");
+      var de = det.match(/de=([0-9A-Za-z,]+)/), jm = det.match(/jobId=(750[a-zA-Z0-9]+)/);
+      if (de && jm && de[1].split(",").sort().join(",") === ordenados) return jm[1];
+    }
+  } catch (e) {
+    Logger.log("[LOCK LOOKUP] " + e.message);
+  }
+  return "";
+}
+
+// Separa las filas fallidas por UNABLE_TO_LOCK_ROW. Devuelve sus columnas
+// originales (sin sf__Id ni sf__Error) y el CSV de fallidas sin ellas.
+function separarFilasLock(failedCsv) {
+  var m = parsearCsv(failedCsv);
+  if (m.length < 2) return { headers: [], rows: [], restoCsv: failedCsv };
+  var hdr = m[0], iErr = hdr.indexOf("sf__Error");
+  var quitar = {};
+  hdr.forEach(function(h, i) { if (h === "sf__Id" || h === "sf__Error") quitar[i] = true; });
+  var headersOrig = hdr.filter(function(h, i) { return !quitar[i]; });
+  var conLock = [], resto = [];
+  for (var i = 1; i < m.length; i++) {
+    var esLock = iErr >= 0 && String(m[i][iErr] || "").indexOf(ERROR_LOCK) === 0;
+    if (esLock) conLock.push(m[i].filter(function(v, j) { return !quitar[j]; }));
+    else resto.push(m[i]);
+  }
+  var q = function(v) { return '"' + String(v === undefined ? "" : v).replace(/"/g, '""') + '"'; };
+  var restoCsv = resto.length ? [hdr.map(q).join(",")].concat(resto.map(function(r) { return r.map(q).join(","); })).join("\n") + "\n" : "";
+  return { headers: headersOrig, rows: conLock, restoCsv: restoCsv };
+}
+
+// Un solo job extra con las filas bloqueadas. Idempotente: si ya se lanzó para
+// estos jobs, devuelve el mismo jobId (nunca se reintentan dos veces).
+function lanzarReintentoLock(sid, instanceUrl, est, ids, lock, userEmail, loteId) {
+  var cache = CacheService.getScriptCache();
+  var key = "lock_" + hashTexto(ids.slice().sort().join(","));
+  var previo = cache.get(key);
+  if (previo) return { jobId: previo };
+
+  var base = instanceUrl + "/services/data/" + SF_API_VERSION;
+  var operation = OPERACIONES_IMPORT.indexOf(est.operation) !== -1 ? est.operation : "insert";
+  var jobBody = { object: est.object || "Lead", operation: operation, contentType: "CSV", lineEnding: "LF" };
+  if (operation === "upsert" && est.externalIdFieldName) jobBody.externalIdFieldName = est.externalIdFieldName;
+  var jobId = null;
+  try {
+    var rc = UrlFetchApp.fetch(base + "/jobs/ingest", { method: "post", headers: cabecerasSfJson(sid), contentType: "application/json",
+      payload: JSON.stringify(jobBody), muteHttpExceptions: true });
+    if (!ok2xx(rc.getResponseCode())) return { error: "No se pudo crear el job de reintento (HTTP " + rc.getResponseCode() + ")." };
+    jobId = JSON.parse(rc.getContentText()).id;
+    var ru = UrlFetchApp.fetch(base + "/jobs/ingest/" + jobId + "/batches", { method: "put",
+      headers: { "Authorization": "Bearer " + sid, "Content-Type": "text/csv", "Accept": "application/json" },
+      contentType: "text/csv", payload: construirCsv(lock.headers, lock.rows), muteHttpExceptions: true });
+    if (!ok2xx(ru.getResponseCode())) throw new Error("subida HTTP " + ru.getResponseCode());
+    var rz = UrlFetchApp.fetch(base + "/jobs/ingest/" + jobId, { method: "patch", headers: cabecerasSfJson(sid), contentType: "application/json",
+      payload: JSON.stringify({ state: "UploadComplete" }), muteHttpExceptions: true });
+    if (!ok2xx(rz.getResponseCode())) throw new Error("cierre HTTP " + rz.getResponseCode());
+  } catch (e) {
+    if (jobId) abortarJobs(base, sid, [jobId]);
+    return { error: "No se pudo lanzar el reintento por bloqueo: " + e.message };
+  }
+  cache.put(key, jobId, IMPORT_IDEMP_SEG);
+  registrarAuditoria(userEmail, "reintentoLock", "iniciado",
+    "jobId=" + jobId + (loteId ? "; lote=" + loteId : "") + "; de=" + ids.join(",") + "; rows=" + lock.rows.length);
+  return { jobId: jobId };
+}
+
+// Auditoría con el estado REAL (v17; antes siempre "success").
+function estadoAuditoriaRecuperar(r) {
+  if (!r) return "error";
+  if (r.stillProcessing) return "en_proceso";
+  if (r.resultsError) return "error_resultados";
+  return r.jobState === "JobComplete" ? "success" : "job_failed";
+}
+
+function detalleAuditoriaJobs(r) {
+  r = r || {};
+  var ids = r.jobIds || (r.jobId ? [r.jobId] : []);
+  return "jobId=" + (ids[0] || "N/A") +
+    (r.loteId ? "; lote=" + r.loteId : "") +
+    (ids.length > 1 ? "; jobIds=" + ids.join(",") : "") +
+    "; state=" + (r.jobState || "N/A") +
+    "; processed=" + (r.processed || 0) + "; failed=" + (r.failed || 0) +
+    "; retries=" + (r.retries || 0) + "; apexMs=" + (r.apexProcessingTime || 0) +
+    "; totalMs=" + (r.totalProcessingTime || 0) +
+    (r.reintentoLock ? "; lockRetry=" + r.reintentoLock.jobId + "(" + r.reintentoLock.filas + ")" : "");
+}
+
 function exportarResultadoASheet(params) {
   var userEmail       = (params.userEmail || "").trim().toLowerCase();
   var fileName        = (params.fileName || "SF Asignador Export").trim();
@@ -1323,6 +1849,15 @@ function exportarResultadoASheet(params) {
   if (targetSheetUrl) {
     var idFromUrl = extraerIdDeUrl(targetSheetUrl);
     if (!idFromUrl) throw new Error("URL del Sheet inválida. Pega un link tipo: https://docs.google.com/spreadsheets/d/…");
+    // v17: la cuenta del script ve archivos que el usuario no. Solo se adjunta a un
+    // Sheet del usuario (dueño o editor), y nunca al de auditoría.
+    if (idFromUrl === AUDIT_SHEET_ID) throw new Error("Ese Sheet no se puede usar como destino.");
+    var archivoDestino;
+    try { archivoDestino = DriveApp.getFileById(idFromUrl); } catch (e) { archivoDestino = null; }
+    if (!archivoDestino || !usuarioPuedeEditar(archivoDestino, userEmail)) {
+      throw new Error("Solo puedes adjuntar a un Sheet tuyo o donde seas editor. " +
+                      "Compártelo contigo como Editor (y con la cuenta del script) y vuelve a intentar.");
+    }
 
     try {
       ss = SpreadsheetApp.openById(idFromUrl);
@@ -1345,15 +1880,14 @@ function exportarResultadoASheet(params) {
     mode = "created";
   }
 
-  var summarySheet      = anadirHoja(ss, "Summary");
-  var preTemplateSheet  = anadirHoja(ss, "Pre Template");
-  var importResultSheet = anadirHoja(ss, "Import Result");
-
-  llenarSummarySheet(summarySheet, summary);
-  if (preTemplateHeaders.length && preTemplateRows.length) llenarHojaConDatos(preTemplateSheet, preTemplateHeaders, preTemplateRows);
-  else preTemplateSheet.getRange(1,1).setValue("Sin datos de Pre Template.");
-  if (importResultHeaders.length && importResultRows.length) llenarHojaConDatos(importResultSheet, importResultHeaders, importResultRows);
-  else importResultSheet.getRange(1,1).setValue("Sin resultado de import.");
+  // v17: si algo falla a la mitad, el Sheet recién creado se manda a la papelera
+  // (antes quedaba huérfano en Drive).
+  try {
+    llenarTresHojas(ss, summary, preTemplateHeaders, preTemplateRows, importResultHeaders, importResultRows);
+  } catch (e) {
+    if (mode === "created") { try { DriveApp.getFileById(ss.getId()).setTrashed(true); } catch (e2) {} }
+    throw e;
+  }
 
   if (mode === "created") {
     var sheets = ss.getSheets();
@@ -1503,28 +2037,35 @@ function exportarSheetDesdeArchivo(params) {
 
   if (fileMimeType.indexOf("csv") >= 0 || origFileName.toLowerCase().endsWith(".csv")) {
     // Es CSV: parseamos manualmente
-    origContent = blob.getDataAsString();
-    ss = SpreadsheetApp.create(fileName);
-    var receivedSheet = anadirHoja(ss, "Received Data");
-    // borrar hoja default
-    var defaultSheet = ss.getSheetByName("Hoja 1") || ss.getSheetByName("Sheet1");
-    if (defaultSheet) try { ss.deleteSheet(defaultSheet); } catch(e) {}
+    // v17: try/finally para no dejar el archivo temporal ni un Sheet a medias en Drive
+    try {
+      origContent = blob.getDataAsString();
+      ss = SpreadsheetApp.create(fileName);
+      var receivedSheet = anadirHoja(ss, "Received Data");
+      // borrar hoja default
+      var defaultSheet = ss.getSheetByName("Hoja 1") || ss.getSheetByName("Sheet1");
+      if (defaultSheet) try { ss.deleteSheet(defaultSheet); } catch(e) {}
 
-    var csvData = Utilities.parseCsv(origContent);
-    if (csvData.length > 0) {
-      var maxCols = 0;
-      csvData.forEach(function(r) { if (r.length > maxCols) maxCols = r.length; });
-      // Normalizar filas al mismo número de columnas
-      var normalized = csvData.map(function(r) {
-        while (r.length < maxCols) r.push("");
-        return r;
-      });
-      receivedSheet.getRange(1, 1, normalized.length, maxCols).setValues(normalized);
-      receivedSheet.setFrozenRows(1);
+      var csvData = Utilities.parseCsv(origContent);
+      if (csvData.length > 0) {
+        var maxCols = 0;
+        csvData.forEach(function(r) { if (r.length > maxCols) maxCols = r.length; });
+        // Normalizar filas al mismo número de columnas.
+        // v17: neutralizar fórmulas también aquí (el archivo viene del usuario).
+        var normalized = csvData.map(function(r) {
+          while (r.length < maxCols) r.push("");
+          return r.map(neutralizarValorSheet);
+        });
+        receivedSheet.getRange(1, 1, normalized.length, maxCols).setValues(normalized);
+        receivedSheet.setFrozenRows(1);
+      }
+    } catch (e) {
+      if (ss) { try { DriveApp.getFileById(ss.getId()).setTrashed(true); } catch (e2) {} }
+      throw new Error("No se pudo leer el CSV. " + e.message);
+    } finally {
+      // Borrar el archivo temporal subido
+      try { DriveApp.getFileById(uploadedFileId).setTrashed(true); } catch(e) {}
     }
-
-    // Borrar el archivo temporal subido
-    try { DriveApp.getFileById(uploadedFileId).setTrashed(true); } catch(e) {}
   } else {
     // Es XLSX: convertimos usando Drive API v3
     try {
@@ -1552,16 +2093,13 @@ function exportarSheetDesdeArchivo(params) {
     }
   }
 
-  // Añadir las 3 hojas nuevas
-  var summarySheet      = anadirHoja(ss, "Summary");
-  var preTemplateSheet  = anadirHoja(ss, "Pre Template");
-  var importResultSheet = anadirHoja(ss, "Import Result");
-
-  llenarSummarySheet(summarySheet, summary);
-  if (preTemplateHeaders.length && preTemplateRows.length) llenarHojaConDatos(preTemplateSheet, preTemplateHeaders, preTemplateRows);
-  else preTemplateSheet.getRange(1,1).setValue("Sin datos de Pre Template.");
-  if (importResultHeaders.length && importResultRows.length) llenarHojaConDatos(importResultSheet, importResultHeaders, importResultRows);
-  else importResultSheet.getRange(1,1).setValue("Sin resultado de import.");
+  // Añadir las 3 hojas nuevas (si falla, el Sheet nuevo va a la papelera)
+  try {
+    llenarTresHojas(ss, summary, preTemplateHeaders, preTemplateRows, importResultHeaders, importResultRows);
+  } catch (e) {
+    try { DriveApp.getFileById(ss.getId()).setTrashed(true); } catch (e2) {}
+    throw e;
+  }
 
   var fileId = ss.getId();
   var file = DriveApp.getFileById(fileId);
@@ -1614,8 +2152,35 @@ function anadirHoja(ss, baseName) {
   return ss.insertSheet(name);
 }
 
+function llenarTresHojas(ss, summary, preTemplateHeaders, preTemplateRows, importResultHeaders, importResultRows) {
+  var summarySheet      = anadirHoja(ss, "Summary");
+  var preTemplateSheet  = anadirHoja(ss, "Pre Template");
+  var importResultSheet = anadirHoja(ss, "Import Result");
+
+  llenarSummarySheet(summarySheet, summary);
+  if (preTemplateHeaders.length && preTemplateRows.length) llenarHojaConDatos(preTemplateSheet, preTemplateHeaders, preTemplateRows);
+  else preTemplateSheet.getRange(1,1).setValue("Sin datos de Pre Template.");
+  if (importResultHeaders.length && importResultRows.length) llenarHojaConDatos(importResultSheet, importResultHeaders, importResultRows);
+  else importResultSheet.getRange(1,1).setValue("Sin resultado de import.");
+}
+
+// v17: el usuario (no la cuenta del script) debe ser dueño o editor del archivo.
+function usuarioPuedeEditar(archivo, userEmail) {
+  var em = String(userEmail || "").toLowerCase();
+  if (!em) return false;
+  try {
+    var owner = archivo.getOwner();
+    if (owner && String(owner.getEmail()).toLowerCase() === em) return true;
+  } catch (e) {}
+  try {
+    return archivo.getEditors().some(function(u) { return String(u.getEmail()).toLowerCase() === em; });
+  } catch (e) {
+    return false;
+  }
+}
+
 function llenarHojaConDatos(sheet, headers, rows) {
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers.map(neutralizarValorSheet)]);
   sheet.getRange(1, 1, 1, headers.length).setBackground("#1e2235").setFontColor("#ffffff").setFontWeight("bold");
   if (rows.length > 0) {
     var normalizedRows = rows.map(function(r) {
@@ -1630,44 +2195,47 @@ function llenarHojaConDatos(sheet, headers, rows) {
   sheet.autoResizeColumns(1, headers.length);
 }
 
+// v17: arma toda la hoja en una matriz y la escribe con UN setValues
+// (antes eran ~20 setValue sueltos, cada uno es una llamada al servicio).
 function llenarSummarySheet(sheet, summary) {
   var ownerStats = summary.ownerStats || [];
   var meta       = summary.meta       || {};
+  var ANCHO = 6;
+  var m = [];
+  var fila = function(vals) { var f = vals.slice(); while (f.length < ANCHO) f.push(""); m.push(f); return m.length; };
 
-  sheet.getRange(1, 1).setValue("Resumen de Asignación e Import")
-       .setFontSize(14).setFontWeight("bold").setFontColor("#4b7cf3");
-
-  var row = 3;
-  if (meta.fecha)         { sheet.getRange(row, 1).setValue("Fecha:");         sheet.getRange(row, 2).setValue(neutralizarValorSheet(meta.fecha));         row++; }
-  if (meta.ejecutadoPor)  { sheet.getRange(row, 1).setValue("Ejecutado por:"); sheet.getRange(row, 2).setValue(neutralizarValorSheet(meta.ejecutadoPor)).setFontWeight("bold"); row++; }
-  if (meta.businessLine)  { sheet.getRange(row, 1).setValue("Business Line:"); sheet.getRange(row, 2).setValue(neutralizarValorSheet(meta.businessLine));  row++; }
+  fila(["Resumen de Asignación e Import"]);
+  fila([]);
+  var filaEjecutadoPor = 0;
+  if (meta.fecha)        fila(["Fecha:", neutralizarValorSheet(String(meta.fecha))]);
+  if (meta.ejecutadoPor) filaEjecutadoPor = fila(["Ejecutado por:", neutralizarValorSheet(String(meta.ejecutadoPor))]);
+  if (meta.businessLine) fila(["Business Line:", neutralizarValorSheet(String(meta.businessLine))]);
   if (meta.dias !== undefined && meta.dias !== null && meta.dias !== "") {
-    sheet.getRange(row, 1).setValue("Días exclusión:");
-    sheet.getRange(row, 2).setValue(meta.dias === 0 ? "Sin filtro" : meta.dias);
-    row++;
+    fila(["Días exclusión:", meta.dias === 0 ? "Sin filtro" : neutralizarValorSheet(String(meta.dias))]);
   }
-
-  var startRow = row + 2;
-  sheet.getRange(startRow, 1).setValue("Owner (email)").setFontWeight("bold").setBackground("#1e2235").setFontColor("#ffffff");
-  sheet.getRange(startRow, 2).setValue("Leads asignados").setFontWeight("bold").setBackground("#1e2235").setFontColor("#ffffff");
-
+  fila([]);
+  var startRow = fila(["Owner (email)", "Leads asignados", "", "Contactos asignados", "Representantes activos", "Contactos que pasaron el query"]);
+  var primeraOwner = startRow + 1;
+  var totales = [Number(summary.contactosAsignados) || 0, Number(summary.repsActivos) || 0, Number(summary.contactosQueryPass) || 0];
   if (ownerStats.length > 0) {
-    var ownerData = ownerStats.map(function(o) { return [neutralizarValorSheet(o.email), o.count]; });
-    sheet.getRange(startRow + 1, 1, ownerData.length, 2).setValues(ownerData);
-    var totalRow = startRow + 1 + ownerData.length;
-    sheet.getRange(totalRow, 1).setValue("TOTAL").setFontWeight("bold").setBackground("#f0f0f0");
-    sheet.getRange(totalRow, 2).setValue("=SUM(B" + (startRow+1) + ":B" + (totalRow-1) + ")").setFontWeight("bold").setBackground("#f0f0f0");
+    ownerStats.forEach(function(o, i) {
+      var f = [neutralizarValorSheet(String(o.email || "")), Number(o.count) || 0, ""];
+      fila(i === 0 ? f.concat(totales) : f);
+    });
+    fila(["TOTAL", "=SUM(B" + primeraOwner + ":B" + (primeraOwner + ownerStats.length - 1) + ")"]);
+  } else {
+    fila(["", "", ""].concat(totales));
   }
 
-  sheet.getRange(startRow, 4).setValue("Contactos asignados").setFontWeight("bold").setBackground("#1e2235").setFontColor("#ffffff");
-  sheet.getRange(startRow, 5).setValue("Representantes activos").setFontWeight("bold").setBackground("#1e2235").setFontColor("#ffffff");
-  sheet.getRange(startRow, 6).setValue("Contactos que pasaron el query").setFontWeight("bold").setBackground("#1e2235").setFontColor("#ffffff");
-  sheet.getRange(startRow + 1, 4).setValue(summary.contactosAsignados || 0);
-  sheet.getRange(startRow + 1, 5).setValue(summary.repsActivos || 0);
-  sheet.getRange(startRow + 1, 6).setValue(summary.contactosQueryPass || 0);
+  sheet.getRange(1, 1, m.length, ANCHO).setValues(m);
+  sheet.getRange(1, 1).setFontSize(14).setFontWeight("bold").setFontColor("#4b7cf3");
+  if (filaEjecutadoPor) sheet.getRange(filaEjecutadoPor, 2).setFontWeight("bold");
+  sheet.getRange(startRow, 1, 1, 2).setFontWeight("bold").setBackground("#1e2235").setFontColor("#ffffff");
+  sheet.getRange(startRow, 4, 1, 3).setFontWeight("bold").setBackground("#1e2235").setFontColor("#ffffff");
+  if (ownerStats.length > 0) sheet.getRange(m.length, 1, 1, 2).setFontWeight("bold").setBackground("#f0f0f0");
 
   sheet.setFrozenRows(1);
-  sheet.autoResizeColumns(1, 6);
+  sheet.autoResizeColumns(1, ANCHO);
 }
 
 function extraerIdDeUrl(url) {
@@ -1844,6 +2412,13 @@ function obtenerWhitelist() {
   return ALLOWED_EMAILS;
 }
 
+// v17: alta y baja bajo candado (dos admins a la vez podían duplicar o borrar la fila equivocada).
+function conCandadoScript(fn) {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) throw new Error("Otra persona está modificando usuarios. Intenta en unos segundos.");
+  try { return fn(); } finally { lock.releaseLock(); }
+}
+
 // ── Alta de usuario (solo admins) ──
 function adminAgregarUsuario(userEmail, payload) {
   if (!esAdmin(userEmail)) throw new Error("Solo los administradores pueden modificar usuarios.");
@@ -1851,36 +2426,44 @@ function adminAgregarUsuario(userEmail, payload) {
   if (!/^[a-z0-9._%+-]+@docplanner\.com$/.test(nuevo)) {
     throw new Error("Solo se aceptan correos @docplanner.com válidos.");
   }
-  if (obtenerWhitelist().indexOf(nuevo) !== -1) {
-    throw new Error(nuevo + " ya tiene acceso.");
-  }
-  var sh = obtenerHojaUsuarios();
-  sh.appendRow([nuevo, userEmail, new Date()]);
-  CacheService.getScriptCache().remove(WHITELIST_CACHE_KEY);
-  registrarAuditoria(userEmail, "admin", "add_user", "email=" + nuevo);
-  return { ok: true, email: nuevo };
+  return conCandadoScript(function() {
+    CacheService.getScriptCache().remove(WHITELIST_CACHE_KEY);
+    if (obtenerWhitelist().indexOf(nuevo) !== -1) {
+      throw new Error(nuevo + " ya tiene acceso.");
+    }
+    var sh = obtenerHojaUsuarios();
+    sh.appendRow([nuevo, neutralizarValorSheet(userEmail), new Date()]);
+    CacheService.getScriptCache().remove(WHITELIST_CACHE_KEY);
+    registrarAuditoria(userEmail, "admin", "add_user", "email=" + nuevo);
+    return { ok: true, email: nuevo };
+  });
 }
 
 // ── Baja de usuario (solo admins; con barandales anti-autobloqueo) ──
+// v17: al quitar la whitelist del caché, los tokens ya cacheados de esa persona
+// dejan de servir en su siguiente petición (validarIdToken revisa la whitelist).
 function adminEliminarUsuario(userEmail, payload) {
   if (!esAdmin(userEmail)) throw new Error("Solo los administradores pueden modificar usuarios.");
   var objetivo = String(payload.email || "").toLowerCase().trim();
   if (!objetivo) throw new Error("No se recibió el email a eliminar.");
   if (esAdmin(objetivo)) throw new Error("No se puede eliminar a un administrador.");
-  var sh = obtenerHojaUsuarios();
-  var last = sh.getLastRow();
-  var fila = -1;
-  if (last >= 2) {
-    var vals = sh.getRange(2, 1, last - 1, 1).getValues();
-    for (var i = 0; i < vals.length; i++) {
-      if (String(vals[i][0] || "").toLowerCase().trim() === objetivo) { fila = i + 2; break; }
+  return conCandadoScript(function() {
+    var sh = obtenerHojaUsuarios();
+    var last = sh.getLastRow();
+    var filas = [];
+    if (last >= 2) {
+      var vals = sh.getRange(2, 1, last - 1, 1).getValues();
+      for (var i = 0; i < vals.length; i++) {
+        if (String(vals[i][0] || "").toLowerCase().trim() === objetivo) filas.push(i + 2);
+      }
     }
-  }
-  if (fila === -1) throw new Error(objetivo + " no está en la lista.");
-  sh.deleteRow(fila);
-  CacheService.getScriptCache().remove(WHITELIST_CACHE_KEY);
-  registrarAuditoria(userEmail, "admin", "remove_user", "email=" + objetivo);
-  return { ok: true, email: objetivo };
+    if (!filas.length) throw new Error(objetivo + " no está en la lista.");
+    // De abajo hacia arriba, por si estaba repetido
+    for (var f = filas.length - 1; f >= 0; f--) sh.deleteRow(filas[f]);
+    CacheService.getScriptCache().remove(WHITELIST_CACHE_KEY);
+    registrarAuditoria(userEmail, "admin", "remove_user", "email=" + objetivo);
+    return { ok: true, email: objetivo };
+  });
 }
 
 // ── El agregador del panel: lee TODA la auditoría y computa todo de un golpe ──
@@ -1921,10 +2504,16 @@ function obtenerDatosAdmin(userEmail) {
     }
 
     // Ciclo de vida de los jobs (para detectar huérfanos)
+    // v17: un import puede tener varios jobs; se sigue por su lote. Los v16 no
+    // tienen lote y se siguen por su jobId, como antes.
     var jm = det.match(/jobId=(750[a-zA-Z0-9]+)/);
-    if (jm) {
-      if (op === "import" && estado === "iniciado") jobIniciado[jm[1]] = { ts: ts, email: email, det: det };
-      else if (estado === "success" || estado === "error") jobCerrado[jm[1]] = true;
+    var lm = det.match(/lote=(lote_[a-f0-9]+)/);
+    var llave = lm ? lm[1] : (jm ? jm[1] : null);
+    if (llave && op === "import") {
+      if (estado === "iniciado") jobIniciado[llave] = { ts: ts, email: email, det: det, jobId: jm ? jm[1] : "", loteId: lm ? lm[1] : "" };
+      else if (ESTADOS_CIERRE_AUDIT[estado]) jobCerrado[llave] = true;
+    } else if (jm && (estado === "success" || estado === "error")) {
+      jobCerrado[llave] = true;   // recuperaciones manuales v16 ("recuperarJob")
     }
 
     // ── Métricas de imports · v16.2 ──
@@ -1937,7 +2526,7 @@ function obtenerDatosAdmin(userEmail) {
     // El de-duplicado por jobId evita el problema inverso: que un job cerrado
     // y luego recuperado a mano se contara dos veces.
     if (estado === "success" && (op === "import" || op === "recuperarJob")) {
-      var jid = jm ? jm[1] : null;
+      var jid = llave;
       if (!jid || !jobContado[jid]) {
         if (jid) jobContado[jid] = true;
         totImports++;
@@ -1963,7 +2552,8 @@ function obtenerDatosAdmin(userEmail) {
   for (var jobId in jobIniciado) {
     if (!jobCerrado[jobId] && (ahora - jobIniciado[jobId].ts) <= 7 * DIA) {
       huerfanos.push({
-        jobId: jobId,
+        jobId: jobIniciado[jobId].jobId || jobId,
+        loteId: jobIniciado[jobId].loteId || "",
         email: jobIniciado[jobId].email,
         ts: jobIniciado[jobId].ts,
         edadMin: Math.round((ahora - jobIniciado[jobId].ts) / 60000),
@@ -2001,7 +2591,7 @@ function obtenerDatosAdmin(userEmail) {
   }
 
   // Health check: escritura real al Sheet (celda auxiliar, se limpia sola) + carpeta COE
-  var health = { version: "16.2", sheetLectura: true, sheetEscritura: false, carpetaCOE: "", whitelistFuente: fuenteWhitelist };
+  var health = { version: VERSION_BACKEND, sheetLectura: true, sheetEscritura: false, carpetaCOE: "", whitelistFuente: fuenteWhitelist };
   try {
     var celda = audit.getRange(1, 8);  // H1: fuera de las 5 columnas del log
     celda.setValue("health_ok");
