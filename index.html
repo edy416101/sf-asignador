@@ -194,6 +194,7 @@
     .isec .slabel { margin-bottom: 10px; }
     .cfg-grid { display: flex; flex-direction: column; gap: 10px; }
     #extIdField { display: none; }
+    .cfg-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .fmap-table { width: 100%; border-collapse: collapse; font-size: 11px; }
     .fmap-table th { font-size: 9.5px; font-weight: 700; color: var(--muted); letter-spacing: .8px; text-transform: uppercase; padding: 5px 8px; border-bottom: 1px solid var(--border); }
     .fmap-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
@@ -791,6 +792,11 @@
               <div class="field"><label>Action</label><select id="cfg-action" onchange="onActionChange()"><option value="insert">Insert</option><option value="upsert">Upsert</option></select></div>
               <div class="field" id="extIdField"><label>External ID Field (Upsert)</label><input id="cfg-extid" type="text" placeholder="ej. Id, Email, Custom_Id__c"/></div>
               <div class="field"><label>Object</label><select id="cfg-object"><option value="Lead" selected>Lead</option></select></div>
+              <div class="cfg-pair">
+                <div class="field"><label>Filas por job</label><input id="cfg-filas" type="number" min="10" max="10000" step="1" value="50"/></div>
+                <div class="field"><label>Jobs a la vez</label><input id="cfg-jobs" type="number" min="1" max="10" step="1" value="10"/></div>
+              </div>
+              <span class="field-hint">Como Batch size y Threads de Inspector. Con 50 y 10, 500 filas tardan ~1 min. Más jobs a la vez es más rápido, pero puede haber más filas bloqueadas (se reintentan solas una vez).</span>
             </div>
           </div>
           <div class="isec">
@@ -3204,6 +3210,8 @@ async function ejecutarImport() {
 
   if (!sid) return toast('Falta el Session ID (SID).', 'bad');
   if (action === 'upsert' && !extId) return toast('Para Upsert debes indicar el External ID Field.', 'bad');
+  const reparto = leerOpcionesReparto();
+  if (reparto.error) return toast(reparto.error, 'bad');
 
   const btn = document.getElementById('importBtn');
   importEnCurso = true;
@@ -3355,12 +3363,34 @@ async function iniciarConReintento(payload) {
   }
 }
 
+// v17.2: "Filas por job" y "Jobs a la vez" (como Batch size y Threads de Inspector).
+// Vacío = el valor por defecto del backend (50 y 10). Devuelve { error } si no es válido.
+function leerOpcionesReparto() {
+  const leer = (id, min, max, nombre) => {
+    const el = document.getElementById(id);
+    const v = el ? String(el.value).trim() : '';
+    if (v === '') return { valor: undefined };
+    const n = Number(v);
+    if (!Number.isInteger(n) || n < min || n > max) return { error: `${nombre} debe ser un número entero entre ${min} y ${max}.` };
+    return { valor: n };
+  };
+  const f = leer('cfg-filas', 10, 10000, 'Filas por job');
+  const j = leer('cfg-jobs', 1, 10, 'Jobs a la vez');
+  if (f.error || j.error) return { error: f.error || j.error };
+  const r = {};
+  if (f.valor !== undefined) r.filasPorJob = f.valor;
+  if (j.valor !== undefined) r.jobsALaVez = j.valor;
+  return r;
+}
+
 async function correrImportBulk({ sid, cfg, rows, total, btn }) {
-  const inicio = await iniciarConReintento({
+  const reparto = leerOpcionesReparto();
+  if (reparto.error) throw new Error(reparto.error);
+  const inicio = await iniciarConReintento(Object.assign({
     action: 'importStart', sid, instanceUrl: INSTANCE_URL,
     object: cfg.object, operation: cfg.action, externalId: cfg.extId,
     headers: cfg.sfHeaders, rows, clientRequestId: nuevoRequestId()
-  });
+  }, reparto));
 
   const jobIds = (inicio.jobIds && inicio.jobIds.length) ? inicio.jobIds : [inicio.jobId];
   const loteId = inicio.loteId || '';
