@@ -14,8 +14,10 @@ Owner: Edgar Martínez. Frontend en GitHub Pages (`index.html`), backend en Apps
   la versión vieja y pasa con la nueva.
 - **Nada real sin confirmar con Edgar.** No usar un SID real, no correr imports, no llamar a
   Salesforce, Apps Script ni Google Sheets. Las cargas reales las hace Edgar.
-- **Publicar el backend = `bash scripts/publicar-backend.sh`**, solo cuando Edgar lo pida y
-  después de mergear a `main`. Usa clasp con el login de Edgar (`~/.clasprc.json`, solo en su
+- **Publicar el backend = `bash scripts/publicar-backend.sh`**, siempre después de mergear a
+  `main` un cambio que toque `backend/`, sin pedirle permiso a Edgar (lo autorizó el
+  13-nov-2026). Si el script falla, no se publica a medias: se arregla la causa y se vuelve a
+  correr. Al terminar, avisarle la versión publicada. Usa clasp con el login de Edgar (`~/.clasprc.json`, solo en su
   PC) y publica una versión nueva del mismo deployment: la URL no cambia. Nunca se pega código
   a mano ni se crea otro deployment.
 - **El repo es público.** Correos, admins, la carpeta de Drive y el Sheet de auditoría viven en

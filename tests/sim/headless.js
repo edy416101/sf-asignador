@@ -9,7 +9,7 @@
 // Uso:  node tests/sim/headless.js                  → index.html del repo
 //       node tests/sim/headless.js ruta/index.html  → otra versión
 // Variable CHROME_PATH si Chrome no está en la ruta de siempre.
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
@@ -47,10 +47,24 @@ async function correr(indexHtml) {
     '--disable-component-update', '--disable-sync', 'about:blank']);
   const lineas = [];
   const out = s => lineas.push(s);
-  const cerrar = () => {
-    try { chrome.kill(); } catch (e) {}
+  // En Windows, kill() cierra solo el proceso principal y los hijos de Chrome quedan vivos:
+  // se acumulan entre corridas y el siguiente Chrome ya no arranca a tiempo. Por eso primero se
+  // le pide a Chrome que se cierre entero (Browser.close por CDP) y solo de respaldo se mata.
+  const cerrar = async () => {
+    try {
+      const v = await (await fetch('http://127.0.0.1:' + pCdp + '/json/version')).json();
+      const ws = new WebSocket(v.webSocketDebuggerUrl);
+      await new Promise((r, x) => { ws.addEventListener('open', r); ws.addEventListener('error', x); setTimeout(x, 3000); });
+      ws.send(JSON.stringify({ id: 1, method: 'Browser.close' }));
+      await new Promise(r => { if (chrome.exitCode !== null) return r(); chrome.once('exit', r); setTimeout(r, 5000); });
+    } catch (e) {}
+    try {
+      if (process.platform === 'win32') spawnSync('taskkill', ['/PID', String(chrome.pid), '/T', '/F'], { stdio: 'ignore' });
+      else chrome.kill();
+    } catch (e) {}
     try { server.kill(); } catch (e) {}
-    setTimeout(() => { try { fs.rmSync(perfil, { recursive: true, force: true }); } catch (e) {} }, 1500);
+    // Chrome suelta sus archivos un momento después de salir: se reintenta antes de rendirse
+    try { fs.rmSync(perfil, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); } catch (e) {}
   };
 
   try {
@@ -118,7 +132,7 @@ async function correr(indexHtml) {
     out('✗ ' + e.message);
     return { ok: false, arranque: true, salida: lineas.join('\n') };
   } finally {
-    cerrar();
+    await cerrar();
   }
 }
 
