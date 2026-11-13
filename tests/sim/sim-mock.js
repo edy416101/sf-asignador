@@ -178,6 +178,9 @@
     // 4c. v18 · Datos al campo correcto: campos custom, mapeo, valores manuales, picklists y país
     await camposCorrectos(check);
 
+    // 4e. v18.4 · Teclado y lectores de pantalla
+    await detallesUso(check);
+
     // 5. Todo pasó por doPost real: auditoría, y un token que Google no conoce se rechaza
     check('La auditoría registró el import y su lote (doPost real)',
       SIM.auditoria.some(f => f[2] === 'import' && f[3] === 'iniciado' && /lote=lote_/.test(f[4])), SIM.auditoria.length + ' filas de auditoría');
@@ -192,6 +195,34 @@
     mostrarPanel(checks);
     return checks;
   };
+
+  async function detallesUso(check) {
+    const espera = ms => new Promise(r => st(r, ms));
+    const tecla = (el, key) => el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    abrirModalRecuperar();
+    await espera(200);
+    const modal = document.getElementById('recuperarModal');
+    const focoAdentro = modal.contains(document.activeElement);
+    tecla(document.activeElement || document.body, 'Escape');
+    check('Modales: el foco entra al abrir y Esc cierra', focoAdentro && !modal.classList.contains('open'),
+      'foco adentro: ' + focoAdentro + ' · abierto: ' + modal.classList.contains('open'));
+    const caja = modal.querySelector('.modal');
+    check('Los modales se anuncian como diálogo con su título', caja.getAttribute('role') === 'dialog' && /Lote o Job ID/.test(document.getElementById(caja.getAttribute('aria-labelledby')).textContent));
+    check('Los avisos (toasts) se leen en voz alta', document.getElementById('toast').getAttribute('aria-live') === 'polite');
+    switchTab('asig');
+    const tabImport = document.getElementById('tab-import');
+    tabImport.focus();
+    tecla(document.getElementById('tab-asig'), 'ArrowRight');
+    check('Pestañas con teclado (flechas) y aria-selected al día',
+      document.getElementById('tab-import').getAttribute('aria-selected') === 'true' && document.getElementById('tc-import').classList.contains('active'));
+    abrirModalExport();
+    const csv = document.querySelector('.mode-tab[data-mode="csv"]');
+    csv.focus();
+    tecla(csv, 'Enter');
+    const modoCsv = currentMode === 'csv';
+    cerrarModalExport();
+    check('Las opciones que no son botones se usan con Enter (role=button)', csv.getAttribute('role') === 'button' && csv.tabIndex === 0 && modoCsv);
+  }
 
   async function exportes(check) {
     const abiertas = [];

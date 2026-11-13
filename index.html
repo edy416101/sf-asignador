@@ -661,12 +661,12 @@
     <button class="jobpend-x" onclick="descartarJobPendiente()" title="Descartar">✕</button>
   </div>
 
-  <div class="tab-bar">
-    <button class="tab active" onclick="switchTab('asig')" id="tab-asig">⚡ Asignación <span class="tab-badge" id="badge-asig">—</span></button>
-    <button class="tab" onclick="switchTab('import')" id="tab-import">📥 Data Import <span class="tab-badge" id="badge-import">—</span></button>
+  <div class="tab-bar" role="tablist" aria-label="Secciones">
+    <button class="tab active" onclick="switchTab('asig')" id="tab-asig" role="tab" aria-selected="true" aria-controls="tc-asig">⚡ Asignación <span class="tab-badge" id="badge-asig">—</span></button>
+    <button class="tab" onclick="switchTab('import')" id="tab-import" role="tab" aria-selected="false" aria-controls="tc-import">📥 Data Import <span class="tab-badge" id="badge-import">—</span></button>
   </div>
 
-  <div class="tab-content active" id="tc-asig">
+  <div class="tab-content active" id="tc-asig" role="tabpanel" aria-labelledby="tab-asig">
     <div class="asig-layout">
       <aside>
         <div>
@@ -675,7 +675,7 @@
             <label>Session ID (SID)</label>
             <div class="sid-wrap">
               <input id="sid" class="mono" type="password" placeholder="Pega tu SID aquí…" autocomplete="off" spellcheck="false"/>
-              <span class="sid-eye" onclick="toggleSid()">VER</span>
+              <span class="sid-eye" onclick="toggleSid()" aria-label="Mostrar u ocultar el SID">VER</span>
             </div>
           </div>
         </div>
@@ -780,7 +780,7 @@
     </div>
   </div>
 
-  <div class="tab-content" id="tc-import">
+  <div class="tab-content" id="tc-import" role="tabpanel" aria-labelledby="tab-import">
     <div class="import-layout">
       <div class="import-config">
         <div class="import-config-scroll">
@@ -1063,7 +1063,7 @@
 </div>
 
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <!-- MODAL CAMPOS CUSTOM -->
 <div class="modal-backdrop" id="customFieldsModal">
@@ -1249,12 +1249,12 @@
 <div class="modal-backdrop" id="recuperarModal">
   <div class="modal" style="max-width:520px">
     <div class="modal-header">
-      <h2>🔍 Recuperar resultado por Job ID</h2>
+      <h2 id="recuperarTitulo">🔍 Recuperar resultado por Lote o Job ID</h2>
       <button class="modal-close" onclick="cerrarModalRecuperar()">✕</button>
     </div>
     <div class="modal-body">
       <div style="background:rgba(124,58,237,0.06); border-left:3px solid var(--ac2); border-radius:6px; padding:10px 12px; font-size:11.5px; color:var(--text); line-height:1.55;">
-        <strong>¿Cuándo usar esto?</strong> Si un import grande quedó "procesando" y la herramienta no alcanzó a mostrar el resultado (Salesforce siguió trabajando después de que se agotó la espera). Pega aquí el <strong>Job ID</strong> que te dio ese import y traemos el resultado completo desde Salesforce.
+        <strong>¿Cuándo usar esto?</strong> Si un import grande quedó "procesando" y la herramienta no alcanzó a mostrar el resultado (Salesforce siguió trabajando después de que se agotó la espera). Pega aquí el <strong>Lote</strong> (lote_…) o el <strong>Job ID</strong> (750…) que te dio ese import y traemos el resultado completo desde Salesforce. Si la tabla tiene filas "En proceso" de ese lote, se completan sin borrar lo demás.
       </div>
 
       <div class="modal-field">
@@ -1265,7 +1265,7 @@
       <div class="modal-field">
         <label>Lote o Job ID</label>
         <input type="text" id="recuperarJobId" placeholder="ej. lote_1a2b3c4d5e6f7a8b o 750Tt00000gk1XBIAY" style="font-family:var(--mono);"/>
-        <span class="hint">Empieza con "750". Lo encuentras en el log del import o en Setup → Bulk Data Load Jobs. Salesforce conserva los jobs ~7 días.</span>
+        <span class="hint">Un Lote empieza con "lote_" y trae todos los jobs del import; un Job ID empieza con "750". Los encuentras en el log del import (el Job ID también en Setup → Bulk Data Load Jobs). Salesforce conserva los jobs ~7 días.</span>
       </div>
 
       <div id="recuperarStatus" style="display:none; font-size:11.5px; padding:10px 12px; border-radius:6px;"></div>
@@ -1520,6 +1520,69 @@ window.addEventListener('load', () => {
   tryInit();
 });
 
+// ── v18 · Teclado y lectores de pantalla ──
+// Esc cierra el modal de arriba (no el de volver a entrar). Al abrir un modal el foco entra al
+// primer campo y Tab no se sale de él; al cerrarlo, el foco vuelve a donde estaba.
+const CIERRE_MODALES = {
+  exportModal: () => cerrarModalExport(), customFieldsModal: () => cerrarModalCustomFields(),
+  loadModal: () => cerrarModalCargar(), retryModal: () => cerrarModalRetry(), recuperarModal: () => cerrarModalRecuperar()
+};
+const ENFOCABLES = 'button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+function modalAbierto() {
+  const abiertos = [...document.querySelectorAll('.modal-backdrop.open')];
+  return abiertos.sort((a, b) => (Number(getComputedStyle(b).zIndex) || 0) - (Number(getComputedStyle(a).zIndex) || 0))[0] || null;
+}
+function visibles(m) { return [...m.querySelectorAll(ENFOCABLES)].filter(el => el.offsetParent !== null); }
+document.addEventListener('keydown', e => {
+  const m = modalAbierto();
+  if (e.key === 'Escape' && m && CIERRE_MODALES[m.id]) { e.preventDefault(); CIERRE_MODALES[m.id](); return; }
+  if (e.key === 'Tab' && m) {
+    const els = visibles(m);
+    if (!els.length) return;
+    const primero = els[0], ultimo = els[els.length - 1];
+    if (!m.contains(document.activeElement)) { e.preventDefault(); primero.focus(); }
+    else if (e.shiftKey && document.activeElement === primero) { e.preventDefault(); ultimo.focus(); }
+    else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primero.focus(); }
+    return;
+  }
+  // Enter o espacio en un control que no es botón (pestañas de modo, ojo del SID…)
+  const t = e.target;
+  if ((e.key === 'Enter' || e.key === ' ') && t && t.getAttribute && t.getAttribute('role') === 'button' && !/^(BUTTON|A|INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) {
+    e.preventDefault(); t.click();
+  }
+  // Flechas entre las pestañas principales
+  if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && t && t.getAttribute && t.getAttribute('role') === 'tab') {
+    const tabs = [...document.querySelectorAll('.tab[role="tab"]')].filter(x => x.offsetParent !== null);
+    const i = tabs.indexOf(t);
+    const sig = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+    if (sig) { sig.focus(); sig.click(); }
+  }
+});
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[onclick]:not(button):not(a):not(input):not(select):not(textarea)').forEach(el => {
+    if (!el.hasAttribute('role')) el.setAttribute('role', 'button');
+    if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+  });
+  document.querySelectorAll('.modal-backdrop').forEach(m => {
+    const caja = m.querySelector('.modal');
+    const titulo = m.querySelector('.modal-header h2');
+    if (caja) { caja.setAttribute('role', 'dialog'); caja.setAttribute('aria-modal', 'true'); }
+    if (caja && titulo) { if (!titulo.id) titulo.id = m.id + 'Titulo'; caja.setAttribute('aria-labelledby', titulo.id); }
+    let anterior = null;
+    new MutationObserver(() => {
+      if (m.classList.contains('open') && !m.dataset.abierto) {
+        m.dataset.abierto = '1';
+        anterior = document.activeElement;
+        setTimeout(() => { if (!m.contains(document.activeElement)) { const el = visibles(m)[0]; if (el) el.focus(); } }, 120);
+      } else if (!m.classList.contains('open') && m.dataset.abierto) {
+        delete m.dataset.abierto;
+        if (anterior && document.contains(anterior) && anterior.focus) anterior.focus();
+        anterior = null;
+      }
+    }).observe(m, { attributes: true, attributeFilter: ['class'] });
+  });
+});
+
 // v18: aviso al cerrar o recargar la pestaña con un import corriendo o resultados sin guardar
 let resultadosSinGuardar = false;
 window.addEventListener('beforeunload', e => {
@@ -1724,6 +1787,7 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
   document.getElementById('tc-' + tab).classList.add('active');
+  document.querySelectorAll('.tab[role="tab"]').forEach(t => t.setAttribute('aria-selected', t.id === 'tab-' + tab ? 'true' : 'false'));
   // v18: al entrar a Import el Field Mapping se rehace con las columnas actuales
   if (tab === 'import' && !importEnCurso) actualizarFuenteImport();
 }
@@ -2339,9 +2403,16 @@ function descargarCSV() {
   toast('⬇ CSV descargado', 'ok');
 }
 
+// v18: una celda con tab, salto de línea o comillas va entre comillas (así la pega Excel/Sheets
+// en UNA celda; antes un salto de línea partía la fila al pegar)
+function celdaTsv(v) {
+  const t = String(v ?? '');
+  return /[\t\r\n"]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+}
+
 async function copiarTabla() {
   if (!preTemplateRows.length) return;
-  const lines = [PT_HEADERS.join('\t'), ...preTemplateRows.map(r => r.map(v => String(v??'').replace(/\t/g,' ')).join('\t'))];
+  const lines = [PT_HEADERS.map(celdaTsv).join('\t'), ...preTemplateRows.map(r => r.map(celdaTsv).join('\t'))];
   try { await navigator.clipboard.writeText(lines.join('\n')); toast('📋 Tabla copiada.', 'ok'); }
   catch { toast('No se pudo copiar.', 'bad'); }
 }
@@ -2556,7 +2627,6 @@ function updateProgress(total, processed, success, failed) {
 async function obtenerCamposLead(sid) {
   if (leadFieldsCache && leadFieldsCacheSid === sid) return leadFieldsCache;
   const data = await backendFetch({ action: 'describe', sid: sid, instanceUrl: INSTANCE_URL, object: 'Lead' });
-  if (data.sfSessionExpired) { const e = new Error(data.error); e.sfSessionExpired = true; throw e; }
   leadFieldsCache = data.fields || [];
   leadFieldsCacheSid = sid;
   leadFieldsMetadata = data.fieldsMetadata || {};
@@ -4318,18 +4388,20 @@ function renderPanelAdmin(d) {
 
 function renderLogAdmin() {
   if (!adminCache) return;
-  const txt = (document.getElementById('admFiltroTexto').value || '').toLowerCase();
-  const fOp = document.getElementById('admFiltroOp').value;
-  const fEst = document.getElementById('admFiltroEstado').value;
+  const valor = id => { const el = document.getElementById(id); return el ? (el.value || '') : ''; };
+  const txt = valor('admFiltroTexto').toLowerCase();
+  const fOp = valor('admFiltroOp');
+  const fEst = valor('admFiltroEstado');
+  const log = Array.isArray(adminCache.log) ? adminCache.log : [];   // v18: sin log no truena
 
-  const filas = (adminCache.log || []).filter(r =>
+  const filas = log.filter(r =>
     (!fOp || r.op === fOp) &&
     (!fEst || r.estado === fEst) &&
-    (!txt || r.email.toLowerCase().includes(txt) || (r.det || '').toLowerCase().includes(txt))
+    (!txt || String(r.email || '').toLowerCase().includes(txt) || String(r.det || '').toLowerCase().includes(txt))
   );
 
-  document.getElementById('admLogInfo').textContent =
-    `${filas.length} de ${adminCache.log.length} mostradas · ${adminCache.totalFilasLog} eventos en total`;
+  const info = document.getElementById('admLogInfo');
+  if (info) info.textContent = `${filas.length} de ${log.length} mostradas · ${adminCache.totalFilasLog ?? log.length} eventos en total`;
 
   const pillEstado = e =>
     e === 'success' || e === 'add_user' ? 'ok' :
@@ -4513,7 +4585,7 @@ async function copiarResultado() {
   if (!importResultRows.length) return;
   const lines = [
     IMPORT_RESULT_HEADERS.join('\t'),
-    ...importResultRows.map(r => IMPORT_RESULT_HEADERS.map(h => String(r[h] ?? '').replace(/\t/g, ' ')).join('\t'))
+    ...importResultRows.map(r => IMPORT_RESULT_HEADERS.map(h => celdaTsv(r[h])).join('\t'))
   ];
   try { await navigator.clipboard.writeText(lines.join('\n')); resultadosSinGuardar = false; toast('📋 Resultado copiado.', 'ok'); }
   catch { toast('No se pudo copiar.', 'bad'); }
@@ -5444,7 +5516,6 @@ async function ejecutarExport() {
       if (!fileName) throw new Error('Debes ingresar un nombre de archivo (ej. número de ticket).');
       data = await backendFetch({
         action: 'exportSheet',
-        userEmail: loggedInEmail,
         fileName, targetSheetUrl: '', folderId,
         summary,
         preTemplateHeaders: PT_HEADERS, preTemplateRows,
@@ -5458,7 +5529,6 @@ async function ejecutarExport() {
       const renombrarAttached = document.getElementById('attachRenameName').value.trim();
       data = await backendFetch({
         action: 'exportSheet',
-        userEmail: loggedInEmail,
         fileName: '', targetSheetUrl,
         folderId: attachFolderId,
         moverAttached: moverAttached,
@@ -5475,7 +5545,6 @@ async function ejecutarExport() {
       const finalName = customName || uploadedFile.name.replace(/\.[^.]+$/, '');
       data = await backendFetch({
         action: 'exportSheetFromFile',
-        userEmail: loggedInEmail,
         fileName: finalName,
         origFileName: uploadedFile.name,
         fileMimeType: uploadedFile.type || (uploadedFile.name.toLowerCase().endsWith('.csv') ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
@@ -5563,7 +5632,7 @@ function descargarTodosLosCSVs(baseName) {
   summaryLines.push(`Fecha,${e(ultimaAsignacion.fecha || '')}`);
   summaryLines.push(`Ejecutado por,${e(loggedInEmail)}`);
   summaryLines.push(`Business Line,${e(ultimaAsignacion.businessLine || '')}`);
-  summaryLines.push(`Días exclusión,${e(ultimaAsignacion.dias === 0 ? 'Sin filtro' : (ultimaAsignacion.dias || ''))}`);
+  summaryLines.push(`Días exclusión,${e(ultimaAsignacion.dias === 0 ? '0 (solo hoy)' : (ultimaAsignacion.dias ?? ''))}`);
   summaryLines.push('');
   summaryLines.push('Owner (email),Leads asignados');
   ownerStatsCache.forEach(o => summaryLines.push(`${e(o.email)},${o.count}`));

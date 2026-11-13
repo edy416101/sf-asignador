@@ -1,5 +1,5 @@
 ﻿// ══════════════════════════════════════════════════════════════════════════
-//  SF ASIGNADOR · BACKEND — Google Apps Script  v18.3
+//  SF ASIGNADOR · BACKEND — Google Apps Script  v18.4
 //
 //  Operaciones (lista cerrada en ACCIONES_PERMITIDAS):
 //    · "asignacion" (default) → procesarAsignacion
@@ -10,6 +10,8 @@
 //    · "exportSheet"        → exportarResultadoASheet
 //    · "exportSheetFromFile"→ exportarSheetDesdeArchivo (CSV/Excel local)
 //    · "adminData" / "adminAddUser" / "adminRemoveUser" → panel admin
+//
+//  v18.4: el Summary dice "0 (solo hoy)" como la pantalla (antes "Sin filtro").
 //
 //  v18.3: asignación y backend más firmes.
 //    · Los reps se buscan en bloques de 10 (con ~24 reps la URL pasaba de 2 kB y tronaba).
@@ -92,7 +94,7 @@
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════════════
 var SF_API_VERSION          = "v62.0";  // ← Versión de la API de Salesforce (un solo lugar para subirla)
-var VERSION_BACKEND         = "18.3";
+var VERSION_BACKEND         = "18.4";
 var GOOGLE_CLIENT_ID        = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 var ALLOWED_DOMAIN          = "docplanner.com";
 
@@ -2600,7 +2602,7 @@ function llenarSummarySheet(sheet, summary) {
   if (meta.ejecutadoPor) filaEjecutadoPor = fila(["Ejecutado por:", neutralizarValorSheet(String(meta.ejecutadoPor))]);
   if (meta.businessLine) fila(["Business Line:", neutralizarValorSheet(String(meta.businessLine))]);
   if (meta.dias !== undefined && meta.dias !== null && meta.dias !== "") {
-    fila(["Días exclusión:", meta.dias === 0 ? "Sin filtro" : neutralizarValorSheet(String(meta.dias))]);
+    fila(["Días exclusión:", meta.dias === 0 ? "0 (solo hoy)" : neutralizarValorSheet(String(meta.dias))]);   // v18.4: igual que en la pantalla
   }
   fila([]);
   var startRow = fila(["Owner (email)", "Leads asignados", "", "Contactos asignados", "Representantes activos", "Contactos que pasaron el query"]);
