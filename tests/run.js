@@ -183,6 +183,9 @@ try {
   prueba('las pruebas v18.3 pudieron correr', () => { throw e; });
 }
 
+// ── v18.4 · Detalles de uso ──
+require('./v18-detalles')(html, prueba, g => { grupo = g; });
+
 // ── v17 · Tiempo simulado: el Salesforce falso tarda como el real ──
 try {
   require('./tiempo-v17')(html, prueba, g => { grupo = g; });

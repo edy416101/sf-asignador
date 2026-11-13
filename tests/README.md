@@ -76,6 +76,10 @@ Imprime ✓/✗ por prueba y termina con código 1 si algo falla. Cubre:
   terminar, conteos sin doble reintento, carpeta de Drive del usuario, auditoría por nombre de
   hoja, `sanitizarPayload`, tipos de entrada, listas en minúsculas, IDs separados por comas o
   tabs, y en la página: un solo Sheet aunque haya doble clic y la pestaña abierta con el clic.
+- **v18.4 · Detalles de uso** (`v18-detalles.js` y el paso 4e del simulador): copiar con saltos
+  de línea, panel admin con datos incompletos, "Días" igual en pantalla y export, y en la
+  página: Esc y foco en los modales, diálogos con título, toasts con `aria-live`, pestañas con
+  flechas y opciones que no son botones usables con Enter.
 - **v17 · Tiempo simulado** (`tiempo-v17.js`): la Bulk API falsa tarda como Salesforce
   (~1.15 s por Lead, transacciones de 200 en serie dentro de cada job, jobs distintos a la vez).
   El reloj es simulado, así que la prueba tarda milisegundos. Se calibró con el job real de 500
