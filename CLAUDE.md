@@ -6,9 +6,12 @@ Owner: Edgar Martínez. Frontend en GitHub Pages (`index.html`), backend en Apps
 
 ## Reglas
 
-- **Solo pruebas simuladas.** Todo cambio se prueba con `node tests/run.js` (Salesforce falso en
-  memoria) y, si se ve en la UI, con el simulador `node tests/sim/serve.js`. Cada arreglo lleva
-  su caso en `tests/run.js`: falla con la versión vieja y pasa con la nueva.
+- **Solo pruebas simuladas, nunca contra prod.** Todo cambio se prueba con `node tests/todo.js`
+  antes del PR y antes de publicar. Usa Salesforce, Bulk API y Google falsos, la página real en
+  Chrome headless y un candado que hace fallar la corrida si algo intenta salir a internet. Si
+  una prueba necesita algo real, se amplían los falsos (`tests/lib/`); nunca se apunta a prod.
+  Cada arreglo lleva su caso en `tests/run.js` (y en `SIM.correr` si se ve en la UI): falla con
+  la versión vieja y pasa con la nueva.
 - **Nada real sin confirmar con Edgar.** No usar un SID real, no correr imports, no llamar a
   Salesforce, Apps Script ni Google Sheets. Las cargas reales las hace Edgar.
 - **Publicar el backend = `bash scripts/publicar-backend.sh`**, solo cuando Edgar lo pida y

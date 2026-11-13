@@ -3,7 +3,25 @@
 Todo cambio se prueba aquí **antes** de subirlo. Las pruebas corren el código real de Cat-alyst
 (`index.html` y `backend/Code.gs`) contra un **Salesforce falso en memoria** y una **Bulk API
 falsa**: no hay SID, no hay llamadas a Salesforce, a Apps Script ni a Google. Solo necesitas
-Node (sin `npm install`).
+Node (sin `npm install`) y Chrome o Edge.
+
+## Un solo comando
+
+```bash
+node tests/todo.js
+```
+
+Corre las pruebas de Node y el simulador del navegador, y termina en `✓ Todo en verde` o con las
+fallas. Se corre antes de cada PR, y `scripts/publicar-backend.sh` lo corre antes de publicar.
+
+**Candado de red.** Las pruebas no pueden salir a internet, ni aunque el código lo intente:
+
+- En Node, `tests/lib/candado-red.js` corta `http`, `https`, sockets y `fetch` fuera de
+  localhost.
+- En el navegador, `tests/sim/headless.js` corta desde Chrome toda petición que no sea a
+  localhost, SheetJS o las fuentes. Eso incluye Salesforce, Apps Script, Google y Drive.
+- En cada corrida se manda una petición de prueba a un host `.invalid`, que no existe, para
+  comprobar que el candado está activo. Si algo se escapa, la corrida falla.
 
 ## 1. Pruebas automáticas (Node)
 
@@ -53,12 +71,16 @@ que pasó.
   Asignación contra el Salesforce falso y el import contra la Bulk API falsa.
 - Cualquier otra petición de red (`fetch`) se **bloquea** y aparece en el panel.
 - También acepta otra versión: `node tests/sim/serve.js ruta/a/index.html`.
+- Sin abrir el navegador: `node tests/sim/headless.js` corre lo mismo en Chrome headless.
 
 ## Archivos
 
 | Archivo | Qué es |
 |---|---|
+| `todo.js` | El comando único: Node + simulador, con candado de red |
 | `run.js` | Las pruebas de Node (incluye `frontend-v17.js` y `backend-v17.js`) |
+| `lib/candado-red.js` | Corta cualquier salida a internet desde Node |
+| `sim/headless.js` | Corre el simulador en Chrome headless y corta la red desde Chrome |
 | `lib/sf-falso.js` | Salesforce falso para la asignación (lo usan Node y el navegador) |
 | `lib/bulk-falso.js` | Bulk API 2.0 falsa: jobs, rechazos, bloqueos, fallos y 401 a pedido |
 | `lib/cargar.js` | Carga funciones de `index.html`, corre `Code.gs` aislado y servicios de Google falsos |

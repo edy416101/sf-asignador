@@ -3,6 +3,7 @@
 //
 // Uso:  node tests/run.js                      → prueba el index.html del repo
 //       node tests/run.js ruta/a/otro/index.html → prueba otra versión (p. ej. antes/después)
+const candado = require('./lib/candado-red');   // primero: nada sale a internet
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -163,6 +164,28 @@ prueba('config.local.gs y .clasp.json están en .gitignore', () => {
   const gi = fs.readFileSync(path.join(RAIZ, '.gitignore'), 'utf8');
   assert.ok(gi.includes('backend/config.local.gs') && gi.includes('backend/.clasp.json'));
 });
+
+// ── Candado de red: nada de las pruebas puede salir a internet ──
+grupo = 'Candado de red (ninguna prueba toca sistemas reales)';
+{
+  const antes = candado.intentos.length;
+  // Hosts .invalid: no existen en internet, así que ni con el candado roto saldría nada real.
+  prueba('https.request a internet → cortado', () => {
+    assert.throws(() => require('https').request('https://salesforce.catalyst.invalid/'), /Candado de red/);
+  });
+  prueba('socket directo a internet → cortado', () => {
+    assert.throws(() => require('net').connect(443, 'script.catalyst.invalid'), /Candado de red/);
+  });
+  prueba('fetch a internet → cortado', () => {
+    const n = candado.intentos.length;
+    fetch('https://googleapis.catalyst.invalid/').catch(() => {});
+    assert.strictEqual(candado.intentos.length, n + 1);
+    assert.ok(/^fetch → googleapis\.catalyst\.invalid$/.test(candado.intentos[n]), candado.intentos[n]);
+  });
+  prueba('ninguna otra prueba intentó salir a internet', () => {
+    assert.deepStrictEqual(candado.intentos.slice(0, antes), []);
+  });
+}
 
 // ── Reporte ─────────────────────────────────────────────────────
 let actual = '';
