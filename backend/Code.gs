@@ -1,5 +1,5 @@
 ﻿// ══════════════════════════════════════════════════════════════════════════
-//  SF ASIGNADOR · BACKEND — Google Apps Script  v17.0
+//  SF ASIGNADOR · BACKEND — Google Apps Script  v17.1
 //
 //  Operaciones (lista cerrada en ACCIONES_PERMITIDAS):
 //    · "asignacion" (default) → procesarAsignacion
@@ -10,6 +10,10 @@
 //    · "exportSheet"        → exportarResultadoASheet
 //    · "exportSheetFromFile"→ exportarSheetDesdeArchivo (CSV/Excel local)
 //    · "adminData" / "adminAddUser" / "adminRemoveUser" → panel admin
+//
+//  v17.1: correos, admins, carpeta y Sheet de auditoría salen de este archivo
+//    y viven en backend/config.local.gs (fuera de git). Se publica con
+//    scripts/publicar-backend.sh (clasp), sin pegar código a mano.
 //
 //  CAMBIO CLAVE v17.0 — la carga se parte en varios jobs:
 //    Bulk API 2.0 procesa un job en transacciones de 200, una tras otra, y
@@ -36,7 +40,7 @@
 //    · Cache de tokens verificados (5 min) para evitar llamadas repetidas
 //
 //  FUNCIONALIDAD v11.0:
-//    · Carpeta de Drive HARDCODEADA: 17Ah_wvZiEdxT3PQOqumR343dyeV17f25
+//    · Carpeta de Drive por defecto (v17.1: en config.local.gs)
 //    · Nueva operación exportSheetFromFile: recibe un CSV/XLSX en base64,
 //      lo sube a Drive, lo convierte a Sheet y le añade las 3 hojas del export
 //    · Errores más claros para el usuario (permisos, tokens, etc.)
@@ -52,35 +56,15 @@
 // ══════════════════════════════════════════════════════════════════════════
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════════════
-var DEFAULT_DRIVE_FOLDER_ID = "17Ah_wvZiEdxT3PQOqumR343dyeV17f25";  // ← Carpeta COE (hardcodeada)
 var SF_API_VERSION          = "v62.0";  // ← Versión de la API de Salesforce (un solo lugar para subirla)
-var VERSION_BACKEND         = "17.0";
+var VERSION_BACKEND         = "17.1";
 var GOOGLE_CLIENT_ID        = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 var ALLOWED_DOMAIN          = "docplanner.com";
 
-// ── SEGURIDAD: Whitelist de emails autorizados ──
-// Solo estos emails pueden usar la herramienta (además del dominio).
-// Para añadir/quitar acceso: modifica esta lista y re-despliega.
-var ALLOWED_EMAILS = [
-  "edgar.martinez@docplanner.com",
-  "fernando.zamora@docplanner.com",
-  "elvia.chaparro@docplanner.com",
-  "servio.lima@docplanner.com",
-  "guilherme.foppa@docplanner.com",
-  "angelica.perez-celini@docplanner.com",
-  "alejandro.zarate@docplanner.com",
-  "camila.fernandez@docplanner.com",
-  "andres.fraile@docplanner.com"
-];
-
-// ── ADMIN v15: administradores de la herramienta ──
-// HARDCODEADOS a propósito (no editables desde el panel): si fueran editables,
-// un error podría dejar a todos sin acceso al panel para arreglarlo.
-// Todos los usuarios pueden VER el panel; solo estos emails pueden EDITAR.
-var ADMIN_EMAILS = [
-  "edgar.martinez@docplanner.com",
-  "guilherme.foppa@docplanner.com"
-];
+// ── CONFIGURACIÓN PRIVADA (v17.1) ──
+// DEFAULT_DRIVE_FOLDER_ID, ALLOWED_EMAILS, ADMIN_EMAILS y AUDIT_SHEET_ID viven en
+// backend/config.local.gs: está en .gitignore porque el repo es público, y clasp lo sube
+// a Apps Script junto con este archivo. Plantilla: docs/config.ejemplo.gs.
 
 // ── ADMIN v15: whitelist dinámica ──
 // La lista de usuarios vive en la pestaña "Usuarios" del Sheet de auditoría y
@@ -132,9 +116,6 @@ var ASIGNACION_CORTE_MS    = 270000; // 4.5 min: se corta con aviso antes del l�
 // ── SEGURIDAD: campos que NUNCA se logean (sanitización) ──
 var CAMPOS_SENSIBLES = ["sid", "idToken", "fileContent", "access_token", "accessToken", "password"];
 
-// Auditoría: pega aquí el ID de un Google Sheet donde se registrarán los imports.
-// Deja "" para desactivar. La hoja debe estar compartida con la cuenta que desplegó el script.
-var AUDIT_SHEET_ID = "17tUa2MGi1QpXpIKsgv-zOsqM5jnBUh_wOc_PfxI3N3U";  // ← Opcional: crea un Sheet vacío en tu Drive y pega su ID aquí
 
 
 function doPost(e) {

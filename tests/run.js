@@ -4,7 +4,9 @@
 // Uso:  node tests/run.js                      → prueba el index.html del repo
 //       node tests/run.js ruta/a/otro/index.html → prueba otra versión (p. ej. antes/después)
 const assert = require('assert');
-const { leerIndex, cargarFunciones, cargarBackend } = require('./lib/cargar');
+const fs = require('fs');
+const path = require('path');
+const { RAIZ, leerIndex, cargarFunciones, cargarBackend } = require('./lib/cargar');
 const SF = require('./lib/sf-falso');
 
 const html = leerIndex(process.argv[2]);
@@ -148,6 +150,19 @@ try {
 } catch (e) {
   prueba('las pruebas v17 del backend pudieron correr', () => { throw e; });
 }
+
+// ── v17.1 · El repo es público: nada privado en los archivos de git ──
+grupo = 'v17.1 · Sin datos privados en el repo';
+prueba('Code.gs no define correos, admins, carpeta ni Sheet (viven en config.local.gs)', () => {
+  const code = fs.readFileSync(path.join(RAIZ, 'backend', 'Code.gs'), 'utf8');
+  assert.ok(!/^var (ALLOWED_EMAILS|ADMIN_EMAILS|AUDIT_SHEET_ID|DEFAULT_DRIVE_FOLDER_ID)\b/m.test(code));
+  const correos = (code.match(/[a-z0-9._-]+@docplanner\.com/gi) || []).filter(c => !/^test-/.test(c));
+  assert.deepStrictEqual(correos, []);
+});
+prueba('config.local.gs y .clasp.json están en .gitignore', () => {
+  const gi = fs.readFileSync(path.join(RAIZ, '.gitignore'), 'utf8');
+  assert.ok(gi.includes('backend/config.local.gs') && gi.includes('backend/.clasp.json'));
+});
 
 // ── Reporte ─────────────────────────────────────────────────────
 let actual = '';

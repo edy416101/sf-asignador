@@ -62,6 +62,7 @@ que pasó.
 | `lib/sf-falso.js` | Salesforce falso para la asignación (lo usan Node y el navegador) |
 | `lib/bulk-falso.js` | Bulk API 2.0 falsa: jobs, rechazos, bloqueos, fallos y 401 a pedido |
 | `lib/cargar.js` | Carga funciones de `index.html`, corre `Code.gs` aislado y servicios de Google falsos |
+| `lib/config-prueba.gs` | Correos e IDs falsos que reemplazan a `backend/config.local.gs` (que no está en git) |
 | `sim/serve.js` | Servidor local del simulador |
 | `sim/sim-mock.js` | Backend simulado, bloqueo de red y botón de simulación |
 
