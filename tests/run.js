@@ -166,6 +166,9 @@ try {
   prueba('las pruebas v18 de duplicados pudieron correr', () => { throw e; });
 }
 
+// ── v18 · Datos al campo correcto (validación, carga manual, columnas del resultado) ──
+require('./v18-campos')(html, prueba, g => { grupo = g; });
+
 // ── v17 · Tiempo simulado: el Salesforce falso tarda como el real ──
 try {
   require('./tiempo-v17')(html, prueba, g => { grupo = g; });

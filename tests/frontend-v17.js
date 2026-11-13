@@ -75,7 +75,9 @@ module.exports = function (html, prueba, setGrupo) {
     RE_EMAIL: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
     RE_FECHA: /^\d{4}-\d{2}-\d{2}$/,
     RE_FECHA_HORA: /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/,
-    TIPOS_CON_LARGO: new Set(['string', 'textarea', 'email', 'phone', 'url', 'picklist', 'multipicklist'])
+    TIPOS_CON_LARGO: new Set(['string', 'textarea', 'email', 'phone', 'url', 'picklist', 'multipicklist']),
+    CAMPOS_OBLIGATORIOS_LEAD: new Set(['Contact__c', 'LastName', 'Email', 'OwnerId', 'BusinessLine__c', 'Lead_Type__c',
+      'ContactTypeSegment__c', 'Country__c', 'Leadassist__Use_Round_Robin__c', 'Status'])
   });
   const H = ['Contact__c', 'LastName', 'Company', 'Email', 'OwnerId', 'LastSourceAt__c', 'Leadassist__Use_Round_Robin__c'];
   const META = {

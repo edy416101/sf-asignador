@@ -1,5 +1,5 @@
 ﻿// ══════════════════════════════════════════════════════════════════════════
-//  SF ASIGNADOR · BACKEND — Google Apps Script  v18.0
+//  SF ASIGNADOR · BACKEND — Google Apps Script  v18.1
 //
 //  Operaciones (lista cerrada en ACCIONES_PERMITIDAS):
 //    · "asignacion" (default) → procesarAsignacion
@@ -10,6 +10,8 @@
 //    · "exportSheet"        → exportarResultadoASheet
 //    · "exportSheetFromFile"→ exportarSheetDesdeArchivo (CSV/Excel local)
 //    · "adminData" / "adminAddUser" / "adminRemoveUser" → panel admin
+//
+//  v18.1: el describe dice si cada picklist es restringido (restrictedPicklist).
 //
 //  v18.0: sin Leads duplicados.
 //    · importStart guarda en caché una respuesta chica (antes, con más de 100 KB, cache.put
@@ -74,7 +76,7 @@
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════════════
 var SF_API_VERSION          = "v62.0";  // ← Versión de la API de Salesforce (un solo lugar para subirla)
-var VERSION_BACKEND         = "18.0";
+var VERSION_BACKEND         = "18.1";
 var GOOGLE_CLIENT_ID        = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 var ALLOWED_DOMAIN          = "docplanner.com";
 
@@ -747,6 +749,7 @@ function describirObjeto(params) {
         updateable: f.updateable === true,
         createable: f.createable === true,
         defaultedOnCreate: f.defaultedOnCreate === true,
+        restrictedPicklist: f.restrictedPicklist === true,   // v18.1: el frontend bloquea solo lo que Salesforce rechazaría
         picklistValues: (f.picklistValues || [])
           .filter(function(pv) { return pv.active !== false; })
           .map(function(pv) { return pv.value; })

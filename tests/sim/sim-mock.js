@@ -173,6 +173,9 @@
     check('Sin Leads duplicados en todo el recorrido', new Set(bulk.creados.map(c => c.fila.Contact__c)).size === bulk.creados.length,
       bulk.creados.length + ' Leads');
 
+    // 4c. v18 · Datos al campo correcto: campos custom, mapeo, valores manuales, picklists y país
+    await camposCorrectos(check);
+
     // 5. Todo pasó por doPost real: auditoría, y un token que Google no conoce se rechaza
     check('La auditoría registró el import y su lote (doPost real)',
       SIM.auditoria.some(f => f[2] === 'import' && f[3] === 'iniciado' && /lote=lote_/.test(f[4])), SIM.auditoria.length + ' filas de auditoría');
@@ -184,6 +187,90 @@
     mostrarPanel(checks);
     return checks;
   };
+
+  async function camposCorrectos(check) {
+    const espera = ms => new Promise(r => st(r, ms));
+    const alineadas = () => preTemplateRows.every(r => r.length === PT_HEADERS.length);
+    const col = n => PT_HEADERS.indexOf(n);
+    // Filas nuevas (otros contactos) para no tocar lo de arriba
+    preTemplateRows = preTemplateRows.slice(0, 8).map((r, i) => { const n = [...r]; n[col('Contact__c')] = '003SIMCAMP' + String(i).padStart(5, '0'); return n; });
+    renderPreTemplate(PT_HEADERS, preTemplateRows);
+    const apellidos = preTemplateRows.map(r => r[col('LastName')]);
+
+    // a) un campo custom Manual entra a las filas con su valor; uno desde SF entra vacío
+    setCustomMode('manual');
+    document.getElementById('newCustomFieldInput').value = 'Campaign_Code__c';
+    document.getElementById('customManualValue').value = 'CAMP1';
+    await agregarCustomField();
+    setCustomMode('sf');
+    document.getElementById('newCustomFieldInput').value = 'Phone';
+    await agregarCustomField();
+    check('Campos custom nuevos entran a las filas que ya existen (Manual con su valor)',
+      alineadas() && preTemplateRows.every(r => r[col('Campaign_Code__c')] === 'CAMP1' && r[col('Phone')] === ''),
+      PT_HEADERS.slice(-2).join(', ') + ' · ' + preTemplateRows[0].length + ' de ' + PT_HEADERS.length + ' columnas');
+
+    // b) quitar un custom quita su columna de las filas: lo demás no se corre
+    quitarCustomField(customFields.findIndex(c => c.name === 'Campaign_Code__c'));
+    check('Quitar un campo custom quita su columna de las filas (los valores no se corren)',
+      alineadas() && preTemplateRows.every((r, i) => r[col('LastName')] === apellidos[i]) && col('Campaign_Code__c') === -1,
+      preTemplateRows[0].length + ' columnas en la fila · ' + PT_HEADERS.length + ' en el encabezado');
+
+    // c) al entrar a Import el mapeo se rehace con las columnas actuales
+    switchTab('import');
+    check('Al entrar a Import el Field Mapping cuadra con las columnas actuales',
+      typeof leerMapeo === 'function' && leerMapeo().map(m => m.col).join('|') === PT_HEADERS.join('|'));
+
+    // d) un valor manual de un campo fijo se aplica a las filas que ya existen
+    await onFieldSourceChange({ value: 'manual' }, 'Status');
+    onFixedManualValueInput('Status', 'Qualifying');
+    await espera(500);
+    check('Un valor manual nuevo (Status) se aplica a las filas que ya existen', preTemplateRows.every(r => r[col('Status')] === 'Qualifying'));
+
+    // e) un país fuera del picklist se bloquea antes de mandar; con PE (Peru) sí pasa
+    const jobsAntes = bulk.jobs.length;
+    preTemplateRows[2] = [...preTemplateRows[2]]; preTemplateRows[2][col('Country__c')] = 'Peruu';
+    SIM.dialogos.length = 0;
+    await ejecutarImport();
+    check('Un valor fuera del picklist (Country__c = "Peruu") bloquea el import antes de mandarlo',
+      bulk.jobs.length === jobsAntes && SIM.dialogos.some(d => /no está en la lista/.test(d)), (bulk.jobs.length - jobsAntes) + ' jobs nuevos · ' + SIM.dialogos.join(' | ').slice(0, 300) + ' · log: ' + document.getElementById('importLog').innerText.slice(-300));
+
+    // f) durante un import no se puede cambiar país ni campos
+    importEnCurso = true;
+    const antes = JSON.stringify(preTemplateRows);
+    seleccionarPais('CO');
+    quitarCustomField(0);
+    importEnCurso = false;
+    check('Con un import en curso no se cambian país ni campos', JSON.stringify(preTemplateRows) === antes && paisActivo !== 'CO');
+
+    seleccionarPais('PE');   // el confirm del simulador dice que sí: toda la columna a "Peru"
+    await ejecutarImport();
+    const nuevos = bulk.creados.filter(c => /^003SIMCAMP/.test(c.fila.Contact__c));
+    const porContacto = Object.fromEntries(preTemplateRows.map(r => [r[col('Contact__c')], r]));
+    const bien = nuevos.length > 0 && nuevos.every(c => {
+      const r = porContacto[c.fila.Contact__c];
+      return r && c.fila.LastName === r[col('LastName')] && c.fila.Country__c === 'Peru' && c.fila.Status === 'Qualifying' && 'Phone' in c.fila;
+    });
+    check('Cada Lead llega con sus valores en su campo (LastName, Country__c = Peru, Status, Phone)', bien,
+      nuevos.length + ' Leads · ' + (nuevos[0] ? JSON.stringify(nuevos[0].fila).slice(0, 160) : ''));
+
+    // g) Recuperar no borra la tabla sin preguntar
+    const filasTabla = importResultRows.length;
+    const confirmar = window.confirm;
+    window.confirm = m => { SIM.dialogos.push('confirm: ' + m); return false; };
+    abrirModalRecuperar();
+    document.getElementById('recuperarJobId').value = (historialRetries[0] || {}).jobId || '';
+    const refAntes = (historialRetries[0] || {}).jobId;
+    await ejecutarRecuperar();
+    window.confirm = confirmar;
+    cerrarModalRecuperar();
+    check('Recuperar pregunta antes de reemplazar la tabla (y si dices que no, la deja igual)',
+      importResultRows.length === filasTabla && (historialRetries[0] || {}).jobId === refAntes && SIM.dialogos.some(d => /Reemplazarlo/.test(d)),
+      filasTabla + ' filas');
+
+    // Se deja la configuración como estaba para lo que sigue
+    customFields = []; fieldsManualValues = {}; camposFijosOcultos = []; fieldsFromSF = [];
+    actualizarHeadersDinamicos();
+  }
 
   function mostrarPanel(checks) {
     let p = document.getElementById('simPanel');

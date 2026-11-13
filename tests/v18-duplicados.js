@@ -128,7 +128,7 @@ module.exports = function (prueba, setGrupo, html) {
   bloque('estado desconocido al cerrar', () => {
     let estadoCaido = true;
     const m = montar({ excepcion: p => ((p.paso === 'cerrar' || (p.paso === 'estado' && estadoCaido)) ? 'antes' : '') });
-    m.ctx.JOB_ABIERTO_MAX_MS = 0;
+    m.ctx.JOB_ABIERTO_MAX_MS = -1;   // cualquier job Open se aborta al consultarlo (con 0, en el mismo milisegundo no)
     const r = m.iniciar(filas(60, i => OWNERS[i % 2]), nuevoReq(), { filasPorJob: 30 });
     estadoCaido = false;
     m.bulk.opciones.excepcion = null;
@@ -280,7 +280,7 @@ function escenario(semilla) {
     }
   };
   const m = montar(opciones);
-  m.ctx.JOB_ABIERTO_MAX_MS = 0;
+  m.ctx.JOB_ABIERTO_MAX_MS = -1;   // cualquier job Open se aborta al consultarlo (con 0, en el mismo milisegundo no)
   const reparto = { filasPorJob: 10 + Math.floor(rnd() * 60), jobsALaVez: 1 + Math.floor(rnd() * 10) };
 
   const estado = new Map();       // Contact__c → 'ok' | 'fail' | 'pend'
