@@ -621,6 +621,7 @@
     <p class="sub">Herramienta interna para asignación e importación de contactos en Salesforce</p>
     <div class="domain-chip">Solo cuentas @docplanner.com</div>
     <div id="gSigninBtn"></div>
+    <p class="login-note" id="gsiAviso" style="display:none; color:var(--warn);">No se pudo cargar el inicio de sesión de Google. Revisa tu conexión, la VPN o el bloqueador de anuncios, y recarga la página.</p>
     <p class="login-note">¿Problemas para entrar? Contacta a tu administrador de RevOps.</p>
   </div>
 </div>
@@ -1232,6 +1233,18 @@
   </div>
 </div>
 
+<!-- v18: VOLVER A ENTRAR (solo cambia el token de Google; no se pierde nada de la página) -->
+<div class="modal-backdrop" id="reloginModal" style="z-index:900">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header"><h2>🔐 Vuelve a entrar</h2></div>
+    <div class="modal-body">
+      <p id="reloginMotivo" style="margin:0 0 10px;">Tu sesión de Google venció.</p>
+      <p style="margin:0 0 14px; color:var(--muted); font-size:12px;">Entra con la misma cuenta. Tus filas, resultados y el import que esté corriendo se quedan como están.</p>
+      <div id="reloginBtn" style="display:flex; justify-content:center;"></div>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL RECUPERAR POR JOB ID -->
 <div class="modal-backdrop" id="recuperarModal">
   <div class="modal" style="max-width:520px">
@@ -1493,11 +1506,24 @@ let addCustomFormState = {
 //  GOOGLE SIGN-IN
 // ══════════════════════════════════════════════════════════════════
 window.addEventListener('load', () => {
+  // v18: si el script de Google no carga en 10 s, se avisa (antes la pantalla se quedaba vacía)
+  const inicio = Date.now();
   const tryInit = () => {
-    if (typeof google !== 'undefined' && google.accounts) initGSI();
-    else setTimeout(tryInit, 200);
+    if (typeof google !== 'undefined' && google.accounts) {
+      document.getElementById('gsiAviso').style.display = 'none';
+      initGSI();
+      return;
+    }
+    if (Date.now() - inicio > 10000) document.getElementById('gsiAviso').style.display = 'block';
+    setTimeout(tryInit, 500);
   };
   tryInit();
+});
+
+// v18: aviso al cerrar o recargar la pestaña con un import corriendo o resultados sin guardar
+let resultadosSinGuardar = false;
+window.addEventListener('beforeunload', e => {
+  if (importEnCurso || resultadosSinGuardar) { e.preventDefault(); e.returnValue = ''; }
 });
 
 function initGSI() {
@@ -1519,14 +1545,58 @@ function decodificarJwt(token) {
   return JSON.parse(new TextDecoder('utf-8').decode(bytes));
 }
 
+// ── v18 · Sesión de Google: se lee el exp del token. Al vencer, se pide entrar otra vez en
+// un recuadro que SOLO cambia el token (las filas, resultados e import siguen). La sesión
+// nunca se cierra sola si hay filas o resultados.
+let tokenExpMs = 0;
+let reLogin = null;   // { promesa, resolver } mientras se espera que la persona vuelva a entrar
+
+function tokenVigente() { return !!idTokenCache && Date.now() < tokenExpMs - 60000; }
+function hayTrabajoAbierto() { return importEnCurso || preTemplateRows.length > 0 || importResultRows.length > 0; }
+
+function pedirReLogin(motivo) {
+  if (!reLogin) {
+    let resolver;
+    const promesa = new Promise(r => { resolver = r; });
+    reLogin = { promesa, resolver };
+    document.getElementById('reloginMotivo').textContent = motivo || 'Tu sesión de Google venció.';
+    document.getElementById('reloginModal').classList.add('open');
+    try {
+      if (typeof google !== 'undefined' && google.accounts) {
+        google.accounts.id.renderButton(document.getElementById('reloginBtn'),
+          { theme: 'filled_blue', size: 'large', text: 'signin_with', width: 280, locale: 'es' });
+      }
+    } catch (e) { /* sin botón de Google: se puede recargar la página */ }
+  }
+  return reLogin.promesa;
+}
+
+async function asegurarToken() {
+  if (tokenVigente()) return;
+  if (!loggedInEmail) { const e = new Error('Sesión expirada. Vuelve a iniciar sesión.'); e.authError = true; throw e; }
+  ilog('🔐 Tu sesión de Google venció: vuelve a entrar para seguir (nada se pierde).', 'warn');
+  await pedirReLogin('Tu sesión de Google venció.');
+}
+
 function onSignIn(response) {
   try {
     const payload = decodificarJwt(response.credential);
     if (!payload.email?.toLowerCase().endsWith('@docplanner.com')) {
       toast('❌ Solo se permiten cuentas @docplanner.com', 'bad'); return;
     }
+    // v18: volver a entrar a media sesión solo cambia el token
+    if (reLogin && loggedInEmail) {
+      if (payload.email.toLowerCase().trim() !== loggedInEmail) { toast(`Entra con la misma cuenta (${loggedInEmail}).`, 'bad'); return; }
+      idTokenCache = response.credential;
+      tokenExpMs = Number(payload.exp || 0) * 1000;
+      document.getElementById('reloginModal').classList.remove('open');
+      const r = reLogin; reLogin = null; r.resolver();
+      toast('✅ Sesión renovada', 'ok');
+      return;
+    }
     loggedInEmail = payload.email.toLowerCase().trim();
     idTokenCache  = response.credential;  // guardamos el JWT completo para enviar al backend
+    tokenExpMs    = Number(payload.exp || 0) * 1000;
     document.getElementById('userAvatar').textContent = (payload.given_name?.[0] || payload.email[0]).toUpperCase();
     document.getElementById('userEmail').textContent  = payload.email;
     document.getElementById('loginScreen').style.display = 'none';
@@ -1536,15 +1606,32 @@ function onSignIn(response) {
   } catch { toast('❌ Error al iniciar sesión.', 'bad'); }
 }
 
-function logout() {
+// forzado: sin preguntar (lo usa el backend cuando el usuario ya no tiene acceso)
+function logout(forzado) {
+  if (forzado !== true) {
+    if (importEnCurso && !confirm('Hay un import en curso. Si sales, sigue en Salesforce y lo podrás recuperar con su Lote cuando vuelvas a entrar.\n\n¿Salir?')) return;
+    if (!importEnCurso && resultadosSinGuardar && !confirm('Tienes resultados del import sin guardar. Si sales, se pierden de la página (los Leads ya están en Salesforce).\n\n¿Salir?')) return;
+  }
   if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
   document.getElementById('mainApp').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
   preTemplateRows = []; importResultRows = [];
   leadFieldsCache = null; ownerStatsCache = [];
-  ultimaAsignacion = {}; loggedInEmail = ""; idTokenCache = "";
+  ultimaAsignacion = {}; loggedInEmail = ""; idTokenCache = ""; tokenExpMs = 0;
   customFields = []; fieldsFromSF = []; fieldsManualValues = {}; camposFijosOcultos = []; contactFieldsCache = null;
   leadFieldsMetadata = null; leadFieldsCacheSid = '';
+  // v18: también IDs, reps, admin, aviso de pendiente, historial y el identificador del import
+  historialRetries = []; ultimoImportConfig = null; ultimoJobIdRecuperable = ''; adminCache = null;
+  resultadosSinGuardar = false; olvidarRequestId(); actualizarHeadersDinamicos();
+  const ids = document.getElementById('idsArea');
+  if (ids) { ids.value = ''; updateCount(); }
+  const reps = document.getElementById('repsBody');
+  if (reps) { reps.innerHTML = ''; addRep('', ''); actualizarRepsTotal(); }
+  const banner = document.getElementById('jobPendienteBanner');
+  if (banner) banner.classList.remove('visible');
+  const vivo = document.getElementById('jobIdLive');
+  if (vivo) vivo.classList.remove('visible');
+  if (reLogin) { document.getElementById('reloginModal').classList.remove('open'); reLogin = null; }
   // v17: el SID no se queda en la página al cerrar sesión
   const sidInput = document.getElementById('sid');
   if (sidInput) { sidInput.value = ''; sidInput.type = 'password'; }
@@ -1560,6 +1647,7 @@ function errorBackend(data) {
   const e = new Error(data.error || 'Error desconocido');
   e.rateLimited = data.rateLimited === true;
   e.authError = data.authError === true;
+  e.authTemporal = data.authTemporal === true;   // v18: Google no respondió; se puede reintentar
   e.notAuthorized = data.notAuthorized === true;
   e.sfSessionExpired = data.sfSessionExpired === true;
   return e;
@@ -1568,13 +1656,22 @@ function errorBackend(data) {
 // opciones.silencioso: sin alert ni logout (lo usa el sondeo de un import en curso,
 // que no debe perder el trabajo si la sesión de Google vence o hay rate limit).
 async function backendFetch(payload, opciones = {}) {
-  if (!idTokenCache) { const e = new Error("Sesión expirada. Vuelve a iniciar sesión."); e.authError = true; throw e; }
+  await asegurarToken();   // v18: si el token venció, se pide entrar otra vez y luego sigue
   const withToken = Object.assign({ idToken: idTokenCache }, payload);
   const res = await fetch(APPS_SCRIPT_URL, {
     method: 'POST', redirect: 'follow', body: JSON.stringify(withToken)
   });
   if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
-  const data = await res.json();
+  // v18: Apps Script a veces responde una página de error (HTML), no JSON
+  const texto = await res.text();
+  let data;
+  try { data = JSON.parse(texto); }
+  catch (e) {
+    const err = new Error('El servidor respondió algo que no se puede leer (no es JSON). Puede ser un corte de Apps Script: intenta de nuevo en un momento.' +
+      (texto ? ` Detalle: ${texto.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)}` : ''));
+    err.noJson = true;
+    throw err;
+  }
 
   if (opciones.silencioso && (data.rateLimited || data.authError || data.notAuthorized || data.error)) throw errorBackend(data);
 
@@ -1594,17 +1691,24 @@ async function backendFetch(payload, opciones = {}) {
     alert(
       "⛔ Acceso denegado\n\n" +
       "Tu email no está autorizado para usar esta herramienta.\n\n" +
-      "Si necesitas acceso, contacta al equipo de RevOps."
+      "Si necesitas acceso, contacta al equipo de RevOps." +
+      (hayTrabajoAbierto() ? "\n\nTus filas y resultados se quedan en la página para que los descargues." : "")
     );
-    setTimeout(() => logout(), 500);
+    if (!hayTrabajoAbierto()) setTimeout(() => logout(true), 500);
     throw errorBackend(data);
   }
 
   // Token expirado o inválido genérico
   if (data.authError) {
-    toast('⚠ Tu sesión expiró. Vuelve a iniciar sesión.', 'bad');
-    // v17: si hay un import corriendo no se cierra la sesión: se perdería el contexto del job
-    if (!importEnCurso) setTimeout(() => logout(), 2000);
+    // v18: con filas, resultados o un import abierto no se cierra la sesión: se pide entrar otra vez
+    if (hayTrabajoAbierto()) {
+      tokenExpMs = 0;
+      toast('⚠ Tu sesión de Google venció: vuelve a entrar y repite la acción.', 'bad');
+      pedirReLogin('Tu sesión de Google venció.');
+    } else {
+      toast('⚠ Tu sesión expiró. Vuelve a iniciar sesión.', 'bad');
+      setTimeout(() => logout(true), 2000);
+    }
     throw errorBackend(data);
   }
 
@@ -2411,6 +2515,10 @@ function resetImportUI() {
 
 function limpiarImport() {
   if (importEnCurso) { toast('Hay un import en curso. Espera a que termine.', 'bad'); return; }
+  // v18: se confirma (antes se borraba el resultado sin preguntar)
+  if (importResultRows.length && !confirm(`¿Limpiar el resultado del import (${importResultRows.length} filas)?` +
+      (resultadosSinGuardar ? '\n\nNo lo has guardado: se pierde de la página (los Leads ya están en Salesforce).' : ''))) return;
+  resultadosSinGuardar = false;
   resetImportUI();
   importResultRows = [];
   // v17: el describe de Lead se conserva (se cachea por SID; ahorra ~7 s por import)
@@ -3493,7 +3601,7 @@ async function iniciarConReintento(payload) {
       return await backendFetch(payload);
     } catch (e) {
       const enCreacion = /ya se está creando/.test(e.message);
-      const deRed = !e.message || e instanceof TypeError || /^HTTP \d/.test(e.message);
+      const deRed = !e.message || e instanceof TypeError || /^HTTP \d/.test(e.message) || e.noJson || e.authTemporal;
       const maximo = enCreacion ? 8 : 3;
       if (intento >= maximo || !(deRed || enCreacion)) throw e;
       ilog(`⚠ ${enCreacion ? 'El servidor aún está creando el import' : 'Sin respuesta al crear el import'}; reintento ${intento + 1}/${maximo} con el mismo identificador (no duplica)…`, 'warn');
@@ -3667,18 +3775,21 @@ async function correrImportBulk({ sid, cfg, rows, total, btn }) {
   mostrarJobIdEnVivo(ref);
 
   if (inicio.repetido) ilog('ℹ El servidor ya había creado este import: se usan los mismos jobs (sin duplicar).', 'info');
-  ilog(`✓ ${jobIds.length} job(s) en paralelo: ${(inicio.jobs || []).map(j => j.filas).join(' + ') || total} filas`, 'ok');
+  const filasPorJob = (inicio.jobs || []).map(j => j.filas);
+  const promedio = filasPorJob.length ? Math.round(filasPorJob.reduce((a, b) => a + b, 0) / filasPorJob.length) : (inicio.total ?? total);
+  const maxMinutos = Math.ceil(Math.max(0, ...filasPorJob, inicio.total ?? total) * 1.15 * 2 / 60);
+  ilog(`✓ ${jobIds.length} job(s) de ~${promedio} filas, corriendo a la vez`, 'ok');
   jobIds.forEach(id => ilog(`   · ${id}`, 'info'));
   if (loteId) ilog(`  Lote ${loteId} guardado: si se cierra el navegador, podrás recuperarlo.`, 'info');
 
   const noEnviadas = filasNoEnviadasAResultado(filasNoEnv, cfg, inicio.errorNoEnviadas);
   if (noEnviadas.length) ilog(`⚠ ${noEnviadas.length} fila(s) NO se enviaron (su job no se pudo cerrar y se abortó). Quedan como fallidas para reintentar.`, 'warn');
-  const pendiente = (motivo, error) => ({ estado: 'pendiente', motivo, error, jobIds, loteId, noEnviadas, filasLote, cfg });
+  const pendiente = (motivo, error) => ({ estado: 'pendiente', motivo, error, jobIds, loteId, noEnviadas, filasLote, cfg, maxMinutos });
 
   setImportStatus(`Salesforce está procesando ${inicio.total ?? total} registros…`, 'run');
   if (btn) btn.textContent = '⏳ Procesando en Salesforce…';
 
-  const fin = await sondearJob({ jobIds, loteId, sid, total: inicio.total ?? total });
+  const fin = await sondearJob({ jobIds, loteId, sid, total: inicio.total ?? total, maxMinutos });
   if (fin.motivo !== 'terminado') return pendiente(fin.motivo, fin.error);
 
   let data;
@@ -3775,11 +3886,12 @@ function encabezadosResultado(cfg, csvs) {
 function mostrarResultadoImport(r, { total, intento, inicioMs }) {
   const ref = r.loteId || (r.jobIds || [])[0] || '';
   const cfg = r.cfg || ultimoImportConfig;
+  resultadosSinGuardar = true;
   if (r.estado === 'pendiente') {
     const motivos = {
       sfSesion:     `Tu SID de Salesforce venció. El import sigue en Salesforce: pega un SID nuevo y usa "🔍 Recuperar" con ${ref}.`,
       googleSesion: `Tu sesión de Google venció. El import sigue en Salesforce: vuelve a entrar y usa "🔍 Recuperar" con ${ref}.`,
-      tiempo:       `Sigue procesando tras ${POLL_MAX_MINUTOS} min. Nada se perdió: usa "🔍 Recuperar" con ${ref} en unos minutos.`,
+      tiempo:       `Sigue procesando tras ${Math.max(POLL_MAX_MINUTOS, r.maxMinutos || 0)} min. Nada se perdió: usa "🔍 Recuperar" con ${ref} en unos minutos.`,
       incierto:     `Este import ya se había mandado (${ref}) pero no se pudo confirmar cómo terminó. No lo mandes otra vez: usa "🔍 Recuperar" con ${ref}.`,
       resultados:   `El import sí corrió, pero no se pudieron traer los resultados. Usa "🔍 Recuperar" con ${ref}.`
     };
@@ -3867,10 +3979,12 @@ function mostrarResultadoImport(r, { total, intento, inicioMs }) {
 // ── Sondeo: pregunta el estado de TODOS los jobs hasta que terminen ──
 // Mide tiempo, no intentos. Sin alerts: rate limit = esperar; sesión vencida = parar
 // y conservar el job pendiente (nunca se cierra la sesión ni se pierde el Job ID).
-async function sondearJob({ jobIds, loteId, sid, total, silencioProgreso }) {
+async function sondearJob({ jobIds, loteId, sid, total, silencioProgreso, maxMinutos }) {
   const inicio = Date.now();
   let ultimoLogueado = -1;
-  while (Date.now() - inicio < POLL_MAX_MINUTOS * 60000) {
+  // v18: el máximo crece con las filas por job (~1.15 s por Lead en serie, con margen)
+  const limiteMin = Math.max(POLL_MAX_MINUTOS, maxMinutos || 0);
+  while (Date.now() - inicio < limiteMin * 60000) {
     await dormir((Date.now() - inicio) < POLL_CAMBIO_MS ? POLL_RAPIDO_MS : POLL_LENTO_MS);
 
     let est;
@@ -3878,7 +3992,9 @@ async function sondearJob({ jobIds, loteId, sid, total, silencioProgreso }) {
       est = await backendFetch({ action: 'jobStatus', sid, instanceUrl: INSTANCE_URL, jobIds, loteId }, { silencioso: true });
     } catch (e) {
       if (e.sfSessionExpired) return { motivo: 'sfSesion', error: e };
-      if (e.authError || e.notAuthorized) return { motivo: 'googleSesion', error: e };
+      if (e.notAuthorized || (e.authError && !loggedInEmail)) return { motivo: 'googleSesion', error: e };
+      // v18: la sesión de Google venció a media espera: se pide entrar otra vez y se sigue
+      if (e.authError) { ilog('🔐 Tu sesión de Google venció: vuelve a entrar para seguir (el import sigue en Salesforce).', 'warn'); await pedirReLogin('Tu sesión de Google venció.'); continue; }
       if (e.rateLimited) { ilog('⏱ Límite de consultas alcanzado; espero un minuto y sigo…', 'warn'); await dormir(60000); continue; }
       // Un fallo de red puntual no debe tumbar el import: se reintenta.
       ilog(`⚠ No se pudo consultar el estado (reintentando): ${e.message}`, 'warn');
@@ -4387,7 +4503,7 @@ async function copiarResultado() {
     IMPORT_RESULT_HEADERS.join('\t'),
     ...importResultRows.map(r => IMPORT_RESULT_HEADERS.map(h => String(r[h] ?? '').replace(/\t/g, ' ')).join('\t'))
   ];
-  try { await navigator.clipboard.writeText(lines.join('\n')); toast('📋 Resultado copiado.', 'ok'); }
+  try { await navigator.clipboard.writeText(lines.join('\n')); resultadosSinGuardar = false; toast('📋 Resultado copiado.', 'ok'); }
   catch { toast('No se pudo copiar.', 'bad'); }
 }
 
@@ -4531,6 +4647,7 @@ async function ejecutarRecuperar() {
       const failJ = parseSfResultCsv(data.failedCsv || '', 'fail', accJ, mapaJ)
         .concat(parseSfResultCsv(data.unprocessedCsv || '', 'unprocessed', accJ, mapaJ));
       const n = juntarRecuperado(okJ, failJ, refs, ultimoImportConfig);
+      resultadosSinGuardar = true;
       const siguen = importResultRows.filter(r => r.__Status === ESTADO_EN_PROCESO && refs.includes(r._ref)).length;
       if (!siguen && !data.resultsError) limpiarJobPendiente(ref, data.jobIds);
       const totalOkJ = importResultRows.filter(x => x.__Status === 'Succeeded').length;
@@ -4587,6 +4704,7 @@ async function ejecutarRecuperar() {
     ultimoImportConfig = cfgNueva;
 
     importResultRows = recuperadas;
+    resultadosSinGuardar = true;
     if (ultimoImportConfig) ultimoImportConfig.jobIds = data.jobIds || [];
     historialRetries = [{
       intento: 0,
@@ -5269,6 +5387,7 @@ async function ejecutarExport() {
       const baseName = document.getElementById('csvFileName').value.trim();
       if (!baseName) throw new Error('Debes ingresar un nombre base para los archivos.');
       descargarTodosLosCSVs(baseName);
+      resultadosSinGuardar = false;
       toast('⬇ 3 archivos CSV descargados.', 'ok');
       const linksDiv = document.getElementById('exportLinks');
       document.getElementById('exportLinksTitle').textContent = '✅ CSVs descargados';
@@ -5391,6 +5510,7 @@ async function ejecutarExport() {
     ownDiv.className = 'el-ownership';
 
     linksDiv.classList.add('visible');
+    resultadosSinGuardar = false;
     window.open(data.url, '_blank');
     toast('✅ Guardado correctamente. Abriendo…', 'ok');
     btn.textContent = '✓ Listo';

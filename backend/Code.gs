@@ -1,5 +1,5 @@
 ﻿// ══════════════════════════════════════════════════════════════════════════
-//  SF ASIGNADOR · BACKEND — Google Apps Script  v18.1
+//  SF ASIGNADOR · BACKEND — Google Apps Script  v18.2
 //
 //  Operaciones (lista cerrada en ACCIONES_PERMITIDAS):
 //    · "asignacion" (default) → procesarAsignacion
@@ -10,6 +10,11 @@
 //    · "exportSheet"        → exportarResultadoASheet
 //    · "exportSheetFromFile"→ exportarSheetDesdeArchivo (CSV/Excel local)
 //    · "adminData" / "adminAddUser" / "adminRemoveUser" → panel admin
+//
+//  v18.2: login más firme. Antes de preguntar a Google, el token debe traer aud (esta app) e
+//    iss de Google. Si Google no responde (5xx, 429 o red), no es authError (authTemporal):
+//    el frontend no cierra la sesión. Tope global de rechazos por minuto: pasado el tope ya
+//    no se pregunta a Google ni se escribe más en la auditoría.
 //
 //  v18.1: el describe dice si cada picklist es restringido (restrictedPicklist).
 //
@@ -76,7 +81,7 @@
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════════════
 var SF_API_VERSION          = "v62.0";  // ← Versión de la API de Salesforce (un solo lugar para subirla)
-var VERSION_BACKEND         = "18.1";
+var VERSION_BACKEND         = "18.2";
 var GOOGLE_CLIENT_ID        = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 var ALLOWED_DOMAIN          = "docplanner.com";
 
@@ -103,6 +108,11 @@ var RATE_LIMIT_MAX_POR_HORA  = 100;
 // import largo agotaría el límite del propio usuario. No hay riesgo de abuso:
 // requiere id_token válido + un jobId existente, y no descarga datos.
 // v17: también cuentan describe, adminData y cualquier acción desconocida.
+// v18.2: tope GLOBAL de tokens rechazados por minuto (bots o un error en bucle). Solo se
+// auditan los primeros; pasado el máximo, ni se pregunta a Google.
+var RECHAZOS_AUDITADOS_POR_MIN = 20;
+var RECHAZOS_MAX_POR_MIN       = 60;
+var ISS_GOOGLE                 = ["accounts.google.com", "https://accounts.google.com"];
 var RATE_LIMIT_OPERACIONES   = ["asignacion", "importStart", "exportSheet", "exportSheetFromFile", "recuperarJob",
                                 "describe", "adminData", "adminAddUser", "adminRemoveUser", "(desconocida)"];
 
@@ -158,9 +168,15 @@ function doPost(e) {
     // ── CAPA 1: validar id_token de Google (dominio + whitelist) ──
     var tokenValidation = validarIdToken(payload.idToken);
     if (!tokenValidation.valid) {
+      // v18.2: Google no respondió. No es un rechazo: el frontend reintenta sin cerrar la sesión.
+      if (tokenValidation.temporal) {
+        output.setContent(JSON.stringify({ error: tokenValidation.error, authTemporal: true }));
+        return output;
+      }
       // v17: un token que ni siquiera tiene forma de JWT se rechaza sin fetch y sin
       // auditoría (sería ruido de bots). Los demás rechazos sí se registran.
-      if (!tokenValidation.basura) {
+      // v18.2: solo los primeros RECHAZOS_AUDITADOS_POR_MIN de cada minuto.
+      if (!tokenValidation.basura && contarRechazo() <= RECHAZOS_AUDITADOS_POR_MIN) {
         registrarAuditoria(
           tokenValidation.email || "(desconocido)",
           operation,
@@ -324,6 +340,10 @@ function validarIdToken(idToken) {
   if (Number(claims.exp) < ahora) {
     return { valid: false, error: "Sesión expirada. Vuelve a iniciar sesión." };
   }
+  // v18.2: un token que no es de Google para esta app ni se manda a Google (ni se audita)
+  if (claims.aud !== GOOGLE_CLIENT_ID || ISS_GOOGLE.indexOf(String(claims.iss || "")) === -1) {
+    return { valid: false, error: "Token emitido para otra aplicación", basura: true };
+  }
 
   var cache = CacheService.getScriptCache();
   var cacheKey = "tok_" + hashTexto(idToken);
@@ -336,14 +356,30 @@ function validarIdToken(idToken) {
     cache.remove(cacheKey);  // vencido o dado de baja: se verifica de nuevo abajo
   }
 
+  // v18.2: con demasiados rechazos en este minuto ya no se pregunta a Google
+  var rechazos = 0;
+  try { rechazos = parseInt(cache.get(llaveRechazos()) || "0", 10); } catch (e) {}
+  if (rechazos >= RECHAZOS_MAX_POR_MIN) {
+    return { valid: false, temporal: true, error: "Hay demasiados intentos de acceso fallidos en este momento. Espera un minuto y vuelve a intentar." };
+  }
+
+  var res;
   try {
-    var res = UrlFetchApp.fetch(
+    res = UrlFetchApp.fetch(
       "https://oauth2.googleapis.com/tokeninfo?id_token=" + encodeURIComponent(idToken),
       { method: "get", muteHttpExceptions: true }
     );
-
-    if (res.getResponseCode() !== 200) {
-      return { valid: false, error: "Google rechazó el token (HTTP " + res.getResponseCode() + ")" };
+  } catch (errRed) {
+    return { valid: false, temporal: true, error: "No se pudo validar tu sesión con Google (" + errRed.message + "). Intenta de nuevo en unos segundos." };
+  }
+  try {
+    var codigo = res.getResponseCode();
+    // v18.2: 5xx o 429 es Google caído o saturado, no un token malo
+    if (codigo === 429 || codigo >= 500) {
+      return { valid: false, temporal: true, error: "Google no pudo validar tu sesión en este momento (HTTP " + codigo + "). Intenta de nuevo en unos segundos." };
+    }
+    if (codigo !== 200) {
+      return { valid: false, error: "Google rechazó el token (HTTP " + codigo + ")" };
     }
 
     var info = JSON.parse(res.getContentText());
@@ -403,6 +439,24 @@ function leerClaimsJwt(token) {
     return (obj && typeof obj === "object") ? obj : null;
   } catch (e) {
     return null;
+  }
+}
+
+// v18.2: contador global de tokens rechazados en el minuto actual (devuelve el nuevo total)
+function llaveRechazos() { return "rech_" + Math.floor(Date.now() / 60000); }
+function contarRechazo() {
+  var cache = CacheService.getScriptCache();
+  var lock = LockService.getScriptLock();
+  var conCandado = false;
+  try { conCandado = lock.tryLock(2000); } catch (e) {}
+  try {
+    var n = parseInt(cache.get(llaveRechazos()) || "0", 10) + 1;
+    cache.put(llaveRechazos(), String(n), 120);
+    return n;
+  } catch (e) {
+    return 1;
+  } finally {
+    if (conCandado) lock.releaseLock();
   }
 }
 

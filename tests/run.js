@@ -169,6 +169,13 @@ try {
 // ── v18 · Datos al campo correcto (validación, carga manual, columnas del resultado) ──
 require('./v18-campos')(html, prueba, g => { grupo = g; });
 
+// ── v18 · Sesión del backend (Google caído, tokens ajenos, tope de rechazos) ──
+try {
+  require('./v18-sesion')(prueba, g => { grupo = g; });
+} catch (e) {
+  prueba('las pruebas v18 de sesión pudieron correr', () => { throw e; });
+}
+
 // ── v17 · Tiempo simulado: el Salesforce falso tarda como el real ──
 try {
   require('./tiempo-v17')(html, prueba, g => { grupo = g; });

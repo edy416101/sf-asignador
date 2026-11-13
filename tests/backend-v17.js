@@ -6,6 +6,8 @@ const { crearBulkFalso, parsearCsv } = require('./lib/bulk-falso');
 const SF = require('./lib/sf-falso');
 
 const INSTANCIA = 'https://docplanner.my.salesforce.com';
+// v18.2: el token debe traer aud (esta app) e iss de Google antes de preguntar a Google
+const CLIENT_ID = (require('fs').readFileSync(require('path').join(__dirname, '..', 'backend', 'Code.gs'), 'utf8').match(/GOOGLE_CLIENT_ID\s*=\s*"([^"]+)"/) || [])[1];
 let nReq = 0;   // cada import de prueba con su clientRequestId (como el frontend v17)
 const OWNERS = ['005P400000FpACnIAN', '005P400000Fp9aHIAR', '005P400000FpZZZIAR', '005P400000FpYYYIAR', '005P400000FpXXXIAR'];
 const HEADERS = ['Contact__c', 'Company', 'LastName', 'Email', 'OwnerId'];
@@ -241,7 +243,7 @@ module.exports = function (prueba, setGrupo) {
   // ── Seguridad (doPost) ────────────────────────────────────────
   setGrupo('v17 · Seguridad del backend (doPost)');
   const ahora = Math.floor(Date.now() / 1000);
-  const claims = { email: 'usuario.prueba@docplanner.com', hd: 'docplanner.com', exp: ahora + 3000 };
+  const claims = { email: 'usuario.prueba@docplanner.com', hd: 'docplanner.com', exp: ahora + 3000, aud: CLIENT_ID, iss: 'https://accounts.google.com' };
   const tokenBueno = jwt(claims);
   function googleQueSoloAcepta(token, ctxRef) {
     return url => {
