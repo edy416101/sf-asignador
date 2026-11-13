@@ -25,7 +25,9 @@ Owner: Edgar Martínez. Frontend en GitHub Pages (`index.html`), backend en Apps
 - **Publicar = PR a `main` con descripción.** Pages publica `main`. Nunca push directo a `main`.
   Ramas por tema (`mejoras/…`, `fix/…`). El PR dice qué cambió, por qué y cómo se probó.
 - **Claude mergea sus propios PRs** (`gh pr merge <n> --merge`) sin pedir permiso, en cuanto
-  pasan `node tests/run.js` y el simulador si aplica. Lo autorizó Edgar el 12-nov-2026. Al
+  pasa `node tests/todo.js` en la rama del PR. El merge va encadenado al resultado
+  (`node tests/todo.js && gh pr merge …`), nunca detrás de un `| tail` que esconda la
+  falla. Lo autorizó Edgar el 12-nov-2026. Al
   terminar, avisarle qué se mergeó. Si el PR cambió el contrato entre backend y frontend,
   respetar el orden de "Backend y frontend van juntos".
 - **Backend y frontend van juntos.** Si cambia el contrato de una acción (`importStart`,
