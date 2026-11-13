@@ -59,6 +59,12 @@ Imprime ✓/✗ por prueba y termina con código 1 si algo falla. Cubre:
   lo que el cliente cree fallido no existe en Salesforce. `ESTRES=2000 node tests/run.js` corre
   más escenarios. También las funciones del navegador: `clientRequestId` estable, lista de
   pendientes y filas "En proceso".
+- **v18 · Datos al campo correcto** (`v18-campos.js` y el paso 4c del simulador): validación
+  antes de mandar (picklists restringidos contra el describe, booleanos, números y
+  obligatorios de negocio), carga manual (sin encabezados, `import_result.csv`, `Contact__c`
+  repetidos), columnas del resultado recuperado, y en la página: campos custom que entran y
+  salen de las filas sin correr valores, Field Mapping por nombre, valores manuales aplicados,
+  bloqueo durante un import, país PE/AR y Recuperar que pregunta antes de reemplazar.
 - **v17 · Tiempo simulado** (`tiempo-v17.js`): la Bulk API falsa tarda como Salesforce
   (~1.15 s por Lead, transacciones de 200 en serie dentro de cada job, jobs distintos a la vez).
   El reloj es simulado, así que la prueba tarda milisegundos. Se calibró con el job real de 500

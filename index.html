@@ -378,6 +378,8 @@
     .flag-mx { background: linear-gradient(90deg, #006847 0 33.3%, #ffffff 33.3% 66.6%, #ce1126 66.6% 100%); }
     .flag-es { background: linear-gradient(180deg, #aa151b 0 25%, #f1bf00 25% 75%, #aa151b 75% 100%); }
     .flag-co { background: linear-gradient(180deg, #fcd116 0 50%, #003893 50% 75%, #ce1126 75% 100%); }
+    .flag-pe { background: linear-gradient(90deg, #d91023 0 33.3%, #ffffff 33.3% 66.6%, #d91023 66.6% 100%); }
+    .flag-ar { background: linear-gradient(180deg, #74acdf 0 33.3%, #ffffff 33.3% 66.6%, #74acdf 66.6% 100%); }
     .pais-menu { display: none; position: absolute; right: 0; top: calc(100% + 8px); width: 215px; background: var(--sf2); border: 1px solid var(--border); border-radius: 11px; padding: 6px; box-shadow: 0 16px 40px rgba(0,0,0,.55); z-index: 300; }
     .pais-menu.open { display: block; }
     .pais-menu-title { font-size: 9.5px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); padding: 6px 10px 4px; }
@@ -637,6 +639,8 @@
         <button class="pais-item active" data-pais="MX" onclick="seleccionarPais('MX')"><span class="flag flag-mx"></span><span>MX — México</span><span class="pais-check">✓</span></button>
         <button class="pais-item" data-pais="ES" onclick="seleccionarPais('ES')"><span class="flag flag-es"></span><span>ES — España</span><span class="pais-check">✓</span></button>
         <button class="pais-item" data-pais="CO" onclick="seleccionarPais('CO')"><span class="flag flag-co"></span><span>CO — Colombia</span><span class="pais-check">✓</span></button>
+        <button class="pais-item" data-pais="PE" onclick="seleccionarPais('PE')"><span class="flag flag-pe"></span><span>PE — Perú</span><span class="pais-check">✓</span></button>
+        <button class="pais-item" data-pais="AR" onclick="seleccionarPais('AR')"><span class="flag flag-ar"></span><span>AR — Argentina</span><span class="pais-check">✓</span></button>
       </div>
     </div>
     <div class="user-bar">
@@ -1303,6 +1307,22 @@ const CAMPOS_OBLIGATORIOS_LEAD = new Set([
 const VALID_FIELD_REGEX = /^[A-Za-z][A-Za-z0-9_]*$/;
 
 // Función que reconstruye los headers dinámicos según customFields Y camposFijosOcultos
+// v18: mientras corre un import no se cambia nada que mueva columnas o datos del pre-template
+function bloqueadoPorImport() {
+  if (!importEnCurso) return false;
+  toast('Hay un import en curso: espera a que termine para cambiar campos, país o datos.', 'bad');
+  return true;
+}
+
+// v18: estampa un valor fijo en una columna de las filas que ya existen. Devuelve cuántas.
+function aplicarValorColumna(nombre, valor) {
+  const i = PT_HEADERS.indexOf(nombre);
+  if (i < 0 || !preTemplateRows.length) return 0;
+  preTemplateRows = preTemplateRows.map(r => { const n = [...r]; n[i] = valor; return n; });
+  renderPreTemplate(PT_HEADERS, preTemplateRows, true);
+  return preTemplateRows.length;
+}
+
 function actualizarHeadersDinamicos() {
   // Filtrar del BASE los campos que el usuario decidió ocultar
   const camposBaseVisibles = PT_HEADERS_BASE.filter(h => !camposFijosOcultos.includes(h));
@@ -1311,6 +1331,9 @@ function actualizarHeadersDinamicos() {
   IMPORT_RESULT_HEADERS = [...PT_HEADERS, '__Status', '__Id', '__Action', '__Errors'];
   DEFAULT_FIELD_MAP = {};
   PT_HEADERS.forEach(h => DEFAULT_FIELD_MAP[h] = h);
+  // v18: si el Field Mapping ya está armado, se rehace con las columnas nuevas
+  const fmap = document.getElementById('fmapBody');
+  if (fmap && fmap.children.length && !importEnCurso) buildFieldMapping();
 
   // Actualizar contador del botón: custom + fromSF + ocultos
   const btn = document.getElementById('customFieldsBtn');
@@ -1330,7 +1353,9 @@ function actualizarHeadersDinamicos() {
 const PAISES_CATALYST = {
   MX: { flagClass: 'flag-mx', sf: 'Mexico',   nombre: 'México'   },
   ES: { flagClass: 'flag-es', sf: 'Spain',    nombre: 'España'   },
-  CO: { flagClass: 'flag-co', sf: 'Colombia', nombre: 'Colombia' }
+  CO: { flagClass: 'flag-co', sf: 'Colombia', nombre: 'Colombia' },
+  PE: { flagClass: 'flag-pe', sf: 'Peru',     nombre: 'Perú'     },   // v18: se valida contra el picklist antes de importar
+  AR: { flagClass: 'flag-ar', sf: 'Argentina', nombre: 'Argentina' }
 };
 let paisActivo = 'MX';  // MX = default histórico del backend (DEFAULTS_HARDCODED)
 
@@ -1340,6 +1365,7 @@ function togglePaisMenu(ev) {
 }
 
 function seleccionarPais(code) {
+  if (bloqueadoPorImport()) return;
   const p = PAISES_CATALYST[code];
   if (!p) return;
   paisActivo = code;
@@ -1594,6 +1620,8 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
   document.getElementById('tc-' + tab).classList.add('active');
+  // v18: al entrar a Import el Field Mapping se rehace con las columnas actuales
+  if (tab === 'import' && !importEnCurso) actualizarFuenteImport();
 }
 
 function irAImport() {
@@ -1849,6 +1877,7 @@ function resetAsigUI() {
 }
 
 function limpiarAsignacion() {
+  if (bloqueadoPorImport()) return;
   if (!confirm('¿Limpiar días, Business Line, Lead Type, campos custom, config de campos base, representantes e IDs?')) return;
   document.getElementById('dias').value = '';
   document.getElementById('businessLine').value = '';
@@ -1871,6 +1900,7 @@ function limpiarAsignacion() {
 }
 
 async function ejecutar() {
+  if (bloqueadoPorImport()) return;
   const sid = document.getElementById('sid').value.trim();
   const diasInput = document.getElementById('dias').value.trim();
   const dias = diasInput === '' ? 0 : parseInt(diasInput);
@@ -2233,8 +2263,12 @@ function onActionChange() {
   document.getElementById('extIdField').style.display = (action === 'upsert') ? '' : 'none';
 }
 
+// v18: el mapeo se rehace conservando lo que el usuario cambió (otro API Name u omitir)
+// en las columnas que siguen existiendo.
 function buildFieldMapping() {
   const tbody = document.getElementById('fmapBody');
+  const previas = {};
+  leerMapeo().forEach(m => { previas[m.col] = m.sfVal; });
   tbody.innerHTML = '';
   PT_HEADERS.forEach(col => {
     const mapped = DEFAULT_FIELD_MAP[col] || col;
@@ -2255,7 +2289,34 @@ function buildFieldMapping() {
       <td class="fmap-ok pending" id="fmap-ok-${esc(col)}">•</td>
     `;
     tbody.appendChild(tr);
+    const previo = previas[col];
+    if (previo && previo !== mapped && previo !== '--custom--') {
+      const sel = tr.querySelector('select'), inp = tr.querySelector('.fmap-custom-input');
+      if (previo === '--skip--') { sel.value = '--skip--'; onFmapSelectChange(sel, col); }
+      else { sel.value = '--custom--'; sel.style.display = 'none'; inp.style.display = 'block'; inp.value = previo; inp.dataset.savedValue = previo; onFmapCustomInput(inp, col); }
+    }
   });
+}
+
+// v18: el mapeo se lee por NOMBRE de columna. Antes se leía por posición: si las columnas
+// cambiaban después de armarlo, los valores se iban al campo equivocado.
+function leerMapeo() {
+  return [...document.querySelectorAll('#fmapBody tr')].map(tr => {
+    const wrap = tr.querySelector('.fmap-sf-wrap');
+    return wrap ? { col: wrap.dataset.col, sfVal: getMapeoValor(tr) } : null;
+  }).filter(Boolean);
+}
+
+// v18: antes de importar, el mapeo debe cuadrar con las columnas y cada fila con sus columnas.
+// Devuelve el motivo si no cuadra ('' si todo bien).
+function revisarAlineacion() {
+  if (leerMapeo().map(m => m.col).join('|') !== PT_HEADERS.join('|')) {
+    buildFieldMapping();
+    return 'Las columnas del pre-template cambiaron desde que se armó el Field Mapping. Ya se actualizó: revísalo y vuelve a ejecutar.';
+  }
+  const malas = preTemplateRows.filter(r => !Array.isArray(r) || r.length !== PT_HEADERS.length).length;
+  if (malas) return `${malas} fila(s) no tienen las ${PT_HEADERS.length} columnas del pre-template. Re-ejecuta la asignación o vuelve a cargar los datos.`;
+  return '';
 }
 
 // Al cambiar el select principal
@@ -2631,6 +2692,7 @@ function renderFixedFieldsList() {
 }
 
 function ocultarCampoFijo(name) {
+  if (bloqueadoPorImport()) return;
   const CAMPOS_OBLIGATORIOS = ['Lead_Type__c', 'ContactTypeSegment__c', 'Country__c', 'Leadassist__Use_Round_Robin__c', 'Status'];
   if (CAMPOS_OBLIGATORIOS.includes(name)) {
     if (!confirm(
@@ -2675,6 +2737,7 @@ function ocultarCampoFijo(name) {
 }
 
 function restaurarCampoFijo(name) {
+  if (bloqueadoPorImport()) return;
   const idx = camposFijosOcultos.indexOf(name);
   if (idx < 0) return;
   camposFijosOcultos.splice(idx, 1);
@@ -2700,6 +2763,7 @@ function restaurarCampoFijo(name) {
 }
 
 async function onFieldSourceChange(select, fieldName) {
+  if (bloqueadoPorImport()) { renderFixedFieldsList(); return; }
   const newValue = select.value;
 
   // Limpiar de todos los estados primero
@@ -2770,8 +2834,16 @@ async function onFieldSourceChange(select, fieldName) {
 
 // Validación en vivo del valor manual de un campo fijo (contra el tipo en Lead)
 let fixedManualDescribeTimer = {};
+let fixedManualAplicarTimer = {};
 function onFixedManualValueInput(fieldName, value) {
+  if (bloqueadoPorImport()) { renderFixedFieldsList(); return; }
   fieldsManualValues[fieldName] = value;
+  // v18: el valor manual se estampa también en las filas que ya existen
+  clearTimeout(fixedManualAplicarTimer[fieldName]);
+  fixedManualAplicarTimer[fieldName] = setTimeout(() => {
+    const n = aplicarValorColumna(fieldName, value);
+    if (n) toast(`✎ ${fieldName} = "${value}" en las ${n} filas del pre-template`, 'ok');
+  }, 400);
   const validationEl = document.getElementById(`fixedManualValidation-${fieldName}`);
   if (!validationEl) return;
 
@@ -2956,6 +3028,7 @@ function onCustomManualValueInput() {
 }
 
 async function agregarCustomField() {
+  if (bloqueadoPorImport()) return;
   const input = document.getElementById('newCustomFieldInput');
   const hint = document.getElementById('customFieldHint');
   const raw = input.value.trim();
@@ -2980,8 +3053,8 @@ async function agregarCustomField() {
   // Warning si ya hay pre-template generado
   if (preTemplateRows.length > 0) {
     const proceder = confirm(
-      `⚠ Ya tienes un pre-template generado.\n\n` +
-      `Añadir el campo "${raw}" no lo afecta directamente, pero necesitas RE-EJECUTAR LA ASIGNACIÓN para que aparezca correctamente en el pre-template.\n\n` +
+      `⚠ Ya tienes un pre-template con ${preTemplateRows.length} fila(s).\n\n` +
+      `La columna "${raw}" se agrega a todas: en modo Manual con su valor, y desde SF vacía (re-ejecuta la asignación para traerla de Contact).\n\n` +
       `¿Continuar?`
     );
     if (!proceder) return;
@@ -3068,6 +3141,18 @@ async function agregarCustomField() {
 
   actualizarHeadersDinamicos();
   renderCustomFieldsList();
+  // v18: la columna nueva entra a las filas que ya existen (Manual: con su valor; desde SF: vacía)
+  if (preTemplateRows.length > 0) {
+    const nuevo = customFields[customFields.length - 1];
+    const ancho = PT_HEADERS.length - 1;
+    preTemplateRows = preTemplateRows.map(r => {
+      const n = r.slice(0, ancho);
+      while (n.length < ancho) n.push('');
+      n.push(nuevo.mode === 'manual' ? (nuevo.value || '') : '');
+      return n;
+    });
+    renderPreTemplate(PT_HEADERS, preTemplateRows, true);
+  }
 
   // Reset del formulario
   input.value = '';
@@ -3080,20 +3165,26 @@ async function agregarCustomField() {
 }
 
 function quitarCustomField(idx) {
+  if (bloqueadoPorImport()) return;
   const cf = customFields[idx];
   if (!cf) return;
   const nombre = cf.name;
   if (preTemplateRows.length > 0) {
-    if (!confirm(`Quitar "${nombre}" del pre-template. ¿Continuar?\n\nNecesitarás re-ejecutar la asignación para que el cambio surta efecto.`)) return;
+    if (!confirm(`Quitar "${nombre}" del pre-template: la columna se borra de las ${preTemplateRows.length} fila(s). ¿Continuar?`)) return;
+    // v18: la columna también sale de las filas (antes solo del encabezado y los valores se corrían)
+    const col = PT_HEADERS.indexOf(nombre);
+    if (col >= 0) preTemplateRows = preTemplateRows.map(r => { const n = [...r]; n.splice(col, 1); return n; });
   }
   customFields.splice(idx, 1);
   actualizarHeadersDinamicos();
   renderCustomFieldsList();
+  if (preTemplateRows.length > 0) renderPreTemplate(PT_HEADERS, preTemplateRows, true);
   toast(`✓ Campo "${nombre}" quitado.`, 'ok');
 }
 
 // Editar valor manual sin remover el campo
 async function editarValorManual(idx) {
+  if (bloqueadoPorImport()) return;
   const cf = customFields[idx];
   if (!cf || cf.mode !== 'manual') return;
 
@@ -3123,7 +3214,8 @@ async function editarValorManual(idx) {
 
   cf.value = String(nuevoValor);
   renderCustomFieldsList();
-  toast(`✓ Valor actualizado en "${cf.name}"`, 'ok');
+  const n = aplicarValorColumna(cf.name, cf.value);   // v18: también en las filas que ya existen
+  toast(`✓ Valor actualizado en "${cf.name}"` + (n ? ` (${n} filas)` : ''), 'ok');
 }
 
 function validarFieldMapping(realFields) {
@@ -3131,9 +3223,7 @@ function validarFieldMapping(realFields) {
   const obligatoriosInvalidos = [];
   const opcionalesInvalidos   = [];
 
-  document.querySelectorAll('#fmapBody tr').forEach((tr, i) => {
-    const csvCol = PT_HEADERS[i];
-    const sfVal = getMapeoValor(tr);  // lee del select o del input custom
+  leerMapeo().forEach(({ col: csvCol, sfVal }) => {   // v18: por nombre de columna
     const cell = document.getElementById(`fmap-ok-${csvCol}`);
     if (!cell) return;
     if (sfVal === '--skip--') { cell.textContent = '—'; cell.className = 'fmap-ok skip'; return; }
@@ -3167,6 +3257,9 @@ const RE_FECHA      = /^\d{4}-\d{2}-\d{2}$/;
 const RE_FECHA_HORA = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
 const TIPOS_CON_LARGO = new Set(['string', 'textarea', 'email', 'phone', 'url', 'picklist', 'multipicklist']);
 
+// v18: además, los obligatorios de negocio (CAMPOS_OBLIGATORIOS_LEAD) vacíos son aviso, y se
+// revisan picklists (contra el describe), booleanos y números. Un valor fuera de un picklist
+// restringido bloquea; uno no restringido es aviso. Los avisos van en errores.avisos.
 function validarFilasImport(sfHeaders, rows, meta) {
   const metas = sfHeaders.map(h => {
     if (!meta) return null;
@@ -3176,19 +3269,35 @@ function validarFilasImport(sfHeaders, rows, meta) {
   const requeridos = sfHeaders.map((h, j) => metas[j]
     ? (h === 'OwnerId' || (metas[j].nillable === false && metas[j].createable !== false && metas[j].type !== 'boolean' && !metas[j].defaultedOnCreate))
     : (h === 'OwnerId' || h === 'LastName'));
-  const errores = [];
+  const deNegocio = sfHeaders.map(h => CAMPOS_OBLIGATORIOS_LEAD.has(h));
+  const listas = metas.map(m => (m && (m.type === 'picklist' || m.type === 'multipicklist') && (m.picklistValues || []).length)
+    ? new Set(m.picklistValues.map(x => String(x).toLowerCase())) : null);
+  const errores = [], avisos = [];
   rows.forEach((r, i) => sfHeaders.forEach((h, j) => {
     const v = String(r[j] ?? '');
     const m = metas[j];
     const err = motivo => errores.push({ fila: i + 1, campo: h, valor: v.slice(0, 40), motivo });
-    if (!v) { if (requeridos[j]) err('vacío (obligatorio)'); return; }
+    const aviso = motivo => avisos.push({ fila: i + 1, campo: h, valor: v.slice(0, 40), motivo });
+    if (!v) {
+      if (requeridos[j]) err('vacío (obligatorio)');
+      else if (deNegocio[j]) aviso('vacío (obligatorio de negocio)');
+      return;
+    }
     if (h === 'OwnerId' && !RE_ID_USER.test(v)) err('debe ser un User (005…) de 15 o 18 caracteres');
     else if (h === 'Contact__c' && !RE_ID_CONTACT.test(v)) err('debe ser un Contact (003…) de 15 o 18 caracteres');
     else if ((h === 'Email' || (m && m.type === 'email')) && !RE_EMAIL.test(v)) err('email no válido');
     else if (m && m.type === 'date' && !RE_FECHA.test(v)) err('fecha con formato AAAA-MM-DD');
     else if (m && m.type === 'datetime' && !RE_FECHA_HORA.test(v)) err('fecha y hora ISO (AAAA-MM-DDThh:mm:ssZ)');
     else if (m && m.length && TIPOS_CON_LARGO.has(m.type) && v.length > m.length) err(`más de ${m.length} caracteres`);
+    else if (m && m.type === 'boolean' && !/^(true|false|1|0)$/i.test(v)) err('debe ser TRUE o FALSE');
+    else if (m && ['int', 'double', 'currency', 'percent'].includes(m.type) && !/^-?\d+(\.\d+)?$/.test(v)) err('debe ser un número (con punto decimal)');
+    else if (listas[j]) {
+      const vals = m.type === 'multipicklist' ? v.split(';').map(x => x.trim()).filter(Boolean) : [v];
+      const fuera = vals.find(x => !listas[j].has(x.toLowerCase()));
+      if (fuera !== undefined) (m.restrictedPicklist === false ? aviso : err)(`"${fuera}" no está en la lista de valores de ${h}`);
+    }
   }));
+  errores.avisos = avisos;
   return errores;
 }
 
@@ -3213,6 +3322,15 @@ async function ejecutarImport() {
   if (action === 'upsert' && !extId) return toast('Para Upsert debes indicar el External ID Field.', 'bad');
   const reparto = leerOpcionesReparto();
   if (reparto.error) return toast(reparto.error, 'bad');
+
+  // v18: el mapeo y las filas deben cuadrar con las columnas actuales
+  const desalineado = revisarAlineacion();
+  if (desalineado) {
+    ilog(`⛔ ${desalineado}`, 'err');
+    setImportStatus(desalineado, 'err');
+    alert(`⛔ ${desalineado}`);
+    return;
+  }
 
   const btn = document.getElementById('importBtn');
   importEnCurso = true;
@@ -3272,18 +3390,23 @@ async function ejecutarImport() {
       ilog(`⚠ No se pudo validar campos: ${err.message}. Continuando…`, 'warn');
     }
 
-    const fmapRows = document.querySelectorAll('#fmapBody tr');
     const sfHeaders = [], colIndexes = [], colNames = [];
-    fmapRows.forEach((tr, i) => {
-      const sfVal = getMapeoValor(tr);  // respeta el modo custom si está activo
+    leerMapeo().forEach(({ col, sfVal }) => {   // v18: por nombre de columna, no por posición
       if (sfVal !== '--skip--' && sfVal !== '--custom--' && sfVal.trim()) {
         sfHeaders.push(sfVal.trim());
-        colIndexes.push(i);
-        colNames.push(PT_HEADERS[i]);
+        colIndexes.push(PT_HEADERS.indexOf(col));
+        colNames.push(col);
       }
     });
 
     if (!sfHeaders.length) { toast('El field mapping está vacío.', 'bad'); return; }
+    // v18: el mismo API Name en dos columnas mandaría valores cruzados
+    const dobles = sfHeaders.filter((h, i) => sfHeaders.findIndex(x => x.toLowerCase() === h.toLowerCase()) !== i);
+    if (dobles.length) {
+      const msg = `El API Name ${dobles[0]} está mapeado en dos columnas. Deja uno solo en el Field Mapping.`;
+      ilog(`⛔ ${msg}`, 'err'); setImportStatus(msg, 'err'); alert(`⛔ ${msg}`);
+      return;
+    }
 
     // v17: valores sin espacios a los lados (un " 005…" fallaba en Salesforce)
     const rowsToSend = [];
@@ -3308,9 +3431,20 @@ async function ejecutarImport() {
       setImportStatus(`Import bloqueado: ${filasMalas} fila(s) con errores. Revisa el log.`, 'err');
       return;
     }
+    // v18: valores que Salesforce podría rechazar (picklist no restringido, obligatorios de negocio vacíos)
+    if ((errores.avisos || []).length) {
+      const av = errores.avisos;
+      av.slice(0, 30).forEach(e => ilog(`   ⚠ Fila ${e.fila} · ${e.campo}: ${e.motivo}${e.valor ? ` ("${e.valor}")` : ''}`, 'warn'));
+      const resumen = [...new Set(av.map(e => `${e.campo}: ${e.motivo}`))].slice(0, 8).join('\n• ');
+      if (!confirm(`⚠ ${new Set(av.map(e => e.fila)).size} fila(s) con valores que Salesforce podría rechazar:\n\n• ${resumen}\n\n¿Importar de todos modos?`)) {
+        setImportStatus('Import cancelado: revisa los avisos del log.', 'err');
+        return;
+      }
+    }
     ilog(`✓ ${rowsToSend.length} fila(s) revisadas, sin errores`, 'ok');
 
-    const cfg = { action, object, extId, sfHeaders: [...sfHeaders], colIndexes: [...colIndexes], colNames: [...colNames] };
+    const cfg = { action, object, extId, sfHeaders: [...sfHeaders], colIndexes: [...colIndexes], colNames: [...colNames],
+      resultHeaders: [...IMPORT_RESULT_HEADERS] };   // v18: al recuperar tras recargar, las columnas del resultado son las de este import
     // v18: filas que ya van en un lote sin resultado no se mandan otra vez (se duplicarían)
     if (bloquearSiHayPendiente(rowsToSend, cfg, 'Import')) return;
     const total = rowsToSend.length;
@@ -3622,6 +3756,19 @@ function filasNoEnviadasAResultado(filas, cfg, motivo) {
     row.__Errors = 'NO_ENVIADA: ' + String(motivo || 'el job no se pudo cerrar y se abortó').replace(/\s*\r?\n\s*/g, ' ');
     return row;
   });
+}
+
+// v18: columnas del resultado recuperado: las del import (cfg.resultHeaders) o, sin config,
+// las del pre-template más las que traiga el CSV de Salesforce (sin perder columnas custom).
+function encabezadosResultado(cfg, csvs) {
+  if (cfg && Array.isArray(cfg.resultHeaders) && cfg.resultHeaders.length) return [...cfg.resultHeaders];
+  const cols = [...PT_HEADERS];
+  (csvs || []).forEach(t => {
+    if (!t) return;
+    const primera = parseDelimitado(String(t).split(/\r?\n/)[0], ',')[0] || [];
+    primera.forEach(h => { if (h && !/^sf__/.test(h) && !cols.includes(h)) cols.push(h); });
+  });
+  return [...cols, '__Status', '__Id', '__Action', '__Errors'];
 }
 
 // Pinta el resultado de un import o un retry (tabla, historial, estado y job pendiente).
@@ -4407,11 +4554,15 @@ async function ejecutarRecuperar() {
     // La config del import (para el retry) solo se conserva si es de ESTE job
     const pendiente = leerPendientes().find(p => coincidePendiente(p, ref, data.jobIds)) || null;
     const esDelPendiente = !!pendiente;
-    if (esDelPendiente && pendiente.cfg) ultimoImportConfig = pendiente.cfg;
-    else if (!(ultimoImportConfig && ultimoImportConfig.jobIds && (data.jobIds || []).every(id => ultimoImportConfig.jobIds.includes(id)))) {
-      ultimoImportConfig = null;   // v17: otro job → sin config vieja (el retry mezclaría columnas)
+    let cfgNueva = ultimoImportConfig;
+    if (esDelPendiente && pendiente.cfg) cfgNueva = pendiente.cfg;
+    else if (!(cfgNueva && cfgNueva.jobIds && (data.jobIds || []).every(id => cfgNueva.jobIds.includes(id)))) {
+      cfgNueva = null;   // v17: otro job → sin config vieja (el retry mezclaría columnas)
     }
-    const mapa = mapaApiAPt(ultimoImportConfig);
+    // v18: las columnas del resultado son las de ese import (o las del CSV), no las de ahora
+    const headersAntes = IMPORT_RESULT_HEADERS;
+    IMPORT_RESULT_HEADERS = encabezadosResultado(cfgNueva, [data.successCsv, data.failedCsv, data.unprocessedCsv]);
+    const mapa = mapaApiAPt(cfgNueva);
     const accion = (data.operation || 'insert').toLowerCase();
     const okRows = parseSfResultCsv(data.successCsv || '', 'ok', accion, mapa);
     const failRows = parseSfResultCsv(data.failedCsv || '', 'fail', accion, mapa)
@@ -4420,11 +4571,20 @@ async function ejecutarRecuperar() {
     const success = okRows.length, failed = failRows.length;
 
     if (recuperadas.length === 0) {
+      IMPORT_RESULT_HEADERS = headersAntes;
       pintar(...AMBAR, `⚠ Estado <strong>${esc(data.jobState)}</strong> pero sin filas de resultado. ` +
         (data.resultsError ? esc(data.resultsError) : 'Puede que Salesforce ya haya purgado los archivos (se conservan ~7 días) o que el job no haya procesado registros.'));
       btn.disabled = false; btn.textContent = '🔍 Recuperar resultado';
       return;
     }
+    // v18: no se borra la tabla actual sin preguntar
+    if (importResultRows.length && !confirm(`Ya hay un resultado en la tabla (${importResultRows.length} filas).\n\n¿Reemplazarlo con el de ${ref}? Si lo necesitas, descárgalo antes.`)) {
+      IMPORT_RESULT_HEADERS = headersAntes;
+      pintar(...AMBAR, 'La tabla se dejó como estaba.');
+      btn.disabled = false; btn.textContent = '🔍 Recuperar resultado';
+      return;
+    }
+    ultimoImportConfig = cfgNueva;
 
     importResultRows = recuperadas;
     if (ultimoImportConfig) ultimoImportConfig.jobIds = data.jobIds || [];
@@ -4712,7 +4872,15 @@ function analizarCarga(matrix, ptHeadersActuales) {
   // Columnas que tendrá el pre-template si se aplica la carga: las actuales + las nuevas al final
   const ptPreview = [...ptHeadersActuales, ...nuevosCustom];
 
-  const dataRows = (hayHeaders ? matrix.slice(1) : matrix).filter(r => r.some(c => String(c || '').trim() !== ''));
+  let dataRows = (hayHeaders ? matrix.slice(1) : matrix).filter(r => r.some(c => String(c || '').trim() !== ''));
+  // v18: un import_result.csv (trae __Status): solo se cargan las filas que fallaron
+  const iStatus = hayHeaders ? primeraFila.findIndex(h => h === '__Status') : -1;
+  let omitidasResultado = 0;
+  if (iStatus >= 0) {
+    const antes = dataRows.length;
+    dataRows = dataRows.filter(r => String(r[iStatus] || '').trim() === 'Failed');
+    omitidasResultado = antes - dataRows.length;
+  }
 
   // ── PASO 2: mapeo columna origen → columna PT ──
   // Con headers: por nombre. Sin headers: por posición contra el pre-template actual.
@@ -4747,7 +4915,18 @@ function analizarCarga(matrix, ptHeadersActuales) {
   const cubiertos = new Set(mapeoColumnas.filter(m => m.ptIndex >= 0).map(m => m.ptName));
   const faltantesObligatorios = MIN_REQUIRED_LOAD.filter(c => !cubiertos.has(c));
 
-  return { hayHeaders, nuevosCustom, ptPreview, ptToOrigenIdx, mapeoColumnas, filas, faltantesObligatorios };
+  // v18: Contact__c repetidos crearían más de un Lead para el mismo contacto
+  const iC = ptPreview.indexOf('Contact__c');
+  const vistos = new Set();
+  let contactosRepetidos = 0;
+  if (iC >= 0) filas.forEach(f => {
+    const k = String(f[iC] || '').trim().slice(0, 15);
+    if (!k) return;
+    if (vistos.has(k)) contactosRepetidos++; else vistos.add(k);
+  });
+
+  return { hayHeaders, nuevosCustom, ptPreview, ptToOrigenIdx, mapeoColumnas, filas, faltantesObligatorios,
+    esResultado: iStatus >= 0, omitidasResultado, contactosRepetidos };
 }
 
 async function actualizarPreviewCarga() {
@@ -4796,7 +4975,7 @@ async function actualizarPreviewCarga() {
   }
 
   const a = analizarCarga(matrix, PT_HEADERS);
-  const { hayHeaders, nuevosCustom, ptPreview, ptToOrigenIdx, mapeoColumnas, filas, faltantesObligatorios } = a;
+  const { hayHeaders, nuevosCustom, ptPreview, ptToOrigenIdx, mapeoColumnas, filas, faltantesObligatorios, esResultado, omitidasResultado, contactosRepetidos } = a;
 
   if (!filas.length) {
     mappingDiv.innerHTML = `<div style="color:var(--err); font-weight:600;">❌ Sin filas de datos (solo se detectaron headers).</div>`;
@@ -4814,6 +4993,15 @@ async function actualizarPreviewCarga() {
     <span style="color:var(--muted); font-size:10.5px;">Headers: ${hayHeaders ? '<strong style="color:var(--ok)">detectados por nombre</strong>' : '<strong style="color:var(--warn)">no detectados — mapeo posicional</strong>'}</span>
   </div>`;
 
+  if (esResultado) {
+    mappingHtml += `<div style="background:rgba(245,158,11,0.08); border-left:3px solid var(--warn); border-radius:6px; padding:8px 10px; font-size:11px; margin-bottom:8px; color:var(--text);">
+      <strong>📄 Es un resultado de import:</strong> se cargan solo las ${filas.length} fila(s) con __Status = Failed` +
+      (omitidasResultado ? ` (se omiten ${omitidasResultado} que ya se crearon o siguen en proceso)` : '') + `.</div>`;
+  }
+  if (contactosRepetidos > 0) {
+    mappingHtml += `<div style="background:rgba(244,63,94,.08); border-left:3px solid var(--err); border-radius:6px; padding:8px 10px; font-size:11px; margin-bottom:8px; color:var(--err); font-weight:600;">
+      ⚠ ${contactosRepetidos} Contact__c repetido(s): se crearía más de un Lead para el mismo contacto.</div>`;
+  }
   if (nuevosCustom.length > 0) {
     mappingHtml += `<div style="background:rgba(124,58,237,0.08); border-left:3px solid var(--ac2); border-radius:6px; padding:8px 10px; font-size:11px; margin-bottom:8px; color:var(--text);">
       <strong style="color:#c4b5fd;">➕ ${nuevosCustom.length} campo(s) custom detectado(s):</strong> ${nuevosCustom.map(esc).join(', ')}<br>
@@ -4870,7 +5058,7 @@ async function actualizarPreviewCarga() {
   tableHtml += `</tbody></table>`;
   tableWrap.innerHTML = tableHtml;
 
-  loadedPreview = { rows: filas, hasHeader: hayHeaders, sourceFormat, mapeoColumnas, faltantesObligatorios, nuevosCustom, ptPreview };
+  loadedPreview = { rows: filas, hasHeader: hayHeaders, sourceFormat, mapeoColumnas, faltantesObligatorios, nuevosCustom, ptPreview, contactosRepetidos };
   previewDiv.style.display = 'block';
   btnConfirm.disabled = (faltantesObligatorios.length > 0);
 }
@@ -4888,6 +5076,14 @@ function aplicarCarga() {
   }
 
   const nuevasFilas = loadedPreview.rows.length;
+
+  // v18: sin encabezados, las columnas se toman por posición: que el usuario confirme el orden
+  if (!loadedPreview.hasHeader) {
+    const orden = (loadedPreview.mapeoColumnas || []).filter(m => m.ptIndex >= 0).map((m, i) => `${i + 1}. ${m.ptName}`).join('\n');
+    if (!confirm(`Tus datos no traen encabezados. Las columnas se van a tomar en este orden:\n\n${orden}\n\n¿Es correcto?`)) return;
+  }
+  if (loadedPreview.contactosRepetidos > 0 &&
+      !confirm(`⚠ ${loadedPreview.contactosRepetidos} Contact__c vienen repetidos: se crearía más de un Lead para el mismo contacto.\n\n¿Cargar de todos modos?`)) return;
 
   // Confirmación si hay datos previos
   if (preTemplateRows.length > 0 || importResultRows.length > 0) {
