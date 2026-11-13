@@ -20,7 +20,11 @@ const { correr } = require('./sim/headless');
   console.log('    ' + (okNode ? '✓ ' : '✗ ') + resumenNode);
 
   console.log('2/2 · Simulador del navegador');
-  const sim = await correr();
+  let sim = await correr();
+  if (sim.arranque) {   // Chrome no levantó a tiempo: un reintento. Un check que falla nunca se reintenta.
+    console.log('    (reintento: ' + sim.salida.trim().split('\n').pop().trim() + ')');
+    sim = await correr();
+  }
   if (!sim.ok) console.log(sim.salida);
   console.log('    ' + (sim.ok ? '✓ ' : '✗ ') + sim.salida.trim().split('\n').pop().trim());
 
