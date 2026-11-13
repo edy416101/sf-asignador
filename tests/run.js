@@ -159,6 +159,13 @@ try {
   prueba('las pruebas v18 de los falsos pudieron correr', () => { throw e; });
 }
 
+// ── v18 · Sin Leads duplicados (casos dirigidos y estrés con cientos de escenarios) ──
+try {
+  require('./v18-duplicados')(prueba, g => { grupo = g; }, html);
+} catch (e) {
+  prueba('las pruebas v18 de duplicados pudieron correr', () => { throw e; });
+}
+
 // ── v17 · Tiempo simulado: el Salesforce falso tarda como el real ──
 try {
   require('./tiempo-v17')(html, prueba, g => { grupo = g; });

@@ -1,5 +1,5 @@
 ﻿// ══════════════════════════════════════════════════════════════════════════
-//  SF ASIGNADOR · BACKEND — Google Apps Script  v17.2
+//  SF ASIGNADOR · BACKEND — Google Apps Script  v18.0
 //
 //  Operaciones (lista cerrada en ACCIONES_PERMITIDAS):
 //    · "asignacion" (default) → procesarAsignacion
@@ -10,6 +10,18 @@
 //    · "exportSheet"        → exportarResultadoASheet
 //    · "exportSheetFromFile"→ exportarSheetDesdeArchivo (CSV/Excel local)
 //    · "adminData" / "adminAddUser" / "adminRemoveUser" → panel admin
+//
+//  v18.0: sin Leads duplicados.
+//    · importStart guarda en caché una respuesta chica (antes, con más de 100 KB, cache.put
+//      tronaba DESPUÉS de crear los jobs y un reintento duplicaba). Una vez que se intentó
+//      cerrar un job, la marca de idempotencia nunca se borra.
+//    · Si el cierre falla o truena, se pregunta a Salesforce: solo es caído un job que sigue
+//      Open. Uno que cerró aunque la respuesta se perdiera sigue vivo (sus filas nunca vuelven
+//      como "no enviadas"). Un job que quedó Open más de 10 min se aborta al consultarlo.
+//    · Reintento por bloqueo: bajo LockService con marca "creando", una llave por job original
+//      (basta uno para encontrarlo) y el bloqueo se detecta aunque venga envuelto en otro error.
+//    · La auditoría guarda los jobs vivos (vivos=); recuperar un lote salta los abortados y
+//      solo lee las filas del import. Los Job ID de 15 y 18 caracteres son el mismo.
 //
 //  v17.2: jobs de 50 filas (10 a la vez) cortados en bloques parejos, como Batch size
 //    y Threads de Salesforce Inspector. Las filas se ordenan por OwnerId, así que cada
@@ -62,7 +74,7 @@
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════════════
 var SF_API_VERSION          = "v62.0";  // ← Versión de la API de Salesforce (un solo lugar para subirla)
-var VERSION_BACKEND         = "17.2";
+var VERSION_BACKEND         = "18.0";
 var GOOGLE_CLIENT_ID        = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 var ALLOWED_DOMAIN          = "docplanner.com";
 
@@ -1305,17 +1317,18 @@ function repartirEnJobs(headers, rows, filasPorJob, jobsALaVez) {
   var porJob = filasPorJob || FILAS_POR_JOB, maxJobs = jobsALaVez || MAX_JOBS_PARALELO;
   var numJobs = Math.max(1, Math.min(maxJobs, Math.ceil(n / porJob)));
   var iOwner = headers.indexOf("OwnerId");
-  var orden = rows;
+  // v18: cada parte lleva también los índices originales de sus filas (idx)
+  var orden = rows.map(function(r, i) { return { r: r, i: i }; });
   if (iOwner >= 0) {
     var llave = function(r) { return String((r && r[iOwner]) || "").trim().slice(0, 15); };
-    orden = rows.map(function(r, i) { return { r: r, i: i, k: llave(r) }; })
-      .sort(function(x, y) { return x.k < y.k ? -1 : x.k > y.k ? 1 : x.i - y.i; })
-      .map(function(o) { return o.r; });
+    orden.forEach(function(o) { o.k = llave(o.r); });
+    orden.sort(function(x, y) { return x.k < y.k ? -1 : x.k > y.k ? 1 : x.i - y.i; });
   }
   var partes = [], base = Math.floor(n / numJobs), resto = n % numJobs, k = 0;
   for (var j = 0; j < numJobs; j++) {
     var tam = base + (j < resto ? 1 : 0);
-    partes.push({ rows: orden.slice(k, k + tam) });
+    var trozo = orden.slice(k, k + tam);
+    partes.push({ rows: trozo.map(function(o) { return o.r; }), idx: trozo.map(function(o) { return o.i; }) });
     k += tam;
   }
   return partes;
@@ -1388,10 +1401,11 @@ function iniciarImportBulk(params) {
       if (previo) {
         var p = JSON.parse(previo);
         if (p.estado === "creando") {
-          throw new Error("Este import ya se está creando. Espera unos segundos y revisa el log o usa Recuperar.");
+          var ec = new Error("Este import ya se está creando. Espera unos segundos y revisa el log o usa Recuperar.");
+          ec.yaAuditado = true;
+          throw ec;
         }
-        p.repetido = true;
-        return p;
+        return respuestaRepetida(p, rows);
       }
       cache.put(idemKey, JSON.stringify({ estado: "creando" }), 600);
     } finally {
@@ -1399,22 +1413,100 @@ function iniciarImportBulk(params) {
     }
   }
 
+  // v18: una vez que se intentó cerrar un job, la marca de idempotencia NUNCA se borra:
+  // ese job pudo crear Leads, y un reintento con el mismo clientRequestId los duplicaría.
+  var avance = { cierreIntentado: false, loteId: "", jobIds: [] };
+  var resultado;
   try {
-    var resultado = crearJobsEnParalelo(sid, instanceUrl, object, operation, externalId, headers, rows, userEmail, clientRequestId, reparto);
-    if (idemKey) cache.put(idemKey, JSON.stringify(resultado), IMPORT_IDEMP_SEG);
-    return resultado;
+    resultado = crearJobsEnParalelo(sid, instanceUrl, object, operation, externalId, headers, rows, userEmail, clientRequestId, reparto, avance);
   } catch (err) {
-    if (idemKey) cache.remove(idemKey);  // todo se abortó: un reintento puede crear de nuevo
+    if (idemKey) {
+      if (err.sinLeads || !avance.cierreIntentado) {
+        try { cache.remove(idemKey); } catch (e) {}   // nada pudo procesarse: un reintento puede crear de nuevo
+      } else {
+        try {
+          cache.put(idemKey, JSON.stringify({ estado: "incierto", loteId: avance.loteId, jobIds: avance.jobIds }), IMPORT_IDEMP_SEG);
+        } catch (e) { Logger.log("[IDEMP] " + e.message); }
+      }
+    }
     throw err;
+  }
+  if (idemKey) guardarIdempotencia(cache, idemKey, resultado);
+  return resultado;
+}
+
+// v18: el caché guarda una versión chica (sin las filas no enviadas, solo sus índices).
+// Antes se guardaba todo: con más de 100 KB, cache.put tronaba DESPUÉS de crear los jobs,
+// se borraba la marca y un reintento duplicaba los Leads. Nunca truena.
+function guardarIdempotencia(cache, idemKey, r) {
+  var chica = {
+    loteId: r.loteId, jobIds: r.jobIds, jobId: r.jobId, jobState: r.jobState, total: r.total,
+    totalRecibidas: r.totalRecibidas, jobs: r.jobs, object: r.object, operation: r.operation,
+    errorNoEnviadas: r.errorNoEnviadas, idxNoEnviadas: r.idxNoEnviadas || []
+  };
+  var texto = JSON.stringify(chica);
+  if (texto.length > 90000) {
+    chica.noEnviadasSinDetalle = chica.idxNoEnviadas.length;
+    chica.idxNoEnviadas = [];
+    texto = JSON.stringify(chica);
+  }
+  try {
+    cache.put(idemKey, texto, IMPORT_IDEMP_SEG);
+  } catch (e) {
+    Logger.log("[IDEMP] " + e.message);
+    try { cache.put(idemKey, JSON.stringify({ loteId: r.loteId, jobIds: r.jobIds, jobId: r.jobId, total: r.total }), IMPORT_IDEMP_SEG); }
+    catch (e2) { Logger.log("[IDEMP] " + e2.message); }
   }
 }
 
-function crearJobsEnParalelo(sid, instanceUrl, object, operation, externalId, headers, rows, userEmail, clientRequestId, reparto) {
+// La respuesta de un clientRequestId repetido: los mismos jobs, y las filas no enviadas
+// rearmadas con sus índices (el reintento manda las mismas filas en el mismo orden).
+function respuestaRepetida(p, rows) {
+  if (p.estado === "incierto") {
+    var e = new Error("Este import ya se mandó a Salesforce" + (p.loteId ? " (" + p.loteId + ")" : "") +
+      " pero no se pudo confirmar cómo terminó. No lo mandes otra vez: usa 🔍 Recuperar con " +
+      (p.loteId || (p.jobIds || [])[0] || "su Lote") + ".");
+    e.importIncierto = true;
+    e.yaAuditado = true;
+    throw e;
+  }
+  if (p.idxNoEnviadas) {
+    p.filasNoEnviadas = p.idxNoEnviadas.map(function(i) { return rows[i]; }).filter(Boolean);
+    delete p.idxNoEnviadas;
+  } else if (!p.filasNoEnviadas) {
+    p.filasNoEnviadas = [];
+  }
+  if (p.noEnviadasSinDetalle) {
+    p.errorNoEnviadas = (p.errorNoEnviadas || "") + " (" + p.noEnviadasSinDetalle + " fila(s) no se enviaron; revisa el lote " + p.loteId + ")";
+  }
+  p.repetido = true;
+  return p;
+}
+
+// Normaliza un ID de Salesforce a 18 caracteres (los de 15 se completan con su sufijo).
+function id18(id) {
+  id = String(id || "").trim();
+  if (id.length !== 15) return id;
+  var mapa = "ABCDEFGHIJKLMNOPQRSTUVWXYZ012345", suf = "";
+  for (var i = 0; i < 3; i++) {
+    var f = 0;
+    for (var j = 0; j < 5; j++) {
+      var c = id.charAt(i * 5 + j);
+      if (c >= "A" && c <= "Z") f += 1 << j;
+    }
+    suf += mapa.charAt(f);
+  }
+  return id + suf;
+}
+
+function crearJobsEnParalelo(sid, instanceUrl, object, operation, externalId, headers, rows, userEmail, clientRequestId, reparto, avance) {
+  avance = avance || {};
   var base = instanceUrl + "/services/data/" + SF_API_VERSION;
   // Compatibilidad: el frontend v16 (sin clientRequestId) solo sigue un jobId, así que
   // para él se crea un solo job, como antes. El v17 manda clientRequestId y recibe N jobs.
   reparto = reparto || {};
-  var partes = clientRequestId ? repartirEnJobs(headers, rows, reparto.filasPorJob, reparto.jobsALaVez) : [{ rows: rows }];
+  var partes = clientRequestId ? repartirEnJobs(headers, rows, reparto.filasPorJob, reparto.jobsALaVez)
+                               : [{ rows: rows, idx: rows.map(function(r, i) { return i; }) }];
 
   var jobBody = { object: object, operation: operation, contentType: "CSV", lineEnding: "LF" };
   if (operation === "upsert" && externalId) jobBody.externalIdFieldName = externalId;
@@ -1434,69 +1526,103 @@ function crearJobsEnParalelo(sid, instanceUrl, object, operation, externalId, he
   });
   if (erroresCrear.length) {
     abortarJobs(base, sid, jobIds);
-    if (sesionVencida) throw errorSesionSf("al crear el job");
-    throw new Error("Error creando Job: " + erroresCrear[0]);
+    var ec = sesionVencida ? errorSesionSf("al crear el job") : new Error("Error creando Job: " + erroresCrear[0]);
+    ec.sinLeads = true;   // ningún job recibió datos
+    throw ec;
   }
 
   var loteId = nuevoLoteId();
+  avance.loteId = loteId; avance.jobIds = jobIds.slice();
   // ── AUDITORÍA AL NACER ── aunque todo lo demás falle, los jobIds quedan registrados.
   registrarAuditoria(userEmail, "import", "iniciado",
     "jobId=" + jobIds[0] + "; lote=" + loteId + "; jobIds=" + jobIds.join(",") +
     "; object=" + object + "; op=" + operation + "; rows=" + rows.length +
     (clientRequestId ? "; req=" + clientRequestId : ""));
 
-  var vivos = partes.map(function(p, i) { return i; });   // índices de jobs que siguen en pie
+  var todos = partes.map(function(p, i) { return i; });
   var motivoCaida = {};
-  var marcarCaidos = function(resps, paso) {
-    resps.forEach(function(r, k) {
-      var i = vivos[k];
-      if (r.code === 401) sesionVencida = true;
-      if (!ok2xx(r.code)) motivoCaida[i] = paso + " (HTTP " + r.code + "): " + String(r.text).slice(0, 200);
-    });
-    vivos = vivos.filter(function(i) { return !motivoCaida[i]; });
-  };
 
+  // ── RONDA 2: subir el CSV de cada job ──
+  // Un job sin cerrar nunca se procesa: si la subida falla o truena, sus filas no se enviaron.
+  var subidos = [];
   try {
-    // ── RONDA 2: subir el CSV de cada job ──
-    marcarCaidos(sfFetchAll(vivos.map(function(i) {
+    var r2 = sfFetchAll(todos.map(function(i) {
       return { url: base + "/jobs/ingest/" + jobIds[i] + "/batches", method: "put",
                headers: { "Authorization": "Bearer " + sid, "Content-Type": "text/csv", "Accept": "application/json" },
                contentType: "text/csv", payload: construirCsv(headers, partes[i].rows) };
-    })), "Error subiendo CSV");
+    }));
+    r2.forEach(function(r, i) {
+      if (r.code === 401) sesionVencida = true;
+      if (ok2xx(r.code)) subidos.push(i);
+      else motivoCaida[i] = "Error subiendo CSV (HTTP " + r.code + "): " + String(r.text).slice(0, 200);
+    });
+  } catch (err) {
+    todos.forEach(function(i) { motivoCaida[i] = "Excepción subiendo el CSV: " + err.message; });
+    subidos = [];
+  }
 
-    // ── RONDA 3: cerrar los jobs (UploadComplete → Salesforce empieza a procesar) ──
-    var cerrar = function(indices) {
-      return sfFetchAll(indices.map(function(i) {
+  // ── RONDA 3: cerrar los jobs (UploadComplete → Salesforce empieza a procesar) ──
+  // v18: si el cierre falla o truena, se pregunta a Salesforce. Solo es caído un job que
+  // SIGUE Open (nunca se procesará). Uno que sí cerró aunque la respuesta se perdiera, o
+  // cuyo estado no se pudo saber, sigue vivo: sus filas NUNCA se devuelven como no enviadas
+  // (un Retry las duplicaría).
+  avance.cierreIntentado = subidos.length > 0;
+  var cerrados = {}, motivoCierre = {};
+  var intentarCerrar = function(indices) {
+    if (!indices.length) return;
+    try {
+      var rc = sfFetchAll(indices.map(function(i) {
         return { url: base + "/jobs/ingest/" + jobIds[i], method: "patch", headers: cabecerasSfJson(sid),
                  contentType: "application/json", payload: JSON.stringify({ state: "UploadComplete" }) };
       }));
-    };
-    var antes = vivos.slice();
-    var rc = cerrar(vivos);
-    var pendientes = vivos.filter(function(i, k) { return !ok2xx(rc[k].code); });
-    if (pendientes.length && !rc.some(function(r) { return r.code === 401; })) {
-      // Un segundo intento solo para los que no cerraron
-      var rc2 = cerrar(pendientes);
-      pendientes = pendientes.filter(function(i, k) {
-        if (!ok2xx(rc2[k].code)) { motivoCaida[i] = "Error cerrando Job (HTTP " + rc2[k].code + "): " + String(rc2[k].text).slice(0, 200); return true; }
-        return false;
+      rc.forEach(function(r, k) {
+        var i = indices[k];
+        if (ok2xx(r.code)) cerrados[i] = true;
+        else {
+          if (r.code === 401) sesionVencida = true;
+          motivoCierre[i] = "Error cerrando Job (HTTP " + r.code + "): " + String(r.text).slice(0, 200);
+        }
       });
-    } else {
-      pendientes.forEach(function(i) {
-        var k = antes.indexOf(i);
-        if (rc[k].code === 401) sesionVencida = true;
-        motivoCaida[i] = "Error cerrando Job (HTTP " + rc[k].code + "): " + String(rc[k].text).slice(0, 200);
-      });
+    } catch (err) {
+      indices.forEach(function(i) { if (!cerrados[i]) motivoCierre[i] = "Excepción cerrando Job: " + err.message; });
     }
-    vivos = vivos.filter(function(i) { return !motivoCaida[i]; });
-  } catch (err) {
-    // Excepción de red a mitad: ningún job quedó a medias sin rastro
-    partes.forEach(function(p, i) { if (vivos.indexOf(i) !== -1 && !motivoCaida[i]) motivoCaida[i] = "Excepción: " + err.message; });
-    vivos = [];
-  }
+  };
+  var estadoDe = function(indices) {
+    var est = {};
+    if (!indices.length) return est;
+    try {
+      var rg = sfFetchAll(indices.map(function(i) {
+        return { url: base + "/jobs/ingest/" + jobIds[i], method: "get", headers: { "Authorization": "Bearer " + sid, "Accept": "application/json" } };
+      }));
+      rg.forEach(function(r, k) {
+        if (r.code === 200) { try { est[indices[k]] = JSON.parse(r.text).state || ""; } catch (e) {} }
+      });
+    } catch (err) { Logger.log("[CIERRE] " + err.message); }
+    return est;
+  };
 
-  // Los jobs que no llegaron a cerrar se abortan: sus filas NO se enviaron.
-  var caidos = partes.map(function(p, i) { return i; }).filter(function(i) { return vivos.indexOf(i) === -1; });
+  intentarCerrar(subidos);
+  var dudosos = subidos.filter(function(i) { return !cerrados[i]; });
+  if (dudosos.length) {
+    var est = estadoDe(dudosos);
+    var abiertos = dudosos.filter(function(i) { return est[i] === "Open"; });
+    if (abiertos.length && !sesionVencida) {
+      intentarCerrar(abiertos);   // un segundo intento solo para los que de verdad siguen Open
+      var siguen = abiertos.filter(function(i) { return !cerrados[i]; });
+      var est2 = estadoDe(siguen);
+      siguen.forEach(function(i) { est[i] = est2[i] || ""; });
+    }
+    dudosos.forEach(function(i) {
+      if (cerrados[i]) return;
+      var sigueAbierto = est[i] === "Open" || (!est[i] && /HTTP 401/.test(motivoCierre[i] || ""));
+      if (sigueAbierto) motivoCaida[i] = motivoCierre[i] || "El job no se pudo cerrar.";
+      else if (!est[i]) Logger.log("[CIERRE] Estado desconocido del job " + jobIds[i] + ": se sigue como vivo.");
+    });
+  }
+  var vivos = subidos.filter(function(i) { return !motivoCaida[i]; });
+
+  // Los caídos siguen Open: se abortan (si el abort falla, igual nunca se procesan).
+  var caidos = todos.filter(function(i) { return vivos.indexOf(i) === -1; });
   if (caidos.length) abortarJobs(base, sid, caidos.map(function(i) { return jobIds[i]; }));
 
   if (!vivos.length) {
@@ -1505,15 +1631,21 @@ function crearJobsEnParalelo(sid, instanceUrl, object, operation, externalId, he
       "jobId=" + jobIds[0] + "; lote=" + loteId + "; " + String(primerMotivo).slice(0, 250));
     var e = sesionVencida ? errorSesionSf("al subir el import") : new Error(primerMotivo + " (los jobs se abortaron: no se creó ningún registro)");
     e.yaAuditado = true;
+    e.sinLeads = true;
     throw e;
   }
 
   var jobIdsVivos = vivos.map(function(i) { return jobIds[i]; });
-  var filasNoEnviadas = [];
-  caidos.forEach(function(i) { filasNoEnviadas = filasNoEnviadas.concat(partes[i].rows); });
+  var filasNoEnviadas = [], idxNoEnviadas = [];
+  caidos.forEach(function(i) {
+    filasNoEnviadas = filasNoEnviadas.concat(partes[i].rows);
+    idxNoEnviadas = idxNoEnviadas.concat(partes[i].idx || []);
+  });
   if (caidos.length) {
+    // v18: con "vivos=", recuperar el lote salta los jobs abortados
     registrarAuditoria(userEmail, "import", "jobs_abortados",
       "lote=" + loteId + "; jobIds=" + caidos.map(function(i) { return jobIds[i]; }).join(",") +
+      "; vivos=" + jobIdsVivos.join(",") +
       "; rows=" + filasNoEnviadas.length + "; " + String(motivoCaida[caidos[0]]).slice(0, 200));
   }
 
@@ -1528,6 +1660,7 @@ function crearJobsEnParalelo(sid, instanceUrl, object, operation, externalId, he
     object: object,
     operation: operation,
     filasNoEnviadas: filasNoEnviadas,
+    idxNoEnviadas: idxNoEnviadas,      // v18: para rearmarlas si el mismo clientRequestId se repite
     errorNoEnviadas: caidos.length ? String(motivoCaida[caidos[0]]) : ""
   };
   try {
@@ -1553,13 +1686,17 @@ function resolverJobIds(params) {
   var vistos = {}, limpios = [];
   ids.forEach(function(id) {
     if (!JOB_ID_REGEX.test(id)) throw new Error("El Job ID no tiene un formato válido. Debe empezar con '750' (ej. 750Tt00000gk1XBIAY).");
+    id = id18(id);   // v18: el mismo job en 15 o 18 caracteres es uno solo
     if (!vistos[id]) { vistos[id] = true; limpios.push(id); }
   });
   if (limpios.length > MAX_JOBS_PARALELO * 2) throw new Error("Demasiados Job IDs en una consulta.");
   return limpios;
 }
 
-// Los jobs de un lote: primero el caché (6 h), si no, la fila "iniciado" de la auditoría.
+// Los jobs de un lote: primero el caché (6 h), si no, la auditoría.
+// v18: solo filas del import ("iniciado" y "jobs_abortados"): la de una recuperación puede
+// traer también el job de reintento por bloqueo. Los jobs abortados al iniciar se saltan
+// ("vivos=" en v18; en v17, restando los "jobIds=" de jobs_abortados).
 function buscarJobsDeLote(loteId) {
   try {
     var c = CacheService.getScriptCache().get("lote_" + loteId);
@@ -1567,16 +1704,28 @@ function buscarJobsDeLote(loteId) {
   } catch (e) {}
   if (!AUDIT_SHEET_ID) return [];
   try {
-    var sh = SpreadsheetApp.openById(AUDIT_SHEET_ID).getSheets()[0];
+    var sh = hojaAuditoria();
     var last = sh.getLastRow();
     if (last < 2) return [];
     var desde = Math.max(2, last - 5000);
-    var vals = sh.getRange(desde, 5, last - desde + 1, 1).getValues();
+    var vals = sh.getRange(desde, 3, last - desde + 1, 3).getValues();   // Operación, Estado, Detalles
+    var lista = function(det, campo) {
+      var m = det.match(new RegExp(campo + "=([0-9A-Za-z,]+)"));
+      return m ? m[1].split(",").filter(function(x) { return JOB_ID_REGEX.test(x); }) : null;
+    };
+    var abortados = [];
     for (var i = vals.length - 1; i >= 0; i--) {
-      var det = String(vals[i][0] || "");
-      if (det.indexOf("lote=" + loteId + ";") === -1) continue;
-      var m = det.match(/jobIds=([0-9A-Za-z,]+)/);
-      if (m) return m[1].split(",").filter(function(x) { return JOB_ID_REGEX.test(x); });
+      var det = String(vals[i][2] || "");
+      if (String(vals[i][0]) !== "import" || det.indexOf("lote=" + loteId + ";") === -1) continue;
+      var estado = String(vals[i][1]);
+      if (estado === "jobs_abortados") {
+        var vivos = lista(det, "vivos");
+        if (vivos) return vivos;
+        abortados = abortados.concat(lista(det, "jobIds") || []);
+      } else if (estado === "iniciado") {
+        var todos = lista(det, "jobIds") || [];
+        return todos.filter(function(id) { return abortados.indexOf(id) === -1; });
+      }
     }
   } catch (e) {
     Logger.log("[LOTE] " + e.message);
@@ -1584,7 +1733,22 @@ function buscarJobsDeLote(loteId) {
   return [];
 }
 
+// v18: la hoja del log de auditoría es la primera que NO es "Usuarios" (si alguien mueve
+// las pestañas, el log no se mezcla con la whitelist).
+function hojaAuditoria() {
+  var hojas = SpreadsheetApp.openById(AUDIT_SHEET_ID).getSheets();
+  for (var i = 0; i < hojas.length; i++) if (hojas[i].getName() !== USUARIOS_SHEET_NAME) return hojas[i];
+  return hojas[0];
+}
+
 var ESTADOS_FINALES = { JobComplete: 1, Failed: 1, Aborted: 1 };
+var JOB_ABIERTO_MAX_MS = 10 * 60000;   // v18: un job Open más viejo que esto se aborta al consultarlo
+
+// Milisegundos desde que se creó un job ("2026-11-12T21:24:36.000+0000"). 0 si no se puede leer.
+function edadJobMs(createdDate) {
+  var t = Date.parse(String(createdDate || "").replace(/([+-]\d{2})(\d{2})$/, "$1:$2"));
+  return isNaN(t) ? 0 : Date.now() - t;
+}
 // Estados de auditoría que cierran un import (para no listarlo como huérfano)
 var ESTADOS_CIERRE_AUDIT = { success: 1, error: 1, job_failed: 1, error_resultados: 1, error_al_iniciar: 1 };
 
@@ -1612,6 +1776,15 @@ function consultarEstadoJob(params) {
     if (r.code !== 200) throw new Error("Salesforce devolvió HTTP " + r.code + " al consultar el Job " + ids[i] + ".");
     var d = JSON.parse(r.text);
     var state = d.state || "Unknown";
+    // v18: un job que sigue Open nunca se va a procesar (nadie lo cerró: p. ej. su cierre se
+    // perdió y no se pudo confirmar). Pasado un rato se aborta, así queda final y sus filas
+    // salen como no procesadas para reintentarlas, en vez de esperar para siempre.
+    if (state === "Open" && edadJobMs(d.createdDate) > JOB_ABIERTO_MAX_MS) {
+      if (abortarJobs(base, sid, [ids[i]]).length) {
+        state = "Aborted";
+        d.errorMessage = "El job quedó abierto sin procesarse y se abortó: sus filas no se crearon. Reinténtalas.";
+      }
+    }
     processed += d.numberRecordsProcessed || 0;
     failed += d.numberRecordsFailed || 0;
     retries += d.retries || 0;
@@ -1657,20 +1830,24 @@ function consultarEstadoJob(params) {
 // ══════════════════════════════════════════════════════════════════════════
 function recuperarResultadoJob(params) {
   var sid = params.sid, instanceUrl = params.instanceUrl;
-  var ids = resolverJobIds(params);
+  var pedidos = resolverJobIds(params);
   var base = instanceUrl + "/services/data/" + SF_API_VERSION;
 
   // Si estos jobs ya tuvieron su reintento por bloqueo, sus filas se resolvieron en
   // otro job. En una recuperación manual se juntan aquí: si no, esas filas saldrían
   // como fallidas y un Retry las crearía dos veces.
-  var jobLock = (params.reintentarLock === true) ? "" : buscarReintentoLock(ids);
-  var todos = jobLock && ids.indexOf(jobLock) === -1 ? ids.concat([jobLock]) : ids;
+  // v18: basta con que UNO de los jobs pedidos tenga reintento, y si el job de reintento
+  // viene entre los pedidos (p. ej. de una fila de auditoría), se trata como tal.
+  var jobLock = (params.reintentarLock === true) ? "" : buscarReintentoLock(pedidos);
+  var ids = pedidos.filter(function(id) { return id !== jobLock; });
+  if (!ids.length) { ids = pedidos; jobLock = ""; }
+  var todos = jobLock ? ids.concat([jobLock]) : ids;
   var est = consultarEstadoJob({ sid: sid, instanceUrl: instanceUrl, jobIds: todos, loteId: params.loteId || "" });
 
   var salida = est;
   salida.successCsv = ""; salida.failedCsv = ""; salida.unprocessedCsv = "";
   salida.resultsError = ""; salida.reintentoLock = null;
-  salida.incluyeReintentoLock = !!(jobLock && todos.length > ids.length);
+  salida.incluyeReintentoLock = !!jobLock;
   salida.stillProcessing = !est.terminado;
   if (salida.stillProcessing) return salida;
 
@@ -1709,6 +1886,12 @@ function recuperarResultadoJob(params) {
       if (r.jobId) {
         salida.failedCsv = lock.restoCsv;
         salida.reintentoLock = { jobId: r.jobId, filas: lock.rows.length };
+      } else if (r.enCurso) {
+        // v18: otra petición lo está lanzando. Esas filas NO salen como fallidas (un Retry
+        // las duplicaría): el frontend las marca "En proceso" y se juntan al recuperar el lote.
+        salida.failedCsv = lock.restoCsv;
+        salida.reintentoLockEnCurso = { filas: lock.rows.length };
+        salida.reintentoLockError = r.error;
       } else {
         salida.reintentoLockError = r.error;
       }
@@ -1717,26 +1900,37 @@ function recuperarResultadoJob(params) {
   return salida;
 }
 
+// v18: una llave por cada job original (antes una por el set exacto de jobIds: recuperar
+// solo parte del lote no encontraba el reintento y sus filas salían como fallidas).
+function llaveReintentoLock(id) { return "lockr_" + id18(id); }
+
 // El job de reintento por bloqueo de estos jobs, si existe: caché (6 h) o la fila
-// "reintentoLock · iniciado" de la auditoría (de=<jobIds originales>).
+// "reintentoLock · iniciado" de la auditoría (de=<jobIds originales>). Basta con uno.
 function buscarReintentoLock(ids) {
-  var ordenados = ids.slice().sort().join(",");
+  var cache = CacheService.getScriptCache();
+  for (var i = 0; i < ids.length; i++) {
+    try {
+      var c = cache.get(llaveReintentoLock(ids[i]));
+      if (c && c !== "creando") return c;
+    } catch (e) {}
+  }
   try {
-    var c = CacheService.getScriptCache().get("lock_" + hashTexto(ordenados));
-    if (c) return c;
+    var v17 = cache.get("lock_" + hashTexto(ids.slice().sort().join(",")));   // llave de v17
+    if (v17) return v17;
   } catch (e) {}
   if (!AUDIT_SHEET_ID) return "";
+  var norm = ids.map(id18);
   try {
-    var sh = SpreadsheetApp.openById(AUDIT_SHEET_ID).getSheets()[0];
+    var sh = hojaAuditoria();
     var last = sh.getLastRow();
     if (last < 2) return "";
     var desde = Math.max(2, last - 5000);
     var vals = sh.getRange(desde, 3, last - desde + 1, 3).getValues();   // Operación, Estado, Detalles
-    for (var i = vals.length - 1; i >= 0; i--) {
-      if (String(vals[i][0]) !== "reintentoLock" || String(vals[i][1]) !== "iniciado") continue;
-      var det = String(vals[i][2] || "");
+    for (var k = vals.length - 1; k >= 0; k--) {
+      if (String(vals[k][0]) !== "reintentoLock" || String(vals[k][1]) !== "iniciado") continue;
+      var det = String(vals[k][2] || "");
       var de = det.match(/de=([0-9A-Za-z,]+)/), jm = det.match(/jobId=(750[a-zA-Z0-9]+)/);
-      if (de && jm && de[1].split(",").sort().join(",") === ordenados) return jm[1];
+      if (de && jm && de[1].split(",").some(function(x) { return norm.indexOf(id18(x)) !== -1; })) return id18(jm[1]);
     }
   } catch (e) {
     Logger.log("[LOCK LOOKUP] " + e.message);
@@ -1746,6 +1940,8 @@ function buscarReintentoLock(ids) {
 
 // Separa las filas fallidas por UNABLE_TO_LOCK_ROW. Devuelve sus columnas
 // originales (sin sf__Id ni sf__Error) y el CSV de fallidas sin ellas.
+// v18: el bloqueo puede venir envuelto en otro error (p. ej. CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY
+// de un trigger): se busca en todo el texto, no solo al inicio.
 function separarFilasLock(failedCsv) {
   var m = parsearCsv(failedCsv);
   if (m.length < 2) return { headers: [], rows: [], restoCsv: failedCsv };
@@ -1755,7 +1951,7 @@ function separarFilasLock(failedCsv) {
   var headersOrig = hdr.filter(function(h, i) { return !quitar[i]; });
   var conLock = [], resto = [];
   for (var i = 1; i < m.length; i++) {
-    var esLock = iErr >= 0 && String(m[i][iErr] || "").indexOf(ERROR_LOCK) === 0;
+    var esLock = iErr >= 0 && String(m[i][iErr] || "").indexOf(ERROR_LOCK) !== -1;
     if (esLock) conLock.push(m[i].filter(function(v, j) { return !quitar[j]; }));
     else resto.push(m[i]);
   }
@@ -1766,11 +1962,24 @@ function separarFilasLock(failedCsv) {
 
 // Un solo job extra con las filas bloqueadas. Idempotente: si ya se lanzó para
 // estos jobs, devuelve el mismo jobId (nunca se reintentan dos veces).
+// v18: bajo LockService y con una marca "creando" por job original, así dos peticiones a
+// la vez (dos pestañas, o un reintento de la descarga) no lanzan dos reintentos.
 function lanzarReintentoLock(sid, instanceUrl, est, ids, lock, userEmail, loteId) {
   var cache = CacheService.getScriptCache();
-  var key = "lock_" + hashTexto(ids.slice().sort().join(","));
-  var previo = cache.get(key);
-  if (previo) return { jobId: previo };
+  var candado = LockService.getScriptLock();
+  var ocupado = { error: "El reintento por bloqueo de este import ya se está lanzando. Recupera el lote en unos minutos.", enCurso: true };
+  if (!candado.tryLock(10000)) return ocupado;
+  try {
+    var previo = buscarReintentoLock(ids);
+    if (previo) return { jobId: previo };
+    for (var i = 0; i < ids.length; i++) {
+      if (cache.get(llaveReintentoLock(ids[i])) === "creando") return ocupado;
+    }
+    ids.forEach(function(id) { try { cache.put(llaveReintentoLock(id), "creando", 600); } catch (e) {} });
+  } finally {
+    candado.releaseLock();
+  }
+  var quitarMarca = function() { ids.forEach(function(id) { try { cache.remove(llaveReintentoLock(id)); } catch (e) {} }); };
 
   var base = instanceUrl + "/services/data/" + SF_API_VERSION;
   var operation = OPERACIONES_IMPORT.indexOf(est.operation) !== -1 ? est.operation : "insert";
@@ -1780,22 +1989,37 @@ function lanzarReintentoLock(sid, instanceUrl, est, ids, lock, userEmail, loteId
   try {
     var rc = UrlFetchApp.fetch(base + "/jobs/ingest", { method: "post", headers: cabecerasSfJson(sid), contentType: "application/json",
       payload: JSON.stringify(jobBody), muteHttpExceptions: true });
-    if (!ok2xx(rc.getResponseCode())) return { error: "No se pudo crear el job de reintento (HTTP " + rc.getResponseCode() + ")." };
+    if (!ok2xx(rc.getResponseCode())) throw new Error("no se pudo crear el job (HTTP " + rc.getResponseCode() + ")");
     jobId = JSON.parse(rc.getContentText()).id;
     var ru = UrlFetchApp.fetch(base + "/jobs/ingest/" + jobId + "/batches", { method: "put",
       headers: { "Authorization": "Bearer " + sid, "Content-Type": "text/csv", "Accept": "application/json" },
       contentType: "text/csv", payload: construirCsv(lock.headers, lock.rows), muteHttpExceptions: true });
     if (!ok2xx(ru.getResponseCode())) throw new Error("subida HTTP " + ru.getResponseCode());
-    var rz = UrlFetchApp.fetch(base + "/jobs/ingest/" + jobId, { method: "patch", headers: cabecerasSfJson(sid), contentType: "application/json",
-      payload: JSON.stringify({ state: "UploadComplete" }), muteHttpExceptions: true });
-    if (!ok2xx(rz.getResponseCode())) throw new Error("cierre HTTP " + rz.getResponseCode());
+    var motivo = "";
+    try {
+      var rz = UrlFetchApp.fetch(base + "/jobs/ingest/" + jobId, { method: "patch", headers: cabecerasSfJson(sid), contentType: "application/json",
+        payload: JSON.stringify({ state: "UploadComplete" }), muteHttpExceptions: true });
+      if (!ok2xx(rz.getResponseCode())) motivo = "cierre HTTP " + rz.getResponseCode();
+    } catch (ez) { motivo = "cierre: " + ez.message; }
+    if (motivo) {
+      // ¿Cerró aunque la respuesta falló? Solo si sigue Open se da por no lanzado.
+      var st = "";
+      try {
+        var rg = UrlFetchApp.fetch(base + "/jobs/ingest/" + jobId, { method: "get", headers: { "Authorization": "Bearer " + sid, "Accept": "application/json" }, muteHttpExceptions: true });
+        if (rg.getResponseCode() === 200) st = JSON.parse(rg.getContentText()).state || "";
+      } catch (eg) {}
+      if (st === "Open" || (!st && /HTTP 401/.test(motivo))) throw new Error(motivo);
+    }
   } catch (e) {
     if (jobId) abortarJobs(base, sid, [jobId]);
+    quitarMarca();
     return { error: "No se pudo lanzar el reintento por bloqueo: " + e.message };
   }
-  cache.put(key, jobId, IMPORT_IDEMP_SEG);
+  ids.forEach(function(id) {
+    try { cache.put(llaveReintentoLock(id), jobId, IMPORT_IDEMP_SEG); } catch (e) { Logger.log("[LOCK] " + e.message); }
+  });
   registrarAuditoria(userEmail, "reintentoLock", "iniciado",
-    "jobId=" + jobId + (loteId ? "; lote=" + loteId : "") + "; de=" + ids.join(",") + "; rows=" + lock.rows.length);
+    "jobId=" + jobId + (loteId ? "; lote=" + loteId : "") + "; de=" + ids.map(id18).join(",") + "; rows=" + lock.rows.length);
   return { jobId: jobId };
 }
 

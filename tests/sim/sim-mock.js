@@ -149,6 +149,30 @@
       doc5 && doc5.__Status === 'Succeeded' && importResultRows.filter(r => r.__Status === 'Failed').length === 2,
       doc5 ? doc5.__Status + ' · fallidas: ' + importResultRows.filter(r => r.__Status === 'Failed').length : 'no está');
 
+    // 4b. v18: el SID vence mientras Salesforce procesa → el lote queda pendiente. Un segundo
+    // clic en Importar no debe crear otro import, y al recuperar el lote la tabla se completa.
+    const iCp = PT_HEADERS.indexOf('Contact__c');
+    preTemplateRows = preTemplateRows.slice(0, 12).map((r, i) => { const n = [...r]; n[iCp] = '003SIMPEND' + String(i).padStart(5, '0'); return n; });
+    renderPreTemplate(PT_HEADERS, preTemplateRows);
+    bulk.opciones.excepcion = p => { if (p.paso === 'estado') { bulk.opciones.sesionVencida = true; bulk.opciones.excepcion = null; } return ''; };
+    await ejecutarImport();
+    const enProceso = importResultRows.filter(r => r.__Status === 'En proceso').length;
+    check('SID vencido a media espera: las filas quedan "En proceso" y el Retry no las toma',
+      enProceso === 12 && document.getElementById('retryBtn').disabled, enProceso + ' en proceso de ' + importResultRows.length);
+    bulk.opciones.sesionVencida = false;
+    const jobsAntes = bulk.jobs.length;
+    SIM.dialogos.length = 0;
+    await ejecutarImport();
+    check('Un segundo clic en Importar con el lote pendiente se bloquea (no crea jobs)',
+      bulk.jobs.length === jobsAntes && SIM.dialogos.some(d => /bloqueado/.test(d)), (bulk.jobs.length - jobsAntes) + ' jobs nuevos');
+    await ejecutarRecuperar();   // el aviso de bloqueo abrió Recuperar con el lote
+    const sinResultado = importResultRows.filter(r => r.__Status === 'En proceso').length;
+    check('Al recuperar el lote, sus filas toman su resultado y ya no queda pendiente',
+      sinResultado === 0 && importResultRows.length === 12 && typeof leerPendientes === 'function' && !leerPendientes().length,
+      sinResultado + ' en proceso · ' + (typeof leerPendientes === 'function' ? leerPendientes().length : '?') + ' pendientes');
+    check('Sin Leads duplicados en todo el recorrido', new Set(bulk.creados.map(c => c.fila.Contact__c)).size === bulk.creados.length,
+      bulk.creados.length + ' Leads');
+
     // 5. Todo pasó por doPost real: auditoría, y un token que Google no conoce se rechaza
     check('La auditoría registró el import y su lote (doPost real)',
       SIM.auditoria.some(f => f[2] === 'import' && f[3] === 'iniciado' && /lote=lote_/.test(f[4])), SIM.auditoria.length + ' filas de auditoría');

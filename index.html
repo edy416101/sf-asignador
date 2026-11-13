@@ -260,6 +260,7 @@
     table.res-import tr:hover td { background: var(--sf2); }
     .res-ok { color: var(--ok); font-weight: 600; }
     .res-err { color: var(--err); font-weight: 600; }
+    .res-pend { color: var(--warn); font-weight: 600; }
     .res-action { color: var(--accent); font-family: var(--mono); font-size: 9.5px; }
     .res-id { font-family: var(--mono); font-size: 9.5px; color: var(--muted); }
     .res-errors { color: var(--err); font-size: 9.5px; }
@@ -3310,6 +3311,8 @@ async function ejecutarImport() {
     ilog(`✓ ${rowsToSend.length} fila(s) revisadas, sin errores`, 'ok');
 
     const cfg = { action, object, extId, sfHeaders: [...sfHeaders], colIndexes: [...colIndexes], colNames: [...colNames] };
+    // v18: filas que ya van en un lote sin resultado no se mandan otra vez (se duplicarían)
+    if (bloquearSiHayPendiente(rowsToSend, cfg, 'Import')) return;
     const total = rowsToSend.length;
     btn.textContent = '⏳ Enviando al servidor…';
     ilog(`📤 Paso 3/3: Iniciando Bulk Import`, 'info');
@@ -3349,6 +3352,7 @@ const JOB_STORAGE_PREFIJO = 'catalyst_job_pendiente:';  // v17: una por usuario
 
 // Una petición que crea Leads: si se pierde la respuesta, se reintenta con el MISMO
 // clientRequestId y el backend devuelve los jobs que ya creó (nunca duplica).
+// v18: si el servidor dice que "ya se está creando", se espera más (hasta ~2 min).
 async function iniciarConReintento(payload) {
   for (let intento = 1; ; intento++) {
     try {
@@ -3356,11 +3360,128 @@ async function iniciarConReintento(payload) {
     } catch (e) {
       const enCreacion = /ya se está creando/.test(e.message);
       const deRed = !e.message || e instanceof TypeError || /^HTTP \d/.test(e.message);
-      if (intento >= 3 || !(deRed || enCreacion)) throw e;
-      ilog(`⚠ ${enCreacion ? 'El servidor aún está creando el import' : 'Sin respuesta al crear el import'}; reintento ${intento + 1}/3 con el mismo identificador (no duplica)…`, 'warn');
-      await dormir(5000);
+      const maximo = enCreacion ? 8 : 3;
+      if (intento >= maximo || !(deRed || enCreacion)) throw e;
+      ilog(`⚠ ${enCreacion ? 'El servidor aún está creando el import' : 'Sin respuesta al crear el import'}; reintento ${intento + 1}/${maximo} con el mismo identificador (no duplica)…`, 'warn');
+      await dormir(enCreacion ? 15000 : 5000);
     }
   }
+}
+
+// ── v18 · Sin Leads duplicados en el navegador ──
+// · El clientRequestId es el mismo mientras se manden las mismas filas y no haya un
+//   resultado final: volver a dar clic tras un error o un corte devuelve los jobs que ya
+//   existen, en vez de crear otros.
+// · Las filas que siguen en Salesforce sin resultado quedan "En proceso (lote …)": no se
+//   pueden reintentar, y un import nuevo con esas filas se bloquea hasta recuperarlas.
+const ESTADO_EN_PROCESO = 'En proceso';
+let reqPorFirma = { firma: '', id: '' };
+
+function hashTexto(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0).toString(36) + '_' + s.length.toString(36);
+}
+function firmaEnvio(cfg, rows) {
+  return hashTexto(JSON.stringify([cfg.object, cfg.action, cfg.extId, cfg.sfHeaders, rows]));
+}
+function requestIdPara(firma) {
+  if (reqPorFirma.firma !== firma) reqPorFirma = { firma, id: nuevoRequestId() };
+  return reqPorFirma.id;
+}
+function olvidarRequestId() { reqPorFirma = { firma: '', id: '' }; }
+
+// Llave de una fila enviada (arreglo en el orden de cfg.colNames). Igual que llaveFila().
+function llaveEnvio(vals) { return vals.map(v => String(v ?? '').trim()).join('\u0001'); }
+// Llave para cruzar con los pendientes: el Contact__c (15) si viene; si no, la fila entera.
+function llaveContacto(vals, cfg) {
+  const i = cfg.colNames.indexOf('Contact__c');
+  const c = i >= 0 ? String(vals[i] ?? '').trim().slice(0, 15) : '';
+  return c || ('fila:' + hashTexto(llaveEnvio(vals)));
+}
+
+// Filas enviadas que no salieron ni OK ni fallidas (siguen en Salesforce)
+function filasFaltantes(enviadas, okRows, failRows, cfg) {
+  const cuenta = new Map();
+  okRows.concat(failRows).forEach(r => { const k = llaveFila(r, cfg.colNames); cuenta.set(k, (cuenta.get(k) || 0) + 1); });
+  return enviadas.filter(vals => {
+    const k = llaveEnvio(vals);
+    const n = cuenta.get(k) || 0;
+    if (n > 0) { cuenta.set(k, n - 1); return false; }
+    return true;
+  });
+}
+function filaEnProceso(vals, cfg, ref) {
+  const row = {};
+  IMPORT_RESULT_HEADERS.forEach(h => { row[h] = ''; });
+  cfg.colNames.forEach((c, j) => { row[c] = vals[j] ?? ''; });
+  row.__Status = ESTADO_EN_PROCESO;
+  row.__Action = `En proceso (${ref})`;
+  row.__Errors = `Sigue en Salesforce sin resultado. Usa "🔍 Recuperar" con ${ref}; no la reintentes antes (se duplicaría).`;
+  row._ref = ref;
+  return row;
+}
+// Marca "En proceso" las filas Failed de la tabla que van en un lote sin resultado (Retry pendiente)
+function marcarEnProceso(filas, cfg, ref) {
+  const cuenta = new Map();
+  filas.forEach(v => { const k = llaveEnvio(v); cuenta.set(k, (cuenta.get(k) || 0) + 1); });
+  importResultRows = importResultRows.map(row => {
+    if (row.__Status !== 'Failed') return row;
+    const k = llaveFila(row, cfg.colNames);
+    const n = cuenta.get(k) || 0;
+    if (!n) return row;
+    cuenta.set(k, n - 1);
+    const p = filaEnProceso([], cfg, ref);
+    return { ...row, __Status: p.__Status, __Action: p.__Action, __Errors: p.__Errors, _ref: ref };
+  });
+}
+// Al recuperar un lote, sus filas "En proceso" toman su resultado (sin borrar el resto de la tabla).
+// Devuelve cuántas se actualizaron.
+function juntarRecuperado(okRows, failRows, refs, cfg) {
+  const porLlave = new Map();
+  const meter = (r, ok) => { const k = llaveFila(r, cfg.colNames); if (!porLlave.has(k)) porLlave.set(k, []); porLlave.get(k).push({ r, ok }); };
+  okRows.forEach(r => meter(r, true));
+  failRows.forEach(r => meter(r, false));
+  let n = 0;
+  importResultRows = importResultRows.map(row => {
+    if (row.__Status !== ESTADO_EN_PROCESO || !refs.includes(row._ref)) return row;
+    const cola = porLlave.get(llaveFila(row, cfg.colNames));
+    const x = cola && cola.shift();
+    if (!x) return row;
+    n++;
+    const { _ref, ...base } = row;
+    return x.ok
+      ? { ...base, __Status: 'Succeeded', __Id: x.r.__Id || '', __Action: `${x.r.__Action || 'Inserted'} (recuperado)`, __Errors: '' }
+      : { ...base, __Status: 'Failed', __Id: '', __Action: 'Failed (recuperado)', __Errors: x.r.__Errors || 'Unknown error' };
+  });
+  return n;
+}
+// Quita filas de una lista (multiconjunto por llave)
+function restarFilas(todas, quitar) {
+  const cuenta = new Map();
+  quitar.forEach(v => { const k = llaveEnvio(v); cuenta.set(k, (cuenta.get(k) || 0) + 1); });
+  return todas.filter(v => { const k = llaveEnvio(v); const n = cuenta.get(k) || 0; if (n) { cuenta.set(k, n - 1); return false; } return true; });
+}
+// Pendientes cuyas filas se cruzan con las que se van a mandar
+function pendientesQueChocan(rows, cfg) {
+  const llaves = new Set(rows.map(v => llaveContacto(v, cfg)));
+  return leerPendientes().filter(p => (p.llaves || []).some(k => llaves.has(k)));
+}
+// Si alguna fila ya va en un lote pendiente, no se manda otra vez: se ofrece recuperarlo.
+function bloquearSiHayPendiente(rows, cfg, que) {
+  const chocan = pendientesQueChocan(rows, cfg);
+  if (!chocan.length) return false;
+  const ref = refPendiente(chocan[0]);
+  const msg = `${que} bloqueado: algunas filas ya van en ${ref}, que sigue sin resultado en Salesforce. ` +
+    `Si las mandas otra vez se pueden crear Leads duplicados.`;
+  ilog(`⛔ ${msg}`, 'err');
+  setImportStatus(msg, 'err');
+  if (confirm(`⛔ ${msg}\n\nPrimero recupera ese lote con "🔍 Recuperar". ¿Abrirlo ahora?\n\n` +
+      `(Si estás seguro de que no se procesó, descarta el aviso de import pendiente y vuelve a intentar.)`)) {
+    ultimoJobIdRecuperable = ref;
+    abrirModalRecuperar();
+  }
+  return true;
 }
 
 // v17.2: "Filas por job" y "Jobs a la vez" (como Batch size y Threads de Inspector).
@@ -3386,63 +3507,103 @@ function leerOpcionesReparto() {
 async function correrImportBulk({ sid, cfg, rows, total, btn }) {
   const reparto = leerOpcionesReparto();
   if (reparto.error) throw new Error(reparto.error);
-  const inicio = await iniciarConReintento(Object.assign({
-    action: 'importStart', sid, instanceUrl: INSTANCE_URL,
-    object: cfg.object, operation: cfg.action, externalId: cfg.extId,
-    headers: cfg.sfHeaders, rows, clientRequestId: nuevoRequestId()
-  }, reparto));
+  const llavesDe = filas => filas.map(v => llaveContacto(v, cfg)).slice(0, 20000);
+  let inicio;
+  try {
+    inicio = await iniciarConReintento(Object.assign({
+      action: 'importStart', sid, instanceUrl: INSTANCE_URL,
+      object: cfg.object, operation: cfg.action, externalId: cfg.extId,
+      headers: cfg.sfHeaders, rows, clientRequestId: requestIdPara(firmaEnvio(cfg, rows))
+    }, reparto));
+  } catch (e) {
+    // v18: el backend sabe que este import ya se mandó, pero no cómo terminó
+    const lote = /ya se mandó/.test(e.message) ? ((e.message.match(/lote_[a-f0-9]{16}/) || [])[0] || '') : '';
+    if (!lote) throw e;
+    guardarJobPendiente({ loteId: lote, jobIds: [], object: cfg.object, operation: cfg.action, total, cfg, llaves: llavesDe(rows) });
+    return { estado: 'pendiente', motivo: 'incierto', error: e, jobIds: [], loteId: lote, noEnviadas: [], filasLote: rows, cfg };
+  }
 
   const jobIds = (inicio.jobIds && inicio.jobIds.length) ? inicio.jobIds : [inicio.jobId];
   const loteId = inicio.loteId || '';
-  ultimoJobIdRecuperable = loteId || jobIds[0];
-  guardarJobPendiente({ loteId, jobIds, object: cfg.object, operation: cfg.action, total, cfg });
-  mostrarJobIdEnVivo(loteId || jobIds[0]);
+  const ref = loteId || jobIds[0];
+  ultimoJobIdRecuperable = ref;
+  const filasNoEnv = inicio.filasNoEnviadas || [];
+  const filasLote = restarFilas(rows, filasNoEnv);   // las que sí van en los jobs
+  guardarJobPendiente({ loteId, jobIds, object: cfg.object, operation: cfg.action, total, cfg, llaves: llavesDe(filasLote) });
+  mostrarJobIdEnVivo(ref);
 
   if (inicio.repetido) ilog('ℹ El servidor ya había creado este import: se usan los mismos jobs (sin duplicar).', 'info');
   ilog(`✓ ${jobIds.length} job(s) en paralelo: ${(inicio.jobs || []).map(j => j.filas).join(' + ') || total} filas`, 'ok');
   jobIds.forEach(id => ilog(`   · ${id}`, 'info'));
   if (loteId) ilog(`  Lote ${loteId} guardado: si se cierra el navegador, podrás recuperarlo.`, 'info');
 
-  const noEnviadas = filasNoEnviadasAResultado(inicio.filasNoEnviadas || [], cfg, inicio.errorNoEnviadas);
+  const noEnviadas = filasNoEnviadasAResultado(filasNoEnv, cfg, inicio.errorNoEnviadas);
   if (noEnviadas.length) ilog(`⚠ ${noEnviadas.length} fila(s) NO se enviaron (su job no se pudo cerrar y se abortó). Quedan como fallidas para reintentar.`, 'warn');
+  const pendiente = (motivo, error) => ({ estado: 'pendiente', motivo, error, jobIds, loteId, noEnviadas, filasLote, cfg });
 
   setImportStatus(`Salesforce está procesando ${inicio.total ?? total} registros…`, 'run');
   if (btn) btn.textContent = '⏳ Procesando en Salesforce…';
 
   const fin = await sondearJob({ jobIds, loteId, sid, total: inicio.total ?? total });
-  if (fin.motivo !== 'terminado') return { estado: 'pendiente', motivo: fin.motivo, error: fin.error, jobIds, loteId, noEnviadas };
+  if (fin.motivo !== 'terminado') return pendiente(fin.motivo, fin.error);
 
-  const data = await descargarResultados({ sid, jobIds, loteId, cierreAutomatico: true, reintentarLock: true });
+  let data;
+  try {
+    data = await descargarResultados({ sid, jobIds, loteId, cierreAutomatico: true, reintentarLock: true });
+  } catch (e) {
+    // v18: el import sí corrió; sin resultados, sus filas quedan "En proceso" (no se reintentan)
+    ilog(`⚠ ${e.message}`, 'err');
+    return pendiente(e.sfSessionExpired ? 'sfSesion' : (e.authError || e.notAuthorized) ? 'googleSesion' : 'resultados', e);
+  }
+  olvidarRequestId();   // ya hay resultado: el siguiente envío lleva otro identificador
+  limpiarJobPendiente(ref, jobIds);   // las filas que sigan sin resultado se vuelven a guardar abajo
   const mapa = mapaApiAPt(cfg);
   let okRows = parseSfResultCsv(data.successCsv || '', 'ok', cfg.action, mapa);
-  let failRows = parseSfResultCsv(data.failedCsv || '', 'fail', cfg.action, mapa)
-    .concat(parseSfResultCsv(data.unprocessedCsv || '', 'unprocessed', cfg.action, mapa))
-    .concat(noEnviadas);
+  let failSf = parseSfResultCsv(data.failedCsv || '', 'fail', cfg.action, mapa)
+    .concat(parseSfResultCsv(data.unprocessedCsv || '', 'unprocessed', cfg.action, mapa));
   const avisos = [];
   if (data.reintentoLockError) avisos.push(data.reintentoLockError);
+  // Filas del lote sin resultado: van en el reintento por bloqueo (o en uno que otra petición está lanzando)
+  // (con resultsError también: las que no se pudieron bajar quedan "En proceso", no "fallidas")
+  let faltan = filasFaltantes(filasLote, okRows, failSf, cfg);
+  let refEnProceso = ref;
 
   // ── Reintento por bloqueo (lo lanzó el backend; aquí solo se espera) ──
   if (data.reintentoLock && data.reintentoLock.jobId) {
     const rl = data.reintentoLock;
+    refEnProceso = rl.jobId;
     ilog(`🔁 ${rl.filas} fila(s) chocaron por bloqueo (UNABLE_TO_LOCK_ROW): se reintentan solas en el job ${rl.jobId}…`, 'warn');
-    guardarJobPendiente({ loteId: '', jobIds: [rl.jobId], object: cfg.object, operation: cfg.action, total: rl.filas, cfg, nota: 'reintento por bloqueo' });
+    guardarJobPendiente({ loteId: '', jobIds: [rl.jobId], object: cfg.object, operation: cfg.action, total: rl.filas, cfg, llaves: llavesDe(faltan), nota: 'reintento por bloqueo' });
     const fin2 = await sondearJob({ jobIds: [rl.jobId], loteId: '', sid, total: rl.filas, silencioProgreso: true });
     if (fin2.motivo === 'terminado') {
-      const d2 = await descargarResultados({ sid, jobIds: [rl.jobId], loteId: '', cierreAutomatico: true, esReintentoLock: true });
-      const ok2 = parseSfResultCsv(d2.successCsv || '', 'ok', cfg.action, mapa);
-      const fail2 = parseSfResultCsv(d2.failedCsv || '', 'fail', cfg.action, mapa)
-        .concat(parseSfResultCsv(d2.unprocessedCsv || '', 'unprocessed', cfg.action, mapa));
-      ok2.forEach(r => { r.__Action = `${r.__Action} (reintento por bloqueo)`; });
-      okRows = okRows.concat(ok2);
-      failRows = failRows.concat(fail2);
-      ilog(`✓ Reintento por bloqueo: ${ok2.length} OK · ${fail2.length} fallidas`, ok2.length ? 'ok' : 'warn');
-      if (d2.resultsError) avisos.push(d2.resultsError);
+      try {
+        const d2 = await descargarResultados({ sid, jobIds: [rl.jobId], loteId: '', cierreAutomatico: true, esReintentoLock: true });
+        const ok2 = parseSfResultCsv(d2.successCsv || '', 'ok', cfg.action, mapa);
+        const fail2 = parseSfResultCsv(d2.failedCsv || '', 'fail', cfg.action, mapa)
+          .concat(parseSfResultCsv(d2.unprocessedCsv || '', 'unprocessed', cfg.action, mapa));
+        ok2.forEach(r => { r.__Action = `${r.__Action} (reintento por bloqueo)`; });
+        okRows = okRows.concat(ok2);
+        failSf = failSf.concat(fail2);
+        faltan = filasFaltantes(faltan, ok2, fail2, cfg);
+        ilog(`✓ Reintento por bloqueo: ${ok2.length} OK · ${fail2.length} fallidas`, ok2.length ? 'ok' : 'warn');
+        if (d2.resultsError) avisos.push(d2.resultsError);
+      } catch (e2) {
+        // v18: los resultados principales se conservan; solo esas filas quedan "En proceso"
+        avisos.push(`No se pudieron traer los resultados del reintento por bloqueo (${e2.message}). Esas filas quedan "En proceso": recupéralas con el Job ID ${rl.jobId}.`);
+      }
     } else {
       avisos.push(`${rl.filas} fila(s) siguen en el reintento por bloqueo (job ${rl.jobId}). Recupéralas con ese Job ID.`);
-      return { estado: 'terminado', okRows, failRows, data, jobIds, loteId, avisos, pendienteLock: rl.jobId };
     }
+    if (!faltan.length) limpiarJobPendiente(rl.jobId, [rl.jobId]);
+  } else if (faltan.length) {
+    avisos.push(`${faltan.length} fila(s) todavía no tienen resultado (${ref}): quedan "En proceso". Recupéralas con ese Lote en unos minutos.`);
   }
-  return { estado: 'terminado', okRows, failRows, data, jobIds, loteId, avisos };
+  if (faltan.length) {
+    guardarJobPendiente({ loteId: refEnProceso === ref ? loteId : '', jobIds: refEnProceso === ref ? jobIds : [refEnProceso],
+      object: cfg.object, operation: cfg.action, total: faltan.length, cfg, llaves: llavesDe(faltan), nota: 'filas en proceso' });
+  }
+  return { estado: 'terminado', okRows, failRows: failSf.concat(noEnviadas), data, jobIds, loteId, avisos, cfg,
+    filasEnProceso: faltan, refEnProceso };
 }
 
 // API Name enviado → columna del pre-template (el resultado de Salesforce trae los API Names)
@@ -3466,11 +3627,14 @@ function filasNoEnviadasAResultado(filas, cfg, motivo) {
 // Pinta el resultado de un import o un retry (tabla, historial, estado y job pendiente).
 function mostrarResultadoImport(r, { total, intento, inicioMs }) {
   const ref = r.loteId || (r.jobIds || [])[0] || '';
+  const cfg = r.cfg || ultimoImportConfig;
   if (r.estado === 'pendiente') {
     const motivos = {
       sfSesion:     `Tu SID de Salesforce venció. El import sigue en Salesforce: pega un SID nuevo y usa "🔍 Recuperar" con ${ref}.`,
       googleSesion: `Tu sesión de Google venció. El import sigue en Salesforce: vuelve a entrar y usa "🔍 Recuperar" con ${ref}.`,
-      tiempo:       `Sigue procesando tras ${POLL_MAX_MINUTOS} min. Nada se perdió: usa "🔍 Recuperar" con ${ref} en unos minutos.`
+      tiempo:       `Sigue procesando tras ${POLL_MAX_MINUTOS} min. Nada se perdió: usa "🔍 Recuperar" con ${ref} en unos minutos.`,
+      incierto:     `Este import ya se había mandado (${ref}) pero no se pudo confirmar cómo terminó. No lo mandes otra vez: usa "🔍 Recuperar" con ${ref}.`,
+      resultados:   `El import sí corrió, pero no se pudieron traer los resultados. Usa "🔍 Recuperar" con ${ref}.`
     };
     const msg = motivos[r.motivo] || `El import quedó sin terminar. Usa "🔍 Recuperar" con ${ref}.`;
     ilog(`⏱ ${msg}`, 'warn');
@@ -3478,15 +3642,32 @@ function mostrarResultadoImport(r, { total, intento, inicioMs }) {
     toast('⏱ El import sigue en Salesforce. Recupéralo con el Lote o Job ID.', 'bad');
     const recInput = document.getElementById('recuperarJobId');
     if (recInput) recInput.value = ref;
+    // v18: las filas que van en el lote quedan "En proceso": no se reintentan ni se vuelven a
+    // importar hasta recuperarlo (antes el botón se reactivaba y un segundo clic duplicaba).
+    if (cfg) {
+      if (intento === 0) {
+        importResultRows = (r.filasLote || []).map(v => filaEnProceso(v, cfg, ref)).concat(r.noEnviadas || []);
+        historialRetries = [];
+      } else {
+        marcarEnProceso(r.filasLote || [], cfg, ref);
+      }
+      renderImportResult(importResultRows);
+      renderRetryHistory();
+      actualizarBotonRetry();
+      document.getElementById('dlResultBtn').disabled = importResultRows.length === 0;
+      document.getElementById('copyResultBtn').disabled = importResultRows.length === 0;
+    }
     return;
   }
 
   const { okRows, failRows, data } = r;
+  const refProceso = r.refEnProceso || ref;
   if (intento === 0) {
-    importResultRows = okRows.concat(failRows);
+    importResultRows = okRows.concat(failRows, (r.filasEnProceso || []).map(v => filaEnProceso(v, cfg, refProceso)));
     historialRetries = [];
   } else {
-    mergeRetryResult(okRows, failRows, intento, ultimoImportConfig ? ultimoImportConfig.colNames : null);
+    mergeRetryResult(okRows, failRows, intento, cfg ? cfg.colNames : null);
+    if ((r.filasEnProceso || []).length) marcarEnProceso(r.filasEnProceso, cfg, refProceso);
   }
   const success = okRows.length, failed = failRows.length;
   historialRetries.push({
@@ -3506,13 +3687,10 @@ function mostrarResultadoImport(r, { total, intento, inicioMs }) {
   }
   (r.avisos || []).forEach(a => ilog(`⚠ ${a}`, 'warn'));
 
+  // v18: si faltan resultados, esas filas quedan "En proceso" (el Retry no las toca) y el
+  // lote sigue pendiente; el pendiente lo limpia correrImportBulk cuando hay resultado.
   const hayErrorResultados = !!data.resultsError;
-  if (hayErrorResultados) {
-    ilog(`⚠ ${data.resultsError}`, 'err');
-    ultimoImportConfig = null;   // la tabla está incompleta: no se reintenta sobre ella
-  } else if (!r.pendienteLock) {
-    limpiarJobPendiente();
-  }
+  if (hayErrorResultados) ilog(`⚠ ${data.resultsError}`, 'err');
 
   const totalFallidos = importResultRows.filter(x => x.__Status === 'Failed').length;
   const totalOk = importResultRows.filter(x => x.__Status === 'Succeeded').length;
@@ -3602,35 +3780,46 @@ async function descargarResultados(params) {
 // ── Persistencia: sobrevive a cerrar el navegador. Una llave por usuario. ──
 function llaveJobPendiente() { return JOB_STORAGE_PREFIJO + (loggedInEmail || 'anon'); }
 
-function guardarJobPendiente(info) {
+// v18: una LISTA de pendientes (antes uno solo: el reintento por bloqueo o un Retry pisaban
+// al import). Cada uno guarda las llaves de sus filas para no volver a mandarlas.
+function leerPendientes() {
+  let lista = [];
   try {
-    localStorage.setItem(llaveJobPendiente(), JSON.stringify({
-      ...info,
-      fecha: new Date().toISOString(),
-      fechaLegible: new Date().toLocaleString('es-MX')
-    }));
+    const raw = localStorage.getItem(llaveJobPendiente()) || localStorage.getItem(JOB_STORAGE_KEY);   // v16/v17: un objeto
+    if (raw) { const v = JSON.parse(raw); lista = Array.isArray(v) ? v : [v]; }
+  } catch (e) { return []; }
+  // Salesforce conserva los jobs ~7 días: más viejo que eso, ya no sirve
+  const limite = Date.now() - 7 * 24 * 3600 * 1000;
+  return lista
+    .map(p => (p && !p.jobIds && p.jobId ? { ...p, jobIds: [p.jobId] } : p))
+    .filter(p => p && refPendiente(p) && new Date(p.fecha).getTime() > limite);
+}
+function escribirPendientes(lista) {
+  try {
+    if (lista.length) localStorage.setItem(llaveJobPendiente(), JSON.stringify(lista));
+    else localStorage.removeItem(llaveJobPendiente());
+    localStorage.removeItem(JOB_STORAGE_KEY);
   } catch (e) { /* modo incógnito o storage lleno: no es crítico */ }
 }
-
-function limpiarJobPendiente() {
-  try { localStorage.removeItem(llaveJobPendiente()); localStorage.removeItem(JOB_STORAGE_KEY); } catch (e) {}
+function refPendiente(p) { return p.loteId || (p.jobIds || [])[0] || ''; }
+function coincidePendiente(p, ref, jobIds) {
+  return (!!ref && (p.loteId === ref || (p.jobIds || []).includes(ref))) || (jobIds || []).some(id => (p.jobIds || []).includes(id));
 }
 
-function leerJobPendiente() {
-  try {
-    let raw = localStorage.getItem(llaveJobPendiente());
-    if (!raw) raw = localStorage.getItem(JOB_STORAGE_KEY);   // pendiente guardado por la v16
-    if (!raw) return null;
-    const info = JSON.parse(raw);
-    if (!info.jobIds && info.jobId) info.jobIds = [info.jobId];
-    // Salesforce conserva los jobs ~7 días: más viejo que eso, ya no sirve
-    if (Date.now() - new Date(info.fecha).getTime() > 7 * 24 * 3600 * 1000) {
-      limpiarJobPendiente();
-      return null;
-    }
-    return info;
-  } catch (e) { return null; }
+function guardarJobPendiente(info) {
+  const nuevo = { ...info, fecha: new Date().toISOString(), fechaLegible: new Date().toLocaleString('es-MX') };
+  const lista = leerPendientes().filter(p => refPendiente(p) !== refPendiente(nuevo));
+  lista.unshift(nuevo);
+  escribirPendientes(lista.slice(0, 20));
 }
+
+// Sin argumentos borra todos; con ref/jobIds, solo los de ese lote o job.
+function limpiarJobPendiente(ref, jobIds) {
+  if (!ref && !(jobIds || []).length) return escribirPendientes([]);
+  escribirPendientes(leerPendientes().filter(p => !coincidePendiente(p, ref, jobIds)));
+}
+
+function leerJobPendiente() { return leerPendientes()[0] || null; }
 
 // ── Muestra el Lote / Job ID en vivo, con botón de copiar ──
 function mostrarJobIdEnVivo(jobId) {
@@ -3652,10 +3841,11 @@ function revisarJobPendiente() {
   const info = leerJobPendiente();
   const banner = document.getElementById('jobPendienteBanner');
   if (!info || !banner) return;
+  const otros = leerPendientes().length - 1;
   document.getElementById('jobPendienteTexto').innerHTML =
     `Import pendiente del <strong>${esc(info.fechaLegible)}</strong> — ` +
     `${esc(String(info.object || 'Lead'))}, ${esc(info.total || '?')} registros` +
-    (info.nota ? ` (${esc(info.nota)})` : '');
+    (info.nota ? ` (${esc(info.nota)})` : '') + (otros > 0 ? ` · y ${otros} más` : '');
   banner.classList.add('visible');
   banner.dataset.jobid = info.loteId || (info.jobIds || [])[0] || '';
 }
@@ -3672,10 +3862,11 @@ function recuperarJobPendiente() {
 }
 
 function descartarJobPendiente() {
-  if (!confirm('¿Olvidar este import pendiente?\n\nEl job sigue en Salesforce; solo deja de aparecer el aviso.')) return;
-  limpiarJobPendiente();
+  if (!confirm('¿Olvidar este import pendiente?\n\nEl job sigue en Salesforce; solo deja de aparecer el aviso y sus filas se pueden volver a mandar (si ya se procesaron, se duplicarían).')) return;
   const banner = document.getElementById('jobPendienteBanner');
+  limpiarJobPendiente(banner ? banner.dataset.jobid : '');
   if (banner) banner.classList.remove('visible');
+  revisarJobPendiente();
 }
 
 
@@ -4026,10 +4217,11 @@ function renderImportResult(rows, conservarPagina) {
   html += `</tr></thead><tbody>`;
   rows.slice(0, resLimite).forEach(row => {
     const isOk = row['__Status'] === 'Succeeded';
+    const clase = isOk ? 'res-ok' : row['__Status'] === ESTADO_EN_PROCESO ? 'res-pend' : 'res-err';
     html += `<tr>`;
     IMPORT_RESULT_HEADERS.forEach(h => {
       const v = String(row[h] ?? '');
-      if (h === '__Status') html += `<td><span class="${isOk ? 'res-ok' : 'res-err'}">${esc(v)}</span></td>`;
+      if (h === '__Status') html += `<td><span class="${clase}">${esc(v)}</span></td>`;
       else if (h === '__Id') html += `<td class="res-id" title="${esc(v)}">${esc(v)}</td>`;
       else if (h === '__Action') html += `<td><span class="res-action">${esc(v)}</span></td>`;
       else if (h === '__Errors') html += `<td class="res-errors" title="${esc(v)}">${esc(v.slice(0,80))}${v.length > 80 ? '…' : ''}</td>`;
@@ -4182,10 +4374,39 @@ async function ejecutarRecuperar() {
       return;
     }
 
+    // v18: si la tabla tiene filas "En proceso" de este lote o job, se les pone su resultado
+    // y el resto de la tabla se queda como está (antes se borraba todo).
+    const refs = [ref, data.loteId, ...(data.jobIds || [])].filter(Boolean);
+    const hayEnProceso = ultimoImportConfig && importResultRows.some(r => r.__Status === ESTADO_EN_PROCESO && refs.includes(r._ref));
+    if (hayEnProceso) {
+      const mapaJ = mapaApiAPt(ultimoImportConfig), accJ = (data.operation || 'insert').toLowerCase();
+      const okJ = parseSfResultCsv(data.successCsv || '', 'ok', accJ, mapaJ);
+      const failJ = parseSfResultCsv(data.failedCsv || '', 'fail', accJ, mapaJ)
+        .concat(parseSfResultCsv(data.unprocessedCsv || '', 'unprocessed', accJ, mapaJ));
+      const n = juntarRecuperado(okJ, failJ, refs, ultimoImportConfig);
+      const siguen = importResultRows.filter(r => r.__Status === ESTADO_EN_PROCESO && refs.includes(r._ref)).length;
+      if (!siguen && !data.resultsError) limpiarJobPendiente(ref, data.jobIds);
+      const totalOkJ = importResultRows.filter(x => x.__Status === 'Succeeded').length;
+      const totalFailJ = importResultRows.filter(x => x.__Status === 'Failed').length;
+      ilog(`🔍 ${ref}: ${n} fila(s) "En proceso" ya tienen resultado` + (siguen ? ` · ${siguen} siguen sin resultado` : ''), siguen ? 'warn' : 'ok');
+      if (data.resultsError) ilog(`⚠ ${data.resultsError}`, 'err');
+      updateProgress(importResultRows.length, importResultRows.length, totalOkJ, totalFailJ);
+      renderImportResult(importResultRows);
+      actualizarBotonRetry();
+      document.getElementById('dlResultBtn').disabled = importResultRows.length === 0;
+      document.getElementById('copyResultBtn').disabled = importResultRows.length === 0;
+      document.getElementById('badge-import').textContent = `${totalOkJ} ✓`;
+      setImportStatus(`Resultado recuperado: ${totalOkJ} exitosos, ${totalFailJ} fallidos` + (siguen ? `, ${siguen} en proceso.` : '.'), totalFailJ || siguen ? 'err' : 'ok');
+      pintar(siguen ? AMBAR[0] : 'rgba(34,197,94,0.08)', siguen ? AMBAR[1] : 'var(--ok)',
+        `✅ ${n} fila(s) actualizadas en la tabla.` + (siguen ? ` ${siguen} siguen sin resultado: intenta en unos minutos.` : ''));
+      btn.disabled = false; btn.textContent = siguen ? '🔍 Reintentar' : '✓ Recuperado';
+      if (!siguen) { revisarJobPendiente(); setTimeout(() => cerrarModalRecuperar(), 1800); }
+      return;
+    }
+
     // La config del import (para el retry) solo se conserva si es de ESTE job
-    const pendiente = leerJobPendiente();
-    const esDelPendiente = pendiente && (pendiente.loteId === ref || (pendiente.jobIds || []).includes(ref) ||
-      (data.jobIds || []).some(id => (pendiente.jobIds || []).includes(id)));
+    const pendiente = leerPendientes().find(p => coincidePendiente(p, ref, data.jobIds)) || null;
+    const esDelPendiente = !!pendiente;
     if (esDelPendiente && pendiente.cfg) ultimoImportConfig = pendiente.cfg;
     else if (!(ultimoImportConfig && ultimoImportConfig.jobIds && (data.jobIds || []).every(id => ultimoImportConfig.jobIds.includes(id)))) {
       ultimoImportConfig = null;   // v17: otro job → sin config vieja (el retry mezclaría columnas)
@@ -4241,9 +4462,10 @@ async function ejecutarRecuperar() {
 
     // v17: el pendiente se borra solo cuando la recuperación sale bien
     if (esDelPendiente) {
-      limpiarJobPendiente();
+      limpiarJobPendiente(ref, data.jobIds);
       const banner = document.getElementById('jobPendienteBanner');
       if (banner) banner.classList.remove('visible');
+      revisarJobPendiente();   // si queda otro pendiente, se vuelve a avisar
     }
     setImportStatus(`Resultado recuperado: ${success} exitosos, ${failed} fallidos.`, failed === 0 && success > 0 ? 'ok' : 'err');
     pintar('rgba(34,197,94,0.08)', 'var(--ok)', `✅ Resultado recuperado: <strong>${success}</strong> exitosos, <strong>${failed}</strong> fallidos. Ya aparece en la tabla.` +
@@ -4286,6 +4508,7 @@ async function ejecutarRetry() {
 
   // Filas del retry con las mismas columnas (por nombre) que el import base
   const rowsRetry = failedRows.map(row => cfg.colNames.map(c => String(row[c] ?? '').trim()));
+  if (bloquearSiHayPendiente(rowsRetry, cfg, 'Retry')) { cerrarModalRetry(); return; }
 
   const btn = document.getElementById('btnRetryConfirm');
   btn.disabled = true; btn.textContent = '⏳ Reintentando…';
