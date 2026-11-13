@@ -22,8 +22,8 @@ git fetch -q origin
 [ -f backend/.clasp.json ] || { echo "✗ Falta backend/.clasp.json (scriptId del proyecto Cat-alyst)."; exit 1; }
 [ -f backend/config.local.gs ] || { echo "✗ Falta backend/config.local.gs (correos y IDs). Copia docs/config.ejemplo.gs."; exit 1; }
 
-# 3. Pruebas simuladas.
-node tests/run.js > /dev/null || { echo "✗ Fallan las pruebas: node tests/run.js"; exit 1; }
+# 3. Pruebas simuladas completas (Node + navegador, con candado de red).
+node tests/todo.js || { echo "✗ Fallan las pruebas: node tests/todo.js"; exit 1; }
 
 # 4. Subir y publicar.
 VERSION="$(sed -n 's/^var VERSION_BACKEND *= *"\([^"]*\)".*/\1/p' backend/Code.gs)"
