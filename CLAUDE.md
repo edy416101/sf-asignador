@@ -43,6 +43,8 @@ Owner: Edgar Martínez. Frontend en GitHub Pages (`index.html`), backend en Apps
 ## Contexto
 
 - Diagnóstico de velocidad y hallazgos de la auditoría: `docs/auditoria-2026-11-12.md`.
+- Revisión v18 (sin Leads duplicados, datos al campo correcto, sesión) y lo que quedó fuera:
+  `docs/auditoria-2026-11-13.md`.
 - Pruebas: `tests/README.md`.
 - La lentitud de fondo (~1 s por Lead) viene de la automatización de Salesforce al crear un Lead
   (triggers y flows). Eso se pide a Global SF; no se arregla en esta tool.
