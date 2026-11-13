@@ -1,5 +1,5 @@
 ﻿// ══════════════════════════════════════════════════════════════════════════
-//  SF ASIGNADOR · BACKEND — Google Apps Script  v17.1
+//  SF ASIGNADOR · BACKEND — Google Apps Script  v17.2
 //
 //  Operaciones (lista cerrada en ACCIONES_PERMITIDAS):
 //    · "asignacion" (default) → procesarAsignacion
@@ -11,6 +11,11 @@
 //    · "exportSheetFromFile"→ exportarSheetDesdeArchivo (CSV/Excel local)
 //    · "adminData" / "adminAddUser" / "adminRemoveUser" → panel admin
 //
+//  v17.2: jobs de 50 filas (10 a la vez) cortados en bloques parejos, como Batch size
+//    y Threads de Salesforce Inspector. Las filas se ordenan por OwnerId, así que cada
+//    rep queda en jobs seguidos, pero un rep grande ya no va entero a un solo job.
+//    El frontend puede mandar filasPorJob y jobsALaVez (con límites).
+//
 //  v17.1: correos, admins, carpeta y Sheet de auditoría salen de este archivo
 //    y viven en backend/config.local.gs (fuera de git). Se publica con
 //    scripts/publicar-backend.sh (clasp), sin pegar código a mano.
@@ -19,7 +24,7 @@
 //    Bulk API 2.0 procesa un job en transacciones de 200, una tras otra, y
 //    cada Lead cuesta ~1 s por la automatización de Salesforce. Un job de 500
 //    tardó 10.5 min. Ahora se crean hasta MAX_JOBS_PARALELO jobs de ~FILAS_POR_JOB
-//    filas, agrupadas por OwnerId, y Salesforce los corre a la vez. Crear, subir
+//    filas, ordenadas por OwnerId, y Salesforce los corre a la vez. Crear, subir
 //    y cerrar van en 3 rondas de UrlFetchApp.fetchAll.
 //    Además: caché de tokens por SHA-256, auditoría neutralizada, listas
 //    permitidas para instanceUrl/object/operation, idempotencia por
@@ -57,7 +62,7 @@
 //  CONFIGURACIÓN
 // ══════════════════════════════════════════════════════════════════════════
 var SF_API_VERSION          = "v62.0";  // ← Versión de la API de Salesforce (un solo lugar para subirla)
-var VERSION_BACKEND         = "17.1";
+var VERSION_BACKEND         = "17.2";
 var GOOGLE_CLIENT_ID        = "568964808002-hftmn4qnjikpfn4l8u6vefbqjjd63b5k.apps.googleusercontent.com";
 var ALLOWED_DOMAIN          = "docplanner.com";
 
@@ -102,9 +107,12 @@ var JWT_REGEX           = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 
 // ── v17 · IMPORT EN PARALELO ──
 // Bulk API 2.0 procesa cada job en serie (transacciones de 200). Para que corra en
-// paralelo hay que crear varios jobs. 500 filas → 5 jobs de 100.
-var FILAS_POR_JOB          = 100;
+// paralelo hay que crear varios jobs. v17.2: 500 filas → 10 jobs de 50 (~1 min).
+// El frontend puede pedir otros valores dentro de estos límites.
+var FILAS_POR_JOB          = 50;
 var MAX_JOBS_PARALELO      = 10;
+var FILAS_POR_JOB_MIN      = 10;
+var FILAS_POR_JOB_MAX      = 10000;
 var IMPORT_IDEMP_SEG       = 21600;  // 6 h: un clientRequestId repetido devuelve los mismos jobs
 var ERROR_LOCK             = "UNABLE_TO_LOCK_ROW";
 
@@ -1288,38 +1296,45 @@ function cabecerasSfJson(sid) {
 
 function ok2xx(code) { return code >= 200 && code < 300; }
 
-// Reparte las filas en jobs. Mismo OwnerId → mismo job. Los owners se acomodan
-// del más grande al más chico en el job con menos filas, para que queden parejos.
-// Sin columna OwnerId se parte en bloques seguidos.
-function repartirEnJobs(headers, rows) {
+// Reparte las filas en jobs parejos, como Batch size y Threads de Inspector.
+// numJobs = filas / filasPorJob, con tope de jobsALaVez (si hay más filas, los jobs crecen).
+// Con columna OwnerId, primero se ordenan por owner (estable): cada rep queda en
+// jobs seguidos y comparte job con pocos reps, pero un rep grande se reparte.
+function repartirEnJobs(headers, rows, filasPorJob, jobsALaVez) {
   var n = rows.length;
-  var numJobs = Math.max(1, Math.min(MAX_JOBS_PARALELO, Math.ceil(n / FILAS_POR_JOB)));
+  var porJob = filasPorJob || FILAS_POR_JOB, maxJobs = jobsALaVez || MAX_JOBS_PARALELO;
+  var numJobs = Math.max(1, Math.min(maxJobs, Math.ceil(n / porJob)));
   var iOwner = headers.indexOf("OwnerId");
-
-  if (iOwner < 0) {
-    var tam = Math.ceil(n / numJobs), partes = [];
-    for (var i = 0; i < n; i += tam) partes.push({ rows: rows.slice(i, i + tam) });
-    return partes;
+  var orden = rows;
+  if (iOwner >= 0) {
+    var llave = function(r) { return String((r && r[iOwner]) || "").trim().slice(0, 15); };
+    orden = rows.map(function(r, i) { return { r: r, i: i, k: llave(r) }; })
+      .sort(function(x, y) { return x.k < y.k ? -1 : x.k > y.k ? 1 : x.i - y.i; })
+      .map(function(o) { return o.r; });
   }
+  var partes = [], base = Math.floor(n / numJobs), resto = n % numJobs, k = 0;
+  for (var j = 0; j < numJobs; j++) {
+    var tam = base + (j < resto ? 1 : 0);
+    partes.push({ rows: orden.slice(k, k + tam) });
+    k += tam;
+  }
+  return partes;
+}
 
-  var grupos = [], porOwner = {};
-  rows.forEach(function(r) {
-    var k = String((r && r[iOwner]) || "").trim().slice(0, 15);
-    if (!porOwner.hasOwnProperty(k)) { porOwner[k] = grupos.length; grupos.push({ owner: k, rows: [] }); }
-    grupos[porOwner[k]].rows.push(r);
-  });
-  // Del grupo más grande al más chico (estable: a igual tamaño, el que apareció primero)
-  var orden = grupos.map(function(g, i) { return i; })
-    .sort(function(a, b) { return (grupos[b].rows.length - grupos[a].rows.length) || (a - b); });
-  var bins = [];
-  for (var b = 0; b < Math.min(numJobs, grupos.length); b++) bins.push({ rows: [], owners: [] });
-  orden.forEach(function(gi) {
-    var menor = 0;
-    for (var x = 1; x < bins.length; x++) if (bins[x].rows.length < bins[menor].rows.length) menor = x;
-    bins[menor].rows = bins[menor].rows.concat(grupos[gi].rows);
-    bins[menor].owners.push(grupos[gi].owner);
-  });
-  return bins.filter(function(bn) { return bn.rows.length > 0; });
+// v17.2: lee filasPorJob y jobsALaVez del frontend. Sin ellos (frontend anterior), los de siempre.
+function opcionesReparto(params) {
+  var entero = function(v, min, max, nombre) {
+    if (v === undefined || v === null || v === "") return 0;
+    var x = Number(v);
+    if (!isFinite(x) || Math.floor(x) !== x || x < min || x > max) {
+      throw new Error(nombre + " debe ser un número entero entre " + min + " y " + max + ".");
+    }
+    return x;
+  };
+  return {
+    filasPorJob: entero(params.filasPorJob, FILAS_POR_JOB_MIN, FILAS_POR_JOB_MAX, "Filas por job"),
+    jobsALaVez: entero(params.jobsALaVez, 1, MAX_JOBS_PARALELO, "Jobs a la vez")
+  };
 }
 
 // Aborta jobs (best effort). Devuelve los que Salesforce aceptó abortar.
@@ -1356,6 +1371,7 @@ function iniciarImportBulk(params) {
     }
   }
   if (!rows.every(function(r) { return Array.isArray(r); })) throw new Error("Filas con formato inválido.");
+  var reparto = opcionesReparto(params);
 
   // ── Idempotencia: el mismo clientRequestId nunca crea jobs dos veces ──
   // Si la respuesta de un importStart se pierde y el navegador reintenta, se
@@ -1384,7 +1400,7 @@ function iniciarImportBulk(params) {
   }
 
   try {
-    var resultado = crearJobsEnParalelo(sid, instanceUrl, object, operation, externalId, headers, rows, userEmail, clientRequestId);
+    var resultado = crearJobsEnParalelo(sid, instanceUrl, object, operation, externalId, headers, rows, userEmail, clientRequestId, reparto);
     if (idemKey) cache.put(idemKey, JSON.stringify(resultado), IMPORT_IDEMP_SEG);
     return resultado;
   } catch (err) {
@@ -1393,11 +1409,12 @@ function iniciarImportBulk(params) {
   }
 }
 
-function crearJobsEnParalelo(sid, instanceUrl, object, operation, externalId, headers, rows, userEmail, clientRequestId) {
+function crearJobsEnParalelo(sid, instanceUrl, object, operation, externalId, headers, rows, userEmail, clientRequestId, reparto) {
   var base = instanceUrl + "/services/data/" + SF_API_VERSION;
   // Compatibilidad: el frontend v16 (sin clientRequestId) solo sigue un jobId, así que
   // para él se crea un solo job, como antes. El v17 manda clientRequestId y recibe N jobs.
-  var partes = clientRequestId ? repartirEnJobs(headers, rows) : [{ rows: rows }];
+  reparto = reparto || {};
+  var partes = clientRequestId ? repartirEnJobs(headers, rows, reparto.filasPorJob, reparto.jobsALaVez) : [{ rows: rows }];
 
   var jobBody = { object: object, operation: operation, contentType: "CSV", lineEnding: "LF" };
   if (operation === "upsert" && externalId) jobBody.externalIdFieldName = externalId;

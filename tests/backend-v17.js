@@ -46,17 +46,21 @@ module.exports = function (prueba, setGrupo) {
     const r = ctx.iniciarImportBulk({ clientRequestId: 'req_prueba_' + (++nReq), sid: 'SID', instanceUrl: INSTANCIA, object: 'Lead', operation: 'insert',
       headers: HEADERS, rows, userEmail: 'usuario.prueba@docplanner.com', clientRequestId: 'req_prueba_0001' });
 
-    prueba('500 filas → 5 jobs de 100', () => {
-      assert.strictEqual(r.jobIds.length, 5);
-      assert.deepStrictEqual([...r.jobs.map(j => j.filas)], [100, 100, 100, 100, 100]);
+    prueba('500 filas → 10 jobs de 50', () => {
+      assert.strictEqual(r.jobIds.length, 10);
+      assert.deepStrictEqual([...r.jobs.map(j => j.filas)], Array(10).fill(50));
       assert.ok(/^lote_[a-f0-9]{16}$/.test(r.loteId), 'loteId: ' + r.loteId);
     });
-    prueba('cada owner queda en un solo job', () => {
+    prueba('las filas de cada owner van juntas: 5 owners de 100 → 2 jobs seguidos cada uno', () => {
       const jobsPorOwner = {};
       bulk.jobs.forEach(j => parsearCsv(j.csv).slice(1).forEach(f => {
-        (jobsPorOwner[f[4]] = jobsPorOwner[f[4]] || new Set()).add(j.id);
+        (jobsPorOwner[f[4]] = jobsPorOwner[f[4]] || new Set()).add(j.i);
       }));
-      Object.entries(jobsPorOwner).forEach(([o, s]) => assert.strictEqual(s.size, 1, o + ' quedó en ' + s.size + ' jobs'));
+      Object.entries(jobsPorOwner).forEach(([o, s]) => {
+        const i = [...s].sort((a, b) => a - b);
+        assert.strictEqual(i.length, 2, o + ' quedó en ' + i.length + ' jobs');
+        assert.strictEqual(i[1], i[0] + 1, o + ' quedó en jobs no seguidos');
+      });
     });
     prueba('crear, subir y cerrar van en 3 rondas de fetchAll (todas las filas una sola vez)', () => {
       const enviados = bulk.jobs.flatMap(j => parsearCsv(j.csv).slice(1).map(f => f[0]));
@@ -71,7 +75,7 @@ module.exports = function (prueba, setGrupo) {
     prueba('doble clic: el mismo clientRequestId no crea otro job', () => {
       const otra = ctx.iniciarImportBulk({ clientRequestId: 'req_prueba_' + (++nReq), sid: 'SID', instanceUrl: INSTANCIA, object: 'Lead', operation: 'insert',
         headers: HEADERS, rows, userEmail: 'usuario.prueba@docplanner.com', clientRequestId: 'req_prueba_0001' });
-      assert.strictEqual(bulk.jobs.length, 5, 'se crearon ' + bulk.jobs.length + ' jobs');
+      assert.strictEqual(bulk.jobs.length, 10, 'se crearon ' + bulk.jobs.length + ' jobs');
       assert.deepStrictEqual(otra.jobIds, r.jobIds);
       assert.strictEqual(otra.repetido, true);
     });
@@ -104,9 +108,29 @@ module.exports = function (prueba, setGrupo) {
     const { bulk, ctx } = montar();
     const rows = filas(500, i => (i < 300 ? OWNERS[0] : i < 450 ? OWNERS[1] : OWNERS[2]));
     const r = ctx.iniciarImportBulk({ clientRequestId: 'req_prueba_' + (++nReq), sid: 'SID', instanceUrl: INSTANCIA, headers: HEADERS, rows, object: 'Lead', operation: 'insert' });
-    prueba('owners disparejos (300/150/50) → 3 jobs, un owner por job', () => {
-      assert.strictEqual(bulk.jobs.length, 3);
-      assert.deepStrictEqual([...r.jobs.map(j => j.filas)].sort((a, b) => b - a), [300, 150, 50]);
+    prueba('owners disparejos (300/150/50) → 10 jobs de 50: el rep de 300 se reparte en 6', () => {
+      assert.strictEqual(bulk.jobs.length, 10);
+      assert.deepStrictEqual([...r.jobs.map(j => j.filas)], Array(10).fill(50));
+      const conOwner0 = bulk.jobs.filter(j => parsearCsv(j.csv).slice(1).some(f => f[4] === OWNERS[0]));
+      assert.strictEqual(conOwner0.length, 6);
+    });
+  }
+  {
+    const { ctx } = montar();
+    const rows = filas(500, i => OWNERS[i % 5]);
+    const base = { sid: 'SID', instanceUrl: INSTANCIA, headers: HEADERS, rows, object: 'Lead', operation: 'insert' };
+    prueba('Filas por job 100 y Jobs a la vez 5 → 5 jobs de 100', () => {
+      const r = ctx.iniciarImportBulk(Object.assign({ clientRequestId: 'req_prueba_' + (++nReq), filasPorJob: 100, jobsALaVez: 5 }, base));
+      assert.deepStrictEqual([...r.jobs.map(j => j.filas)], Array(5).fill(100));
+    });
+    prueba('si las filas no caben, los jobs crecen: 200 por job y 2 a la vez → 2 jobs de 250', () => {
+      const r = ctx.iniciarImportBulk(Object.assign({ clientRequestId: 'req_prueba_' + (++nReq), filasPorJob: 200, jobsALaVez: 2 }, base));
+      assert.deepStrictEqual([...r.jobs.map(j => j.filas)], [250, 250]);
+    });
+    prueba('Filas por job y Jobs a la vez fuera de rango → error, no crea nada', () => {
+      [{ filasPorJob: 5 }, { filasPorJob: 20000 }, { jobsALaVez: 0 }, { jobsALaVez: 11 }, { filasPorJob: 'abc' }, { jobsALaVez: 2.5 }].forEach(o => {
+        assert.throws(() => ctx.iniciarImportBulk(Object.assign({ clientRequestId: 'req_prueba_' + (++nReq) }, base, o)), /entero entre/, JSON.stringify(o));
+      });
     });
   }
   {
@@ -151,10 +175,10 @@ module.exports = function (prueba, setGrupo) {
     const rows = filas(500, i => OWNERS[i % 5]);
     const r = ctx.iniciarImportBulk({ clientRequestId: 'req_prueba_' + (++nReq), sid: 'SID', instanceUrl: INSTANCIA, headers: HEADERS, rows, object: 'Lead', operation: 'insert' });
     prueba('si falla la subida de un job: ese se aborta y sus filas vuelven como no enviadas', () => {
-      assert.strictEqual(r.jobIds.length, 4);
-      assert.strictEqual(r.filasNoEnviadas.length, 100);
+      assert.strictEqual(r.jobIds.length, 9);
+      assert.strictEqual(r.filasNoEnviadas.length, 50);
       assert.strictEqual(bulk.jobs[1].state, 'Aborted');
-      assert.strictEqual(r.total, 400);
+      assert.strictEqual(r.total, 450);
       assert.ok(r.errorNoEnviadas);
     });
   }
@@ -189,7 +213,7 @@ module.exports = function (prueba, setGrupo) {
     prueba('recuperar otra vez no lanza un segundo reintento', () => {
       const otra = ctx.recuperarResultadoJob({ sid: 'SID', instanceUrl: INSTANCIA, jobIds: r.jobIds, reintentarLock: true });
       assert.strictEqual(otra.reintentoLock.jobId, res.reintentoLock.jobId);
-      assert.strictEqual(bulk.jobs.length, 3);
+      assert.strictEqual(bulk.jobs.length, 5);   // 4 jobs de 50 + 1 de reintento
     });
     prueba('recuperar a mano el lote junta el reintento: las filas bloqueadas salen OK, no fallidas', () => {
       const man = ctx.recuperarResultadoJob({ sid: 'SID', instanceUrl: INSTANCIA, loteId: r.loteId });

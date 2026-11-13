@@ -23,13 +23,13 @@ function intervalos(html) {
 }
 
 // Corre un import de `rows` y sondea hasta que termina. Devuelve minutos simulados y el progreso visto.
-function medir(html, rows, { unSoloJob = false } = {}) {
+function medir(html, rows, { unSoloJob = false, opciones = {} } = {}) {
   const bulk = crearBulkFalso({ reloj: {} });
   const g = serviciosGoogleFalsos();
   const ctx = cargarBackend(bulk.UrlFetchApp, process.env.CODE_GS || null, g.globales);
   if (unSoloJob) ctx.FILAS_POR_JOB = 100000;   // así trabajaba v16: un solo job con todo
-  const r = ctx.iniciarImportBulk({ sid: 'SID', instanceUrl: INSTANCIA, object: 'Lead', operation: 'insert',
-    headers: HEADERS, rows, userEmail: 'usuario.prueba@docplanner.com', clientRequestId: 'req_tiempo_' + (++nMedicion) });
+  const r = ctx.iniciarImportBulk(Object.assign({ sid: 'SID', instanceUrl: INSTANCIA, object: 'Lead', operation: 'insert',
+    headers: HEADERS, rows, userEmail: 'usuario.prueba@docplanner.com', clientRequestId: 'req_tiempo_' + (++nMedicion) }, opciones));
   const p = intervalos(html);
   const progreso = [];
   let t = 0, est;
@@ -66,22 +66,29 @@ module.exports = function (html, prueba, setGrupo) {
     const vistos = [...new Set(v16.progreso.map(x => x.processed))];
     assert.deepStrictEqual(vistos, [0, 200, 400, 500]);
   });
-  prueba('v17 con 10 reps: 5 jobs a la vez → ' + fmt(v17.min) + ' (vs ' + fmt(v16.min) + ')', () => {
-    assert.strictEqual(v17.jobs, 5);
+  prueba('v17.2 con 10 reps: 10 jobs de 50 a la vez → ' + fmt(v17.min) + ' (vs ' + fmt(v16.min) + ')', () => {
+    assert.strictEqual(v17.jobs, 10);
     assert.strictEqual(v17.est.processed, 500);
-    assert.ok(v17.min <= 2.5, fmt(v17.min));
-    assert.ok(v16.min / v17.min >= 4, 'solo ' + (v16.min / v17.min).toFixed(1) + ' veces más rápido');
+    assert.ok(v17.min <= 1.5, fmt(v17.min));
+    assert.ok(v16.min / v17.min >= 7, 'solo ' + (v16.min / v17.min).toFixed(1) + ' veces más rápido');
   });
 
-  // Casos que dependen de cuántos reps trae la carga (cada owner va entero a un solo job)
+  // Antes (v17.0) cada rep iba entero a un solo job: con 1 o 2 reps casi no ganaba. Ya no depende de eso.
   const dosReps = medir(html, filas(500, i => i % 2));
-  prueba('v17 con 2 reps: 2 jobs de 250 → ' + fmt(dosReps.min) + ' (gana menos: un owner no se parte)', () => {
-    assert.strictEqual(dosReps.jobs, 2);
-    assert.ok(dosReps.min <= 5.5, fmt(dosReps.min));
+  prueba('v17.2 con 2 reps: también 10 jobs → ' + fmt(dosReps.min) + ' (v17.0 tardaba 5.0 min)', () => {
+    assert.strictEqual(dosReps.jobs, 10);
+    assert.ok(dosReps.min <= 1.5, fmt(dosReps.min));
   });
   const unRep = medir(html, filas(500, () => 0));
-  prueba('v17 con 1 rep: 1 solo job → ' + fmt(unRep.min) + ' (igual que antes)', () => {
-    assert.strictEqual(unRep.jobs, 1);
-    assert.ok(Math.abs(unRep.min - v16.min) < 0.5, fmt(unRep.min));
+  prueba('v17.2 con 1 rep: también 10 jobs → ' + fmt(unRep.min) + ' (v17.0 tardaba 9.8 min)', () => {
+    assert.strictEqual(unRep.jobs, 10);
+    assert.ok(unRep.min <= 1.5, fmt(unRep.min));
+  });
+
+  // Los valores de Salesforce Inspector por defecto (Batch size 200, Threads 6)
+  const inspector = medir(html, diezReps, { opciones: { filasPorJob: 200, jobsALaVez: 6 } });
+  prueba('como Inspector por defecto (200 por job, 6 a la vez) → 3 jobs, ' + fmt(inspector.min), () => {
+    assert.strictEqual(inspector.jobs, 3);
+    assert.ok(inspector.min > v17.min, fmt(inspector.min));
   });
 };

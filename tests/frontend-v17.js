@@ -203,4 +203,29 @@ module.exports = function (html, prueba, setGrupo) {
   prueba('SheetJS 0.20.x con SRI', () => {
     assert.ok(/xlsx-0\.20\.\d+\/package\/dist\/xlsx\.full\.min\.js" integrity="sha384-/.test(html));
   });
+
+  // ── v17.2: Filas por job y Jobs a la vez ──
+  setGrupo('v17.2 · Filas por job y Jobs a la vez (como Inspector)');
+  const reparto = (filas, jobs) => cargarAhora(html, ['leerOpcionesReparto'], 'leerOpcionesReparto', {
+    document: { getElementById: id => (id === 'cfg-filas' ? { value: filas } : id === 'cfg-jobs' ? { value: jobs } : null) }
+  })();
+  prueba('la pantalla trae 50 y 10 por defecto', () => {
+    assert.ok(/id="cfg-filas"[^>]*value="50"/.test(html) && /id="cfg-jobs"[^>]*value="10"/.test(html));
+  });
+  prueba('50 y 10 → se mandan al backend como números', () => {
+    assert.deepStrictEqual(reparto('50', ' 10 '), { filasPorJob: 50, jobsALaVez: 10 });
+  });
+  prueba('vacías → no se mandan (el backend usa sus valores)', () => {
+    assert.deepStrictEqual(reparto('', ''), {});
+  });
+  prueba('fuera de rango o con decimales → error y no se importa', () => {
+    [['5', '10'], ['50', '11'], ['50', '0'], ['2.5', '10'], ['abc', '10'], ['20000', '1']].forEach(([a, b]) => {
+      assert.ok(reparto(a, b).error, a + ' / ' + b);
+    });
+  });
+  prueba('el import manda filasPorJob y jobsALaVez en importStart', () => {
+    const a = html.indexOf('async function correrImportBulk(');
+    const fn = html.slice(a, html.indexOf('\n}\n', a));
+    assert.ok(fn.includes('leerOpcionesReparto()') && fn.includes('}, reparto))'), 'correrImportBulk no usa el reparto');
+  });
 };

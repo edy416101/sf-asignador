@@ -41,14 +41,15 @@ Imprime ✓/✗ por prueba y termina con código 1 si algo falla. Cubre:
 - **v17 · Frontend** (`frontend-v17.js`): parser CSV/TSV con comillas, saltos de línea y tabs;
   headers que no se confunden con datos; validación de filas; candado contra doble clic;
   resultados por API Name; merge del retry; escapes y descargas CSV.
-- **v17 · Backend** (`backend-v17.js`): import partido en N jobs por OwnerId, idempotencia por
+- **v17 · Backend** (`backend-v17.js`): import partido en jobs parejos de 50 (ordenados por OwnerId), Filas por job y Jobs a la vez, idempotencia por
   `clientRequestId`, estado sumado, CSV unidos, reintento por `UNABLE_TO_LOCK_ROW`, fallos al
   iniciar (abort), `resultsError`, y seguridad de `doPost` (token falso con la misma cola,
   `action` con `=`, `instanceUrl` ajeno, `operation` fuera de lista, token basura, baja de usuario).
 - **v17 · Tiempo simulado** (`tiempo-v17.js`): la Bulk API falsa tarda como Salesforce
   (~1.15 s por Lead, transacciones de 200 en serie dentro de cada job, jobs distintos a la vez).
   El reloj es simulado, así que la prueba tarda milisegundos. Se calibró con el job real de 500
-  Leads del 12-nov-2026, que tardó 10.5 min: un solo job da 9.8 min. Con v17 y 10 reps da 1.9 min.
+  Leads del 12-nov-2026, que tardó 10.5 min: un solo job da 9.8 min. Con v17.2 (10 jobs de 50) da
+  1.0 min, con 1, 2 o 10 reps. Con los valores de Inspector por defecto (200 y 6) da 3.3 min.
   No mide los bloqueos entre jobs ni si Salesforce corre todos los jobs a la vez.
 
 Para comparar contra otra versión (por ejemplo, la de `main` antes de un arreglo):
