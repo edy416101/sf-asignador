@@ -28,7 +28,13 @@ node tests/run.js > /dev/null || { echo "✗ Fallan las pruebas: node tests/run.
 # 4. Subir y publicar.
 VERSION="$(sed -n 's/^var VERSION_BACKEND *= *"\([^"]*\)".*/\1/p' backend/Code.gs)"
 COMMIT="$(git rev-parse --short HEAD)"
-(cd backend && $CLASP push -f && $CLASP deploy -i "$DEPLOY_ID" -d "v$VERSION ($COMMIT)")
+# Se sube desde una copia sin BOM: clasp no lee un appsscript.json que empieza con BOM
+# ("Input params not Valid JSON string").
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+cp backend/.clasp.json backend/Code.gs backend/appsscript.json backend/config.local.gs "$TMP/"
+for f in "$TMP"/Code.gs "$TMP"/appsscript.json "$TMP"/config.local.gs; do sed -i '1s/^\xEF\xBB\xBF//' "$f"; done
+(cd "$TMP" && $CLASP push -f && $CLASP deploy -i "$DEPLOY_ID" -d "v$VERSION ($COMMIT)")
 
 # 5. Verificar que la URL ya responde con la versión nueva.
 RESP="$(curl -sL "$URL")"
