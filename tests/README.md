@@ -65,6 +65,11 @@ Imprime ✓/✗ por prueba y termina con código 1 si algo falla. Cubre:
   repetidos), columnas del resultado recuperado, y en la página: campos custom que entran y
   salen de las filas sin correr valores, Field Mapping por nombre, valores manuales aplicados,
   bloqueo durante un import, país PE/AR y Recuperar que pregunta antes de reemplazar.
+- **v18 · Sesión** (`v18-sesion.js` y el paso 6 del simulador): Google caído (5xx, 429, red) no
+  saca al usuario; tokens sin `aud`/`iss` de Google no llegan a Google; tope global de
+  rechazos por minuto sin llenar la auditoría. En la página: token vencido → recuadro para
+  volver a entrar con la misma cuenta y la petición sigue, nunca se cierra la sesión sola con
+  filas o resultados, respuesta que no es JSON, aviso al cerrar la pestaña y Salir que limpia todo.
 - **v17 · Tiempo simulado** (`tiempo-v17.js`): la Bulk API falsa tarda como Salesforce
   (~1.15 s por Lead, transacciones de 200 en serie dentro de cada job, jobs distintos a la vez).
   El reloj es simulado, así que la prueba tarda milisegundos. Se calibró con el job real de 500

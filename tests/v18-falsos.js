@@ -29,7 +29,7 @@ function montar({ google = {}, bulk = {}, sf = {} } = {}) {
   // Un token válido para `email`, registrado en el tokeninfo falso (o con `info` a la medida)
   const token = (email = USUARIO, info = {}, claims = {}) => {
     const exp = Math.floor(Date.now() / 1000) + 3000;
-    const t = jwt(Object.assign({ email, hd: 'docplanner.com', exp }, claims));
+    const t = jwt(Object.assign({ email, hd: 'docplanner.com', exp, aud: ctx.GOOGLE_CLIENT_ID, iss: 'https://accounts.google.com' }, claims));
     g.registrarToken(t, Object.assign({ aud: ctx.GOOGLE_CLIENT_ID, hd: 'docplanner.com', email_verified: 'true', exp: String(exp), email }, info));
     return t;
   };
@@ -202,7 +202,8 @@ module.exports = function (prueba, setGrupo) {
       ['token de más de 4 KB', () => 'a.' + 'b'.repeat(4100) + '.c', /formato/, { basura: true }],
       ['JWT sin exp', () => jwt({ email: USUARIO }), /formato/, { basura: true }],
       ['exp vencido (sin preguntar a Google)', () => jwt({ email: USUARIO, exp: ahora - 10 }), /expirada/, {}],
-      ['Google lo rechaza (400)', () => jwt({ email: USUARIO, exp: ahora + 100 }), /HTTP 400/, {}],
+      ['token que no es de Google para esta app (sin aud ni iss) → ni se pregunta a Google', () => jwt({ email: USUARIO, exp: ahora + 100 }), /otra aplicación/, { basura: true }],
+      ['Google lo rechaza (400)', () => jwt({ email: USUARIO, exp: ahora + 100, aud: m.ctx.GOOGLE_CLIENT_ID, iss: 'accounts.google.com' }), /HTTP 400/, {}],
       ['emitido para otra app (aud)', () => m.token(USUARIO, { aud: 'otra-app.apps.googleusercontent.com' }), /otra aplicación/, {}],
       ['dominio ajeno (hd)', () => m.token(USUARIO, { hd: 'gmail.com' }), /Dominio no autorizado/, {}],
       ['email no verificado', () => m.token(USUARIO, { email_verified: 'false' }), /no verificado/, {}],

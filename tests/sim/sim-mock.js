@@ -73,7 +73,7 @@
     const b = await cargarBackend();
     const b64 = s => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     const exp = Math.floor(Date.now() / 1000) + 3600;
-    const token = b64('{"alg":"RS256"}') + '.' + b64(JSON.stringify({ email: SIM.EMAIL, given_name: 'Simón', exp, hd: 'docplanner.com' })) + '.firmaSimulada';
+    const token = b64('{"alg":"RS256"}') + '.' + b64(JSON.stringify({ email: SIM.EMAIL, given_name: 'Simón', exp, hd: 'docplanner.com', aud: b.GOOGLE_CLIENT_ID, iss: 'https://accounts.google.com' })) + '.firmaSimulada';
     google.registrarToken(token, { aud: b.GOOGLE_CLIENT_ID, hd: 'docplanner.com', email_verified: 'true', exp: String(exp), email: SIM.EMAIL });
     onSignIn({ credential: token });
   }
@@ -182,11 +182,74 @@
     const ajeno = await (await fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ idToken: 'aaa.bbb.ccc', action: 'describe' }) })).json();
     check('Un token que Google no reconoce se rechaza en el backend', ajeno.authError === true, JSON.stringify(ajeno));
 
+    // 6. v18 · Sesión y robustez
+    await sesionYRobustez(check);
+
     check('Ninguna llamada salió a sistemas reales', !SIM.bloqueadas.length, SIM.bloqueadas.join(', ') || 'backend simulado: ' + [...new Set(SIM.llamadas)].join(' → '));
 
     mostrarPanel(checks);
     return checks;
   };
+
+  async function sesionYRobustez(check) {
+    const espera = ms => new Promise(r => st(r, ms));
+    const modalAbierto = () => !!document.getElementById('reloginModal') && document.getElementById('reloginModal').classList.contains('open');
+    const describeLead = () => backendFetch({ action: 'describe', sid: 'SID-FALSO', instanceUrl: INSTANCE_URL, object: 'Lead' });
+    const filas = JSON.stringify(preTemplateRows);
+
+    // a) el token venció: la petición espera a que la persona vuelva a entrar y luego sigue
+    tokenExpMs = Date.now() - 1000;
+    let resultado = null;
+    const pendiente = describeLead().then(d => { resultado = d; }, e => { resultado = e; });
+    await espera(30);
+    const seAbrio = modalAbierto();
+    const b64 = s => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    onSignIn({ credential: b64('{"alg":"RS256"}') + '.' + b64(JSON.stringify({ email: 'otra.persona@docplanner.com', exp: Math.floor(Date.now() / 1000) + 3600 })) + '.x' });
+    const otraCuentaRechazada = modalAbierto() && resultado === null;
+    await login();
+    await pendiente;
+    check('Token de Google vencido: se pide entrar otra vez y la petición sigue (sin perder filas)',
+      seAbrio && !modalAbierto() && resultado && Array.isArray(resultado.fields) && JSON.stringify(preTemplateRows) === filas,
+      'recuadro: ' + seAbrio + ' · resultado: ' + (resultado && (resultado.fields ? resultado.fields.length + ' campos' : resultado.message)));
+    check('Volver a entrar con otra cuenta no se acepta', otraCuentaRechazada);
+
+    // b) el backend rechaza el token y hay filas: no se cierra la sesión, se pide entrar otra vez
+    SIM.google.tokens.clear();
+    [...SIM.google.cache.keys()].filter(k => k.startsWith('tok_')).forEach(k => SIM.google.cache.delete(k));
+    let error = null;
+    try { await describeLead(); } catch (e) { error = e; }
+    await espera(60);
+    check('Si el backend rechaza el token con filas en pantalla, no se cierra la sesión',
+      error && error.authError && document.getElementById('mainApp').style.display === 'flex' && modalAbierto() && JSON.stringify(preTemplateRows) === filas,
+      error ? error.message : 'sin error');
+    await login();
+
+    // c) respuesta que no es JSON → mensaje claro
+    const fetchReal = window.fetch;
+    window.fetch = async () => new Response('<html><body>Service unavailable</body></html>', { status: 200 });
+    let msg = '';
+    try { await describeLead(); } catch (e) { msg = e.message; }
+    window.fetch = fetchReal;
+    check('Si Apps Script responde algo que no es JSON, el mensaje lo dice claro', /no es JSON/.test(msg), msg.slice(0, 120));
+
+    // d) aviso al cerrar la pestaña con resultados sin guardar; al guardarlos ya no
+    const intentarCerrar = () => { const ev = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(ev); return ev.defaultPrevented; };
+    const avisaSinGuardar = importResultRows.length > 0 && intentarCerrar();
+    setMode('csv');
+    document.getElementById('csvFileName').value = 'prueba_sim';
+    await ejecutarExport();
+    check('Cerrar la pestaña con resultados sin guardar avisa; después de guardarlos, no', avisaSinGuardar && !intentarCerrar(),
+      'antes: ' + avisaSinGuardar + ' · después: ' + intentarCerrar());
+    check('El log dice cuántos jobs y de cuántas filas', /job\(s\) de ~\d+ filas/.test(document.getElementById('importLog').innerText));
+
+    // e) Salir limpia todo (IDs, reps, filas) aunque se vuelva a entrar con otra persona
+    document.getElementById('idsArea').value = '003TEST00000001';
+    logout();
+    const limpio = !preTemplateRows.length && !importResultRows.length && !document.getElementById('idsArea').value &&
+      document.querySelectorAll('#repsBody tr').length === 1 && !idTokenCache;
+    check('Salir limpia filas, resultados, IDs, reps y el token', limpio);
+    await login();
+  }
 
   async function camposCorrectos(check) {
     const espera = ms => new Promise(r => st(r, ms));
